@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 import uuid
 
@@ -7,6 +8,65 @@ def generate_hex_id():
     return uuid.uuid4().hex[:8] #Get 8 characters from the uuid
 
 # Create your models here.
+
+class UserManager(BaseUserManager):
+    """
+    Custom user manager
+    """
+    def create_user(self, username, email, password=None):
+        if not email:
+            raise ValueError('Users must have an email address')
+        if not username:
+            raise ValueError('Users must have a username')
+        if not password:
+            raise ValueError('Users must have a password')
+        
+        username = self.model.normalize_username(username)
+        email = self.normalize_email(email)
+        user = self.model(username=username, email=email)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+    def create_superuser(self, username, email, password=None):
+        user = self.create_user(username, password, email)
+        user.is_admin = True
+        user.is_superuser = True
+        user.save(using=self._db)
+        return user
+        
+class User(AbstractBaseUser):
+    """
+    Custom user model
+    """
+    username = models.CharField(max_length=255, unique=True)
+    email = models.EmailField(max_length=255, unique=True)
+    password = models.CharField(max_length=128)
+    is_active = models.BooleanField(default=True)
+    is_admin = models.BooleanField(default=False)
+    
+    lumis = models.PositiveIntegerField(default=0) #Lumis currency
+    
+    
+    #One to one relationship with character
+    character = models.OneToOneField(
+        'Character',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='user'
+        )
+    objects = UserManager()
+    
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+    
+    def __str__(self):
+        return self.username
+    
+    def is_admin(self):
+        return self.is_admin
+
+
 class Character(models.Model):
     """
     Character model
@@ -18,13 +78,33 @@ class Character(models.Model):
         editable=False
     )
     name = models.CharField(max_length=20)
+    
     #stats
-    hp = models.IntegerField(default=50) #base stat
-    mp = models.IntegerField(default=5) #base stat
-    att = models.IntegerField(default=5) #base stat
-    strength = models.IntegerField(default=10) #base stat
-    agility = models.IntegerField(default=10) #base stat
-    intelligence = models.IntegerField(default=10) #base stat
+    
+    base_hp = models.IntegerField(default=50) #base stat
+    base_mp = models.IntegerField(default=5) #base stat
+    base_att = models.IntegerField(default=5) #base stat
+    base_strength = models.IntegerField(default=10) #base stat
+    base_agility = models.IntegerField(default=10) #base stat
+    base_intelligence = models.IntegerField(default=10) #base stat
+    
+    #multipliers
+    hp_multiplier = models.FloatField(default=1.0) #100% base hp
+    mp_multiplier = models.FloatField(default=1.0) #100% base mp
+    att_multiplier = models.FloatField(default=1.0) #100% base att
+    strength_multiplier = models.FloatField(default=1.0) #100% base strength
+    agility_multiplier = models.FloatField(default=1.0) #100% base agility
+    intelligence_multiplier = models.FloatField(default=1.0) #100% base intelligence
+    
+    #fixed stats
+    fixed_hp = models.IntegerField(default=0) #Fixed hp
+    fixed_mp = models.IntegerField(default=0) #Fixed mp
+    fixed_att = models.IntegerField(default=0) #Fixed att
+    fixed_strength = models.IntegerField(default=0) #Fixed strength
+    fixed_agility = models.IntegerField(default=0) #Fixed agility
+    fixed_intelligence = models.IntegerField(default=0) #Fixed intelligence
+      
+    #drop rate
     drop_rate = models.FloatField(default=1) #100% base drop rate
     
     #information
@@ -35,8 +115,26 @@ class Character(models.Model):
     level = models.IntegerField(default=1)
     current_exp = models.IntegerField(default=0)
     
+    
+    
     def __str__(self):
         return self.id
+    
+    #logic
+    
+    def calculate_stat(self, base, multiplier, fixed):
+        return int((base * multiplier) + fixed)
+    
+    def get_stats(self):
+        return {
+            "hp": self.calculate_stat(self.base_hp, self.hp_multiplier, self.fixed_hp),
+            "mp": self.calculate_stat(self.base_mp, self.mp_multiplier, self.fixed_mp),
+            "att": self.calculate_stat(self.base_att, self.att_multiplier, self.fixed_att),
+            "strength": self.calculate_stat(self.base_strength, self.strength_multiplier, self.fixed_strength),
+            "agility": self.calculate_stat(self.base_agility, self.agility_multiplier, self.fixed_agility),
+            "intelligence": self.calculate_stat(self.base_intelligence, self.intelligence_multiplier, self.fixed_intelligence),
+            "drop_rate": self.drop_rate
+        }
     
     def calculate_attack_power(self):
         if self.character_class:
@@ -161,6 +259,15 @@ class Item(models.Model):
     drop_rate_boost = models.FloatField(default=0)
     description = models.TextField(blank=True)
     
+    #Sell price
+    sell_price = models.IntegerField(default=1) 
+    
+    #Lumen Ascension
+    lumen_asc_level = models.IntegerField(default=0)
+    
+    #Aurora Level
+    aurora_level = models.IntegerField(default=0)
+    
     
     def __str__(self):
         return self.name
@@ -260,4 +367,84 @@ class Drop(models.Model):
                 return {"item": self.item.name, "quantity": quantity}
         return None
         
+class AuroraLine(models.Model):
+    """
+    Aurora Line for an item
+    """
+    Stats_Choices = [
+        ('hp', 'HP'),
+        ('mp', 'MP'),
+        ('att', 'Attack'),
+        ('str', 'Strength'),
+        ('agi', 'Agility'),
+        ('int', 'Intelligence'),
+        ('all', 'All Stats'),
+        ('drop', 'Drop Rate')
+    ]
+    
+    Line_Type_Choices = [
+        ('flat', 'Flat'),
+        ('percent', 'Percent')
+    ]
+    
+    Item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='aurora_lines')
+    
+    stat_type = models.CharField(max_length=20, choices=Stats_Choices)
+    line_type = models.CharField(max_length=20, choices=Line_Type_Choices)
+    value = models.FloatField() #Value of the line
+    
+    def __str__(self):
+        return f"{self.stat_type} {self.value} {self.line_type}"
+    
+    def apply_lines(character, item):
+        #Apply the lines to the character
         
+        for line in item.aurora_lines.all():
+            if line.line_type == 'flat':
+                if line.stat.type == 'all':
+                    for stat in ['str', 'agi', 'int']:
+                        setattr (character, f"fixed_{stat}", getattr(character, f"fixed_{stat}") + line.value)
+                else:
+                    setattr(character, f"fixed_{line.stat_type}", getattr(character, f"fixed_{line.stat_type}") + line.value)
+            elif line.line_type == 'percent':
+                if line.stat_type == 'all':
+                    for stat in ['str', 'agi', 'int']:
+                        multiplier_field = f"{stat}_multiplier"
+                        setattr(character, multiplier_field, getattr(character, multiplier_field) + line.value / 100)
+                    else:
+                        multiplier_field = f"{line.stat_type}_multiplier"
+                        setattr(character, multiplier_field, getattr(character, multiplier_field) + line.value / 100)
+                        
+class Trade(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('cancelled', 'Cancelled')
+    ]
+    
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_trades')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_trades')
+    
+    #Lumis to be traded
+    sender_lumis = models.PositiveIntegerField(default=0)
+    receiver_lumis = models.PositiveIntegerField(default=0)
+    
+    #Check time of trade
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    
+    def __str__(self):
+        return f"{self.sender.username} to {self.receiver.username}"
+    
+class TradeItem(models.Model):
+    trade = models.ForeignKey(Trade, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    is_sender = models.BooleanField() #True if the item is from the sender, False if the item is from the receiver
+    
+    def __str__(self):
+        role = 'Sender' if self.is_sender else 'Receiver'
+        return f"{role}: {self.item.name}"
+    
+
+                            
+                                        
