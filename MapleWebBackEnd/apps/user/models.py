@@ -44,7 +44,7 @@ class User(AbstractBaseUser):
     
     #One to one relationship with character
     character = models.OneToOneField(
-        'Character',
+        'character.Character',
         on_delete=models.CASCADE,
         null=True,
         blank=True,

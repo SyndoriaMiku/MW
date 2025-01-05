@@ -94,25 +94,41 @@ class Character(models.Model):
         Gain experience points, then check if the character can level up
         """
         self.current_exp += exp
-        while True:
-            next_level = Level.objects.filter(level=self.level+1).first()
-            if next_level and self.current_exp >= next_level.required_exp:
-                self.level_up(next_level)
-            else:
-                break
+        current_level = Level.objects.get(level=self.level)
+        next_level = Level.objects.filter(level=self.level + 1).first()
+        
+        #check max level
+        if not next_level or current_level.required_exp==0:
+            return #do not get exp if max level
+        
+        #gain exp
+        self.current_exp += exp
+        while self.current_exp >= next_level.required_exp:
+            self.level_up(next_level)
+            next_level = Level.objects.filter(level=self.level + 1).first()
+        
             
     def level_up(self, next_level):
         """
         Level up the character and reset the experience points
         """
-        self.level += 1
-        self.current_exp -= next_level.required_exp
-        #Increase stats
-        self.hp += self.character_class.hp_growth
-        self.mp += self.character_class.mp_growth
-        self.strength += self.character_class.strength_growth
-        self.agility += self.character_class.agility_growth
-        self.intelligence += self.character_class.intelligence_growth
+        next_level = Level.objects.filter(level=self.level + 1).first()
+        
+        #Check next level
+        if next_level and next_level.required_exp > 0:
+            self.level += 1
+            self.current_exp -= next_level.required_exp
+            #Increase stats
+            #Increase stats
+            self.hp += self.character_class.hp_growth
+            self.mp += self.character_class.mp_growth
+            self.strength += self.character_class.strength_growth
+            self.agility += self.character_class.agility_growth
+            self.intelligence += self.character_class.intelligence_growth
+        else:
+            self.current_exp = 0
+            
+        
 
         
     
@@ -139,23 +155,12 @@ class Job(models.Model):
     """
     
     name = models.CharField(max_length=50, unique=True) #Job name
-    character_class = models.ForeignKey('CharacterClass', on_delete=models.CASCADE) #Class that job belongs to
+    character_class = models.ForeignKey(CharacterClass, on_delete=models.CASCADE) #Class that job belongs to
     
     def __str__(self):
         return self.name
     
-class Skill(models.Model):
-    """
-    Skill of job
-    """
-    name = models.CharField(max_length=50) #Skill name
-    job = models.ForeignKey('Job', on_delete=models.CASCADE) #Job that skill belongs to
-    mp_cost = models.IntegerField(default=0) #MP cost of the skill
-    cooldown = models.IntegerField(default=0) #Cooldown of the skill
-    description = models.TextField(blank=True) #Description of the skill
-    
-    def __str__(self):
-        return self.name
+
 
 class Level(models.Model):
     """
@@ -174,84 +179,27 @@ class Equipped(models.Model):
         related_name='equipped'
     )
     
-    ring1 = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='ring1_equipped')
-    ring2 = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='ring2_equipped')
-    ring3 = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='ring3_equipped')
-    ring4 = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='ring4_equipped')
-    pendant = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='pendant_equipped')
-    earring = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='earring_equipped')
-    belt = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='belt_equipped')
-    hat = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='hat_equipped')
-    top = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='top_equipped')
-    bottom = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='bottom_equipped')
-    shoes = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='shoes_equipped')
-    cape = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='cape_equipped')
-    gloves = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='gloves_equipped')
-    shoulder = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='shoulder_equipped')
-    face = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='face_equipped')
-    eye = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='eye_equipped')
-    weapon = models.ForeignKey(inventory.Item, on_delete=models.SET_NULL, null=True, blank=True, related_name='weapon_equipped')
+    ring1 = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='ring1_equipped')
+    ring2 = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='ring2_equipped')
+    ring3 = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='ring3_equipped')
+    ring4 = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='ring4_equipped')
+    pendant = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='pendant_equipped')
+    earring = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='earring_equipped')
+    belt = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='belt_equipped')
+    hat = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='hat_equipped')
+    top = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='top_equipped')
+    bottom = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='bottom_equipped')
+    shoes = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='shoes_equipped')
+    cape = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='cape_equipped')
+    gloves = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='gloves_equipped')
+    shoulder = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='shoulder_equipped')
+    face = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='face_equipped')
+    eye = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='eye_equipped')
+    weapon = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='weapon_equipped')
     
     def __str__(self):
         return f"{self.character.name}'s Equipped"    
 
-class Monster(models.Model):
-    """
-    Monster model
-    """
-    id = models.CharField(
-    name = models.CharField(max_length=50)
-    hp = models.IntegerField(default=50)
-    mp = models.IntegerField(default=5)
-    att = models.IntegerField(default=5)
 
-    def __str__(self):
-        return self.name
-        
-class Drop(models.Model):
-    NORMAL = 'normal'
-    EPIC = 'epic'
-    
-    DROP_TYPE_CHOICE = [
-        (NORMAL, 'Normal Drop'),
-        (EPIC, 'Epic Drop')
-    ]
-    
-    monster = models.ForeignKey(
-        Monster,
-        on_delete=models.CASCADE,
-        related_name='drops'
-    )
-    item = models.ForeignKey(
-        Item,
-        on_delete=models.CASCADE,
-        related_name='drops'
-    )
-    drop_rate = models.FloatField() #0.1 = 10% drop rate
-    quantity_min = models.IntegerField() #Minimum quantity of the item dropped
-    quantity_max = models.IntegerField() #Maximum quantity of the item dropped
-    drop_type = models.CharField(
-        max_length=10,
-        choices=DROP_TYPE_CHOICE,
-        default=NORMAL
-    )
-    
-    def __str__(self):
-        return f"{self.item.name} from {self.monster.name}"   
-    
-    def calculate_drop(self, player_drop_rate):
-        #Calculate the drop quantity
-        import random
-        
-        if self.drop_type == Drop.NORMAL:
-            final_drop_rate = self.item.drop_rate * player_drop_rate
-            if random.random() <= final_drop_rate:
-                quantity = random.randint(self.quantity_min, self.quantity_max)
-                return {"item": self.item.name, "quantity": quantity}
-        elif self.drop_type == Drop.EPIC:
-            if random.random() <= self.item.drop_rate:
-                quantity = random.randint(self.quantity_min, self.quantity_max)
-                return {"item": self.item.name, "quantity": quantity}
-        return None
     
         
