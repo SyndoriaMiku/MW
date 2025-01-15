@@ -16,12 +16,12 @@ class UserManager(BaseUserManager):
         if not password:
             raise ValueError('Users must have a password')
         
-        username = self.model.normalize_username(username)
         email = self.normalize_email(email)
         user = self.model(username=username, email=email)
         user.set_password(password)
         user.save(using=self._db)
         return user
+    
     def create_superuser(self, username, email, password=None):
         user = self.create_user(username, password, email)
         user.is_admin = True
@@ -35,7 +35,6 @@ class User(AbstractBaseUser):
     """
     username = models.CharField(max_length=255, unique=True)
     email = models.EmailField(max_length=255, unique=True)
-    password = models.CharField(max_length=128)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     
@@ -58,5 +57,5 @@ class User(AbstractBaseUser):
     def __str__(self):
         return self.username
     
-    def is_admin(self):
-        return self.is_admin
+    def is_staff(self):
+        return self.is_admin #Required for admin
