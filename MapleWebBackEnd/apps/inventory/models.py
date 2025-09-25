@@ -22,11 +22,26 @@ class Item(models.Model):
         ('use', 'Consumable'),
         ('etc', 'Etc')
     ]
+
+    Weapon_Type_Choices = [
+        ('1hs', 'One Handed Sword'),
+        ('2hs', 'Two Handed Sword'),
+        ('1ha', 'One Handed Axe'),
+        ('bow', 'Bow'),
+        ('staff', 'Staff'),
+        ('wand', 'Wand'),
+        ('spear', 'Spear'),
+
+    ]
+         
     
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=20, choices=Type_Choices) #Item type
     minimum_level = models.IntegerField(default=1) #Minimum level to equip the item
+    class_restriction = models.ManyToManyField('character.CharacterClass', blank=True) #Class restriction (empty means no restriction)
+    job_restriction = models.ManyToManyField('character.Job', blank=True) #Job restriction (empty means no restriction)
+    #Stats Boost
     hp_boost = models.IntegerField(default=0)
     mp_boost = models.IntegerField(default=0)
     att_boost = models.IntegerField(default=0)
@@ -42,6 +57,13 @@ class Item(models.Model):
     
     #Lumen Ascension
     lumen_asc_level = models.IntegerField(default=0)
+    lumen_hp_boost = models.IntegerField(default=0)
+    lumen_mp_boost = models.IntegerField(default=0)
+    lumen_att_boost = models.IntegerField(default=0)
+    lumen_str_boost = models.IntegerField(default=0)
+    lumen_agi_boost = models.IntegerField(default=0)
+    lumen_int_boost = models.IntegerField(default=0)
+    
     
     #Aurora Level
     aurora_level = models.IntegerField(default=0)
