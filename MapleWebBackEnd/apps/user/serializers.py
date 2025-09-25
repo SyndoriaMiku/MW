@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password as django_validate_password
 from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
@@ -14,3 +15,10 @@ class UserSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password']
         )
+
+    def validate_password(self, value):
+        django_validate_password(value)
+        return value
+
+    def validate_email(self, value):
+        return User.objects.normalize_email(value)
