@@ -23,7 +23,7 @@ class UserManager(BaseUserManager):
         return user
     
     def create_superuser(self, username, email, password=None):
-        user = self.create_user(username, password, email)
+        user = self.create_user(username, email, password)
         user.is_admin = True
         user.is_superuser = True
         user.save(using=self._db)
@@ -57,5 +57,5 @@ class User(AbstractBaseUser):
     def __str__(self):
         return self.username
     
-    def is_staff(self):
-        return self.is_admin #Required for admin
+    def has_admin_permissions(self):
+        return self.is_admin
