@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'apps.character',
     'apps.inventory',
     'apps.market',
+    'apps.gameplay',
 
     #Third Party Apps
     'rest_framework',
@@ -114,6 +115,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTH_USER_MODEL = 'user.User'
+
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+]
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
