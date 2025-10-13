@@ -9,8 +9,8 @@ class Trade(models.Model):
         ('cancelled', 'Cancelled')
     ]
     
-    sender = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='sent_trades')
-    receiver = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='received_trades')
+    sender = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='sent_trades')
+    receiver = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='received_trades')
     
     #Lumis to be traded
     sender_lumis = models.PositiveIntegerField(default=0)
@@ -24,8 +24,8 @@ class Trade(models.Model):
         return f"{self.sender.username} to {self.receiver.username}"
     
 class TradeItem(models.Model):
-    trade = models.ForeignKey(Trade, on_delete=models.CASCADE, related_name='items')
-    item = models.ForeignKey('inventory.Item', on_delete=models.CASCADE)
+    trade = models.ForeignKey('market.Trade', on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('inventory.InventoryItem', on_delete=models.CASCADE)
     is_sender = models.BooleanField() #True if the item is from the sender, False if the item is from the receiver
     
     def __str__(self):
@@ -34,9 +34,9 @@ class TradeItem(models.Model):
     
 class Listing(models.Model):
     #User listing this item
-    seller = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='listings')
+    seller = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='listings')
     #Item being listed
-    item = models.ForeignKey('inventory.Item', on_delete=models.CASCADE, related_name='listings')
+    item = models.ForeignKey('inventory.InventoryItem', on_delete=models.CASCADE, related_name='listings')
     
     #Price of the item (Lumis)
     price = models.PositiveIntegerField()
@@ -53,11 +53,11 @@ class Transaction(models.Model):
     #ID of the transaction
     id = models.AutoField(primary_key=True)
     #Link to the listing
-    listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='transactions')
+    listing = models.ForeignKey('market.Listing', on_delete=models.CASCADE, related_name='transactions')
     #Buyer of the item
-    buyer = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='transactions')
+    buyer = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='transactions')
     #Seller of the item
-    seller = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='sales')
+    seller = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='sales')
     #Transaction time
     created_at = models.DateTimeField(auto_now_add=True)
     
