@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils.functional import cached_property
+from collections import defaultdict
 
 
 #Create UUID
@@ -20,6 +22,7 @@ class Character(models.Model):
         editable=False
     )
     name = models.CharField(max_length=20)
+    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='characters')
     
     #stats
     
@@ -34,8 +37,8 @@ class Character(models.Model):
     drop_rate = models.FloatField(default=1) #100% base drop rate
     
     #information
-    character_class = models.ForeignKey('CharacterClass', on_delete=models.SET_NULL, null=True)
-    Job = models.ForeignKey('Job', on_delete=models.SET_NULL, null=True)
+    character_class = models.ForeignKey('classes.CharacterClass', on_delete=models.SET_NULL, null=True)
+    job = models.ForeignKey('classes.Job', on_delete=models.SET_NULL, null=True)
     
     #leveling
     level = models.IntegerField(default=1)
@@ -44,7 +47,11 @@ class Character(models.Model):
     def __str__(self):
         return self.name
     
-    def _get_equipment(self):
+    def _get_equipped_items(self):
+        """Helper method to get all equipped items."""
+        if not hasattr(self, 'equipment'):
+            return []
+            
         if not hasattr(self, '_cached_equipment'):
             equipment = []
             slot_fields = [
@@ -60,7 +67,7 @@ class Character(models.Model):
         return self._cached_equipment
     
     def _get_base_equipment_mods(self, mods, equipped_items):
-        """Lớp 1: Thu thập chỉ số gốc từ ItemTemplate."""
+        """Get stat from ItemTemplate."""
         for item in equipped_items:
             template = item.template
             mods['hp']['flat'] += template.hp_boost
@@ -72,10 +79,27 @@ class Character(models.Model):
 
             if template.all_stats_boost > 0:
                 for stat in ['strength', 'agility', 'intelligence']:
-                    mods[stat]['flat'] += template.all_stats_boost
+                    mods[stat]['percent'] += template.all_stats_boost
+    
+    def _get_lumen_ascend_mods(self, mods, equipped_items):
+        """Get stat from Lumen Ascend."""
+        for item in equipped_items:
+            level = item.lumen_ascend_level
+            if level > 0 and item.template.lumen_tier:
+                tier = item.template.lumen_tier
+                mods['hp']['flat'] += tier.hp_per_level * level
+                mods['mp']['flat'] += tier.mp_per_level * level
+                mods['att']['flat'] += tier.att_per_level * level
+                mods['strength']['flat'] += tier.strength_per_level * level
+                mods['agility']['flat'] += tier.agility_per_level * level
+                mods['intelligence']['flat'] += tier.intelligence_per_level * level
+                
+                if tier.all_stats_per_level > 0:
+                    for stat in ['strength', 'agility', 'intelligence']:
+                        mods[stat]['percent'] += tier.all_stats_per_level * level
 
     def _get_aurora_line_mods(self, mods, equipped_items):
-        """Lớp 2: Thu thập chỉ số từ các dòng Aurora."""
+        """Get stat from Aurora."""
         for item in equipped_items:
             for line in item.aurora_lines.all():
                 stat, value = line.stat_type, line.value
@@ -93,7 +117,7 @@ class Character(models.Model):
                         mods[stat]['percent'] += value / 100.0
 
     def _get_item_set_mods(self, mods, equipped_items):
-        """Lớp 3: Thu thập chỉ số từ hiệu ứng Item Set."""
+        """Get stat from Item Set effects."""
         set_counts = defaultdict(int)
         for item in equipped_items:
             for item_set in item.template.item_sets.all():
@@ -111,12 +135,12 @@ class Character(models.Model):
                 
                 if effect.all_stats_boost > 0:
                     for stat in ['strength', 'agility', 'intelligence']:
-                        mods[stat]['flat'] += effect.all_stats_boost
+                        mods[stat]['percent'] += effect.all_stats_boost
 
     @cached_property
     def _all_stat_modifiers(self):
         """
-        HÀM ĐIỀU PHỐI TRUNG TÂM: Chạy pipeline để lấy TẤT CẢ các bonus.
+        Get all the bonus modifiers from equipment and other sources.
         """
         stat_keys = ['hp', 'mp', 'att', 'strength', 'agility', 'intelligence', 'drop_rate']
         mods = {key: {'flat': 0, 'percent': 0} for key in stat_keys}
@@ -126,11 +150,8 @@ class Character(models.Model):
         # --- GỌI CÁC LỚP TÍNH TOÁN THEO THỨ TỰ ---
         self._get_base_equipment_mods(mods, equipped_items)
         self._get_aurora_line_mods(mods, equipped_items)
+        self._get_lumen_ascend_mods(mods, equipped_items)
         self._get_item_set_mods(mods, equipped_items)
-        
-        # TƯƠNG LAI: Thêm hàm mới ở đây, ví dụ:
-        # self._get_lumen_ascend_mods(mods, equipped_items)
-        # self._get_active_buff_mods(mods)
         
         return mods
 
@@ -142,17 +163,17 @@ class Character(models.Model):
     @cached_property
     def total_strength(self):
         mods = self._all_stat_modifiers['strength']
-        return round((self.base_strength + mods['flat']) * (1 + mods['percent']))
+        return round((self.base_str + mods['flat']) * (1 + mods['percent']))
 
     @cached_property
     def total_agility(self):
         mods = self._all_stat_modifiers['agility']
-        return round((self.base_agility + mods['flat']) * (1 + mods['percent']))
+        return round((self.base_agi + mods['flat']) * (1 + mods['percent']))
         
     @cached_property
     def total_intelligence(self):
         mods = self._all_stat_modifiers['intelligence']
-        return round((self.base_intelligence + mods['flat']) * (1 + mods['percent']))
+        return round((self.base_int + mods['flat']) * (1 + mods['percent']))
 
     @cached_property
     def total_hp(self):
@@ -190,7 +211,7 @@ class Equipment(models.Model):
     cape = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='cape_equipped')
     gloves = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='gloves_equipped')
     shoulder = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='shoulder_equipped')
-    weapon = models.ForeignKey("inventory.Item", on_delete=models.SET_NULL, null=True, blank=True, related_name='weapon_equipped')
+    weapon = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='weapon_equipped')
     
     def __str__(self):
         return f"{self.character.name}'s Equipped"    
