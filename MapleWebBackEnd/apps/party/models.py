@@ -2,10 +2,11 @@ from django.db import models
 from django.conf import settings
 from apps.characters.models import generate_hex_id
 from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 class Party(models.Model):
     """
-    Save activate party information
+    Save active party information
     """
     id = models.CharField(primary_key=True, max_length=8, default=generate_hex_id, editable=False)
     name = models.CharField(max_length=100)
