@@ -247,6 +247,20 @@ class Equipment(models.Model):
     
     def __str__(self):
         return f"{self.character.name}'s Equipped"    
+    
+class CharacterSkill(models.Model):
+    character = models.ForeignKey(Character, on_delete=models.CASCADE, related_name='skills')
+    skill_template = models.ForeignKey('skills.SkillTemplate', on_delete=models.CASCADE)
+    level = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(10)])
+    
+    class Meta:
+        unique_together = ('character', 'skill_template')
+        verbose_name = "Character Skill"
+        verbose_name_plural = "Character Skills"
+        ordering = ['character', 'skill_template']
+    
+    def __str__(self):
+        return f"{self.character.name} - {self.skill_template.name} (Level {self.level})"
 
 
     
