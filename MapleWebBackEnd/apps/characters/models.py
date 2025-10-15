@@ -54,6 +54,31 @@ class Character(models.Model):
     def __str__(self):
         return self.name
     
+    #Stamina regeneration logic
+    STAMINA_REGEN_RATE = 180 #Regenerate 1 stamina every interval in seconds
+    def update_stamina(self):
+        """
+        Calculate and update current stamina based on time elapsed since last update.
+        Always call this method before accessing current_stamina.
+        """
+        if self.current_stamina >= self.max_stamina:
+            self.last_stamina_update = timezone.now()
+            self.save(update_fields=['last_stamina_update'])
+            return self.current_stamina
+        #Calculate time elapsed since last update
+        now = timezone.now()
+        time_passed = (now - self.last_stamina_update).total_seconds()
+        #Calculate how much stamina to regenerate
+        stamina_to_regen = int(time_passed // self.STAMINA_REGEN_RATE)
+        if stamina_to_regen > 0:
+            new_stamina = min(self.current_stamina + stamina_to_regen, self.max_stamina)
+            self.current_stamina = new_stamina
+            #Update last update time to account for partial intervals
+            seconds_used = stamina_to_regen * self.STAMINA_REGEN_RATE
+            self.last_stamina_update += timezone.timedelta(seconds=seconds_used)
+            self.save(update_fields=['current_stamina', 'last_stamina_update'])
+        return self.current_stamina
+
     def _get_equipped_items(self):
         """Helper method to get all equipped items."""
         if not hasattr(self, 'equipment'):
