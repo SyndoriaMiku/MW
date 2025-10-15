@@ -1,7 +1,8 @@
 from django.db import models
 from django.utils.functional import cached_property
 from collections import defaultdict
-
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 
 #Create UUID
 import uuid
@@ -43,6 +44,12 @@ class Character(models.Model):
     #leveling
     level = models.IntegerField(default=1)
     current_exp = models.IntegerField(default=0)
+
+    #stamina system
+    max_stamina = models.IntegerField(default=120)
+    current_stamina = models.PositiveIntegerField(default=120, validators=[MinValueValidator(0), MaxValueValidator(120)])
+    last_stamina_update = models.DateTimeField(default=timezone.now,help_text="Last time stamina was updated")
+
     
     def __str__(self):
         return self.name

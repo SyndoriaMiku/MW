@@ -1,70 +1,115 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 
-class Level(models.Model):
+
+
+class ExperienceTable(models.Model):
     """
-    Level model
-    """ 
+    Experience table for character leveling
+    """
     level = models.IntegerField(unique=True)
     required_exp = models.IntegerField() #EXP needed to level up
     
     def __str__(self):
         return f"Level {self.level} need {self.required_exp} EXP"
-
-class MonsterTemplate(models.Model):
+    
+class EnemyTemplate(models.Model):
     """
-    Monster model
+    Template for enemy types
     """
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=50)
-    hp = models.IntegerField(default=50)
-    mp = models.IntegerField(default=5)
-    att = models.IntegerField(default=5)
+    name = models.CharField(max_length=100)
+    level = models.IntegerField()
+    is_boss = models.BooleanField(default=False) #True if boss, False if normal monster
+    skills = models.ManyToManyField('skills.SkillTemplate', blank=True, related_name='enemies') #Skills that the enemy can use
+
+    base_hp = models.IntegerField()
+    base_mp = models.IntegerField()
+    base_att = models.IntegerField()
+
+    # Regular reward
+    exp_reward = models.IntegerField() #EXP rewarded for defeating this enemy
+    lumis_reward_min = models.IntegerField() #Lumis rewarded for defeating this enemy
+    lumis_reward_max = models.IntegerField() #Lumis rewarded for defeating this enemy
+
+
+class LootTable(models.Model):
+    """
+    Loot table for monsters
+    """
+    class DropType(models.TextChoices):
+        COMMON = 'common', 'Easily dropped, gain a lot of drop increase'
+        EPIC = 'epic', 'Hard to drop, can only boosted by specific consumable item and limited events'
+        LEGENDARY = 'legendary', 'Very rare, cannot increase drop rate'
+
+    enemy = models.ForeignKey('world.EnemyTemplate', on_delete=models.CASCADE, related_name='loot_tables')
+    item_template = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE)
+
+    base_drop_rate = models.FloatField(validators=[MinValueValidator(0), MaxValueValidator(1)]) #Base drop rate (0 to 1)
+    min_quantity = models.IntegerField(default=1) #Minimum quantity dropped
+    max_quantity = models.IntegerField(default=1) #Maximum quantity dropped
+
+    drop_type = models.CharField(max_length=10, choices=DropType.choices, default=DropType.COMMON)
+
+    class Meta:
+        unique_together = ('enemy', 'item_template')
+        verbose_name = "Loot Table"
+        verbose_name_plural = "Loot Tables"
+        ordering = ['enemy', 'item_template']
+
+    def __str__(self):
+        return f"{self.enemy.name} - {self.item_template.name}"
+
+# ===================================================================
+# SECTION: WORLD DUNGEON & MAP MODELS
+# ===================================================================
+class BaseStageTemplate(models.Model):
+    """
+    Base template for stages in dungeons
+    """
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+    # Requirement
+    required_level = models.IntegerField(default=1) #Minimum level to enter the dungeon
+    # Content
+    enemies = models.ManyToManyField('world.EnemyTemplate',through='world.StageEnemy', related_name='%(class)s_stages')
+    # Reward
+    exp_reward = models.IntegerField(default=0) #EXP rewarded for completing this stage
+    lumis_reward = models.IntegerField(default=0) #Lumis rewarded for completing this
+
+    class Meta:
+        abstract = True
+        ordering = ['required_level', 'id']
 
     def __str__(self):
         return self.name
-        
-class Drop(models.Model):
-    NORMAL = 'normal'
-    EPIC = 'epic'
     
-    DROP_TYPE_CHOICE = [
-        (NORMAL, 'Normal Drop'),
-        (EPIC, 'Epic Drop')
-    ]
+class NormalDungeonTemplate(BaseStageTemplate):
+    """
+    Normal dungeon template
+    """
+    stamina_cost = models.PositiveIntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(100)]) #Stamina cost to enter the dungeon
     
-    monster = models.ForeignKey(
-        Monster,
-        on_delete=models.CASCADE,
-        related_name='drops'
-    )
-    item = models.ForeignKey(
-        "inventory.Item",
-        on_delete=models.CASCADE,
-        related_name='drops'
-    )
-    drop_rate = models.FloatField() #0.1 = 10% drop rate
-    quantity_min = models.IntegerField() #Minimum quantity of the item dropped
-    quantity_max = models.IntegerField() #Maximum quantity of the item dropped
-    drop_type = models.CharField(
-        max_length=10,
-        choices=DROP_TYPE_CHOICE,
-        default=NORMAL
-    )
-    
-    def __str__(self):
-        return f"{self.item.name} from {self.monster.name}"   
-    
-    def calculate_drop(self, player_drop_rate):
-        #Calculate the drop quantity
-        import random
-        
-        if self.drop_type == Drop.NORMAL:
-            final_drop_rate = self.item.drop_rate * player_drop_rate
-            if random.random() <= final_drop_rate:
-                quantity = random.randint(self.quantity_min, self.quantity_max)
-                return {"item": self.item.name, "quantity": quantity}
-        elif self.drop_type == Drop.EPIC:
-            if random.random() <= self.item.drop_rate:
-                quantity = random.randint(self.quantity_min, self.quantity_max)
-                return {"item": self.item.name, "quantity": quantity}
-        return None
+
+    class Meta(BaseStageTemplate.Meta):
+        verbose_name = "Normal Dungeon Template"
+        verbose_name_plural = "Normal Dungeon Templates"
+
+class BossDungeonTemplate(BaseStageTemplate):
+    """
+    Boss dungeon template
+    """
+    class TimeType(models.TextChoices):
+        DAILY = 'daily', 'Can be done once per day'
+        WEEKLY = 'weekly', 'Can be done once per week'
+        MONTHLY = 'monthly', 'Can be done once per month'
+
+    max_party_size = models.IntegerField(default=4, validators=[MinValueValidator(1), MaxValueValidator(10)]) #Maximum party size
+    time_type = models.CharField(max_length=10, choices=TimeType.choices,default=TimeType.DAILY) #How often the dungeon can be done
+
+
+    class Meta(BaseStageTemplate.Meta):
+        verbose_name = "Boss Dungeon Template"
+        verbose_name_plural = "Boss Dungeon Templates"
