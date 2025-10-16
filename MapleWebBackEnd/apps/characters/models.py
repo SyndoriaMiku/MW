@@ -105,30 +105,28 @@ class Character(models.Model):
             mods['hp']['flat'] += template.hp_boost
             mods['mp']['flat'] += template.mp_boost
             mods['att']['flat'] += template.att_boost
-            mods['strength']['flat'] += template.strength_boost
-            mods['agility']['flat'] += template.agility_boost
-            mods['intelligence']['flat'] += template.intelligence_boost
+            mods['str']['flat'] += template.str_boost
+            mods['agi']['flat'] += template.agi_boost
+            mods['int']['flat'] += template.int_boost
 
             if template.all_stats_boost > 0:
-                for stat in ['strength', 'agility', 'intelligence']:
-                    mods[stat]['percent'] += template.all_stats_boost
+                for stat in ['str', 'agi', 'int']:
+                    mods[stat]['flat'] += template.all_stats_boost
     
     def _get_lumen_ascend_mods(self, mods, equipped_items):
         """Get stat from Lumen Ascend."""
+        from items.models import LumenAscendRule
         for item in equipped_items:
             level = item.lumen_ascend_level
             if level > 0 and item.template.lumen_tier:
-                tier = item.template.lumen_tier
-                mods['hp']['flat'] += tier.hp_per_level * level
-                mods['mp']['flat'] += tier.mp_per_level * level
-                mods['att']['flat'] += tier.att_per_level * level
-                mods['strength']['flat'] += tier.strength_per_level * level
-                mods['agility']['flat'] += tier.agility_per_level * level
-                mods['intelligence']['flat'] += tier.intelligence_per_level * level
-                
-                if tier.all_stats_per_level > 0:
-                    for stat in ['strength', 'agility', 'intelligence']:
-                        mods[stat]['percent'] += tier.all_stats_per_level * level
+                rules = LumenAscendRule.objects.filter(tier=item.template.lumen_tier, level=level).first()
+                for rule in rules:
+                    mods['hp']['flat'] += rule.hp_boost
+                    mods['mp']['flat'] += rule.mp_boost
+                    mods['att']['flat'] += rule.att_boost
+                    mods['str']['flat'] += rule.str_boost
+                    mods['agi']['flat'] += rule.agi_boost
+                    mods['int']['flat'] += rule.int_boost
 
     def _get_aurora_line_mods(self, mods, equipped_items):
         """Get stat from Aurora."""
@@ -137,7 +135,7 @@ class Character(models.Model):
                 stat, value = line.stat_type, line.value
                 
                 if stat == 'all':
-                    for s in ['strength', 'agility', 'intelligence']:
+                    for s in ['str', 'agi', 'int']:
                         if line.line_type == 'flat':
                             mods[s]['flat'] += value
                         elif line.line_type == 'percent':
@@ -161,20 +159,20 @@ class Character(models.Model):
                 mods['hp']['flat'] += effect.hp_boost
                 mods['mp']['flat'] += effect.mp_boost
                 mods['att']['flat'] += effect.att_boost
-                mods['strength']['flat'] += effect.strength_boost
-                mods['agility']['flat'] += effect.agility_boost
-                mods['intelligence']['flat'] += effect.intelligence_boost
+                mods['str']['flat'] += effect.str_boost
+                mods['agi']['flat'] += effect.agi_boost
+                mods['int']['flat'] += effect.int_boost
                 
                 if effect.all_stats_boost > 0:
-                    for stat in ['strength', 'agility', 'intelligence']:
-                        mods[stat]['percent'] += effect.all_stats_boost
+                    for stat in ['str', 'agi', 'int']:
+                        mods[stat]['flat'] += effect.all_stats_boost
 
     @cached_property
     def _all_stat_modifiers(self):
         """
         Get all the bonus modifiers from equipment and other sources.
         """
-        stat_keys = ['hp', 'mp', 'att', 'strength', 'agility', 'intelligence', 'drop_rate']
+        stat_keys = ['hp', 'mp', 'att', 'str', 'agi', 'int', 'drop_rate']
         mods = {key: {'flat': 0, 'percent': 0} for key in stat_keys}
         
         equipped_items = self._get_equipped_items()
@@ -193,18 +191,18 @@ class Character(models.Model):
     # ===================================================================
 
     @cached_property
-    def total_strength(self):
-        mods = self._all_stat_modifiers['strength']
+    def total_str(self):
+        mods = self._all_stat_modifiers['str']
         return round((self.base_str + mods['flat']) * (1 + mods['percent']))
 
     @cached_property
-    def total_agility(self):
-        mods = self._all_stat_modifiers['agility']
+    def total_agi(self):
+        mods = self._all_stat_modifiers['agi']
         return round((self.base_agi + mods['flat']) * (1 + mods['percent']))
         
     @cached_property
-    def total_intelligence(self):
-        mods = self._all_stat_modifiers['intelligence']
+    def total_int(self):
+        mods = self._all_stat_modifiers['int']
         return round((self.base_int + mods['flat']) * (1 + mods['percent']))
 
     @cached_property

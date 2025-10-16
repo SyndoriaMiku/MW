@@ -101,10 +101,9 @@ class ItemSetEffect(models.Model):
     hp_boost = models.IntegerField(default=0)
     mp_boost = models.IntegerField(default=0)
     att_boost = models.IntegerField(default=0)
-    strength_boost = models.IntegerField(default=0)
-    agility_boost = models.IntegerField(default=0)
-    intelligence_boost = models.IntegerField(default=0)
-    all_stats_boost = models.IntegerField(default=0)
+    str_boost = models.IntegerField(default=0)
+    agi_boost = models.IntegerField(default=0)
+    int_boost = models.IntegerField(default=0)
     
     def __str__(self):
         return f"{self.item_set.name} {self.required_count} Set Items Effect"
@@ -194,4 +193,31 @@ class AuroraLinePool(models.Model):
             f"{self.item_type} (Level {self.min_level}+): "
             f"{self.stat_type} {self.value} ({self.line_type})"
         )
-    
+
+class LumenAscendRule(models.Model):
+    """
+    Stat boost rules for Lumen Ascend
+    """
+    lumen_tier = models.ForeignKey('items.LumenTierProperty', on_delete=models.CASCADE, related_name='ascend_rules')
+    item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, help_text="Item type applicable for this rule")
+    #Stat gain on this level up, e.g at level 1 gain 5hp, so lumen_level 1 hp_boost 5
+    lumen_level = models.PositiveIntegerField(help_text="Lumen Ascend Level")
+
+    #Stat gain
+    hp_boost = models.IntegerField(default=0)
+    mp_boost = models.IntegerField(default=0)
+    att_boost = models.IntegerField(default=0)
+    str_boost = models.IntegerField(default=0)
+    agi_boost = models.IntegerField(default=0)
+    int_boost = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ('lumen_tier', 'item_type', 'lumen_level')
+        verbose_name = "Lumen Ascend Stat Rule"
+        verbose_name_plural = "Lumen Ascend Stat Rules"
+        ordering = ['lumen_tier', 'item_type', 'lumen_level']
+    def __str__(self):
+        return (
+            f"Lumen Tier {self.lumen_tier.tier} - {self.item_type} - Level {self.lumen_level}"
+        )
+

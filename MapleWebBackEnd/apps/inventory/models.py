@@ -1,5 +1,5 @@
 from django.db import models
-from items.models import STATS_CHOICES, LINE_TYPE_CHOICES
+from apps.items.models import STATS_CHOICES, LINE_TYPE_CHOICES
     
 class InventoryItem(models.Model):
     """
