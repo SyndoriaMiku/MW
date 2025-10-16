@@ -2,6 +2,8 @@ from datetime import timezone
 from django.db import models
 from django.forms import ValidationError
 
+from MapleWebBackEnd.apps import items
+
 class ShopCategory(models.Model):
     class CurrencyType(models.TextChoices):
         LUMIS = 'lumis', 'Lumis'
@@ -70,4 +72,37 @@ class ShopItem(models.Model):
     def __str__(self):
         return f"{self.item_template.name} in {self.category.name} for {self.price} {self.category.currency_type}"
 
+class SpecialShopItem(models.Model):
+    """
+    Special item
+    """
+    id = models.AutoField(primary_key=True)
+
+    item = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, related_name='special_shop_items', help_text="Item endgame")
+    exchange = models.ManyToManyField('items.ItemTemplate', through='SpecialShopItemRecipe', related_name='+' )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Special Shop Item"
+        verbose_name_plural = "Special Shop Items"
+        ordering = ['id']
+    def __str__(self):
+        return f"Special Item {self.item.name} for {self.exchange.name}"    
+
+class SpecialShopItemRecipe(models.Model):
+    """
+    Model for special item recipe
+    """
+    recipe = models.ForeignKey('shops.SpecialShopItem', on_delete=models.CASCADE)
+    item = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, help_text="Item required for exchange")
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        verbose_name = "Special Shop Item Recipe"
+        verbose_name_plural = "Special Shop Item Recipes"
+        ordering = ['recipe', 'item']
+        unique_together = ('recipe', 'item')
+    def __str__(self):
+        return f"{self.quantity} x {self.item.name} for {self.recipe.item.name}"
     

@@ -8,6 +8,7 @@ class QuestTemplate(models.Model):
         MAIN = 'main', 'Main Quest'
         SIDE = 'side', 'Side Quest'
         DAILY = 'daily', 'Daily Quest'
+        WEEKLY = 'weekly', 'Weekly Quest'
         EVENT = 'event', 'Event Quest'
 
     id = models.AutoField(primary_key=True)
