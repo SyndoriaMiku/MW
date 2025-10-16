@@ -1,8 +1,6 @@
-from datetime import timezone
 from django.db import models
-from django.forms import ValidationError
-
-from MapleWebBackEnd.apps import items
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 class ShopCategory(models.Model):
     class CurrencyType(models.TextChoices):
@@ -79,7 +77,7 @@ class SpecialShopItem(models.Model):
     id = models.AutoField(primary_key=True)
 
     item = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, related_name='special_shop_items', help_text="Item endgame")
-    exchange = models.ManyToManyField('items.ItemTemplate', through='SpecialShopItemRecipe', related_name='+' )
+    exchange = models.ManyToManyField('items.ItemTemplate', through='shops.SpecialShopItemRecipe', related_name='+' )
 
     is_active = models.BooleanField(default=True)
 

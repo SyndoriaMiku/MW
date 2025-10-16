@@ -22,9 +22,6 @@ class EquipmentInline(admin.StackedInline):
             'fields': ('weapon',)
         }),
     )
-    
-    autocomplete_fields = ['pendant', 'earring', 'belt', 'face', 'eye', 'hat', 'top', 'bottom', 
-                          'shoes', 'cape', 'gloves', 'shoulder', 'weapon', 'rings']
 
 
 class CharacterSkillInline(admin.TabularInline):
@@ -32,7 +29,6 @@ class CharacterSkillInline(admin.TabularInline):
     model = CharacterSkill
     extra = 0
     fields = ('skill_template', 'level')
-    autocomplete_fields = ['skill_template']
 
 
 @admin.register(Character)
@@ -63,8 +59,6 @@ class CharacterAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ('id', 'last_stamina_update')
-    
-    autocomplete_fields = ['owner', 'character_class', 'job']
     
     inlines = [EquipmentInline, CharacterSkillInline]
     
@@ -103,10 +97,6 @@ class EquipmentAdmin(admin.ModelAdmin):
             'fields': ('weapon',)
         }),
     )
-    
-    autocomplete_fields = ['character', 'pendant', 'earring', 'belt', 'face', 'eye', 
-                          'hat', 'top', 'bottom', 'shoes', 'cape', 'gloves', 
-                          'shoulder', 'weapon', 'rings']
 
 
 @admin.register(CharacterSkill)
@@ -122,5 +112,3 @@ class CharacterSkillAdmin(admin.ModelAdmin):
             'fields': ('character', 'skill_template', 'level')
         }),
     )
-    
-    autocomplete_fields = ['character', 'skill_template']

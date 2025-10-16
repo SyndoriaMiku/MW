@@ -18,8 +18,6 @@ from decouple import config, Csv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -53,6 +51,8 @@ INSTALLED_APPS = [
     'apps.battles',      # Turn-based battle system
     'apps.party',        # Party/team system
     'apps.world',        # World and locations
+    'apps.quests',       # Quest system
+    'apps.shops',        # Shop system
 
     # Third Party Apps
     'rest_framework',
@@ -126,7 +126,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL = 'users.GameUser'
 
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',

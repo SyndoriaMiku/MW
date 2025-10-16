@@ -23,7 +23,7 @@ class Character(models.Model):
         editable=False
     )
     name = models.CharField(max_length=20)
-    owner = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='characters')
+    owner = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='characters')
     
     #stats
     
@@ -115,7 +115,7 @@ class Character(models.Model):
     
     def _get_lumen_ascend_mods(self, mods, equipped_items):
         """Get stat from Lumen Ascend."""
-        from items.models import LumenAscendRule
+        from apps.items.models import LumenAscendRule
         for item in equipped_items:
             level = item.lumen_ascend_level
             if level > 0 and item.template.lumen_tier:
@@ -272,7 +272,7 @@ class Equipment(models.Model):
     
 class CharacterSkill(models.Model):
     character = models.ForeignKey(Character, on_delete=models.CASCADE, related_name='skills')
-    skill_template = models.ForeignKey('skills.SkillTemplate', on_delete=models.CASCADE)
+    skill_template = models.ForeignKey('skilles.SkillTemplate', on_delete=models.CASCADE)
     level = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(10)])
     
     class Meta:

@@ -21,7 +21,7 @@ class EnemyTemplate(models.Model):
     name = models.CharField(max_length=100)
     level = models.IntegerField()
     is_boss = models.BooleanField(default=False) #True if boss, False if normal monster
-    skills = models.ManyToManyField('skills.SkillTemplate', blank=True, related_name='enemies') #Skills that the enemy can use
+    skills = models.ManyToManyField('skilles.SkillTemplate', blank=True, related_name='enemies') #Skills that the enemy can use
 
     base_hp = models.IntegerField()
     base_mp = models.IntegerField()
@@ -74,7 +74,7 @@ class BaseStageTemplate(models.Model):
     # Requirement
     required_level = models.IntegerField(default=1) #Minimum level to enter the dungeon
     # Content
-    enemies = models.ManyToManyField('world.EnemyTemplate',through='world.StageEnemy', related_name='%(class)s_stages')
+    enemies = models.ManyToManyField('world.EnemyTemplate', related_name='%(class)s_stages', blank=True)
     # Reward
     exp_reward = models.IntegerField(default=0) #EXP rewarded for completing this stage
     lumis_reward = models.IntegerField(default=0) #Lumis rewarded for completing this
