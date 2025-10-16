@@ -119,7 +119,7 @@ class Character(models.Model):
         for item in equipped_items:
             level = item.lumen_ascend_level
             if level > 0 and item.template.lumen_tier:
-                rules = LumenAscendRule.objects.filter(tier=item.template.lumen_tier, level=level).first()
+                rules = LumenAscendRule.objects.filter(tier=item.template.lumen_tier, level=level, item_type=item.template.item_type)
                 for rule in rules:
                     mods['hp']['flat'] += rule.hp_boost
                     mods['mp']['flat'] += rule.mp_boost
@@ -184,6 +184,30 @@ class Character(models.Model):
         self._get_item_set_mods(mods, equipped_items)
         
         return mods
+    @cached_property
+    def total_damage(self):
+        """
+        Calculate total damage based on total stats and class ratios.
+        """
+        if not self.job or not self.character_class:
+            return self.total_att
+        
+        job = self.job
+        main_stat = self.character_class.main_stat
+        stats = {
+            "str": self.total_str,
+            "agi": self.total_agi,
+            "int": self.total_int,
+        }
+        total_main_stats = stats.pop(main_stat)
+
+        dmg_att = self.total_att * job.att_weight
+        dmg_stat = total_main_stats * job.main_stat_weight
+        final_dmg = dmg_att + dmg_stat
+
+        return round(final_dmg)
+        
+
 
     # ===================================================================
     # SECTION: PUBLIC STAT PROPERTIES
