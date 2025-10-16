@@ -39,6 +39,7 @@ class User(AbstractBaseUser):
     is_admin = models.BooleanField(default=False)
     
     lumis = models.PositiveIntegerField(default=0) #Lumis currency
+    nova = models.PositiveIntegerField(default=0) #Nova currency
     
     
     #One to one relationship with character
