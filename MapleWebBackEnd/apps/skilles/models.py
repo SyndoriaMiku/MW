@@ -35,7 +35,7 @@ class SkillTemplate(models.Model):
     effect_type = models.CharField(max_length=10, choices=EffectType.choices, default=EffectType.DAMAGE)
 
     base_power = models.FloatField(default=0) #Base power of the skill
-    power_ratio = models.FloatField(default=0) #Power ratio based on character's attack
+    power_ratio = models.FloatField(default=0) #Power ratio based on character's damage
 
     applies_effect = models.ForeignKey('EffectTemplate', on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied by the skill")
     class Meta:
