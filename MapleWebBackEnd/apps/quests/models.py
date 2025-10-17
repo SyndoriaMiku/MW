@@ -41,7 +41,7 @@ class QuestObjective(models.Model):
     item_to_collect = models.ForeignKey('items.ItemTemplate', null=True, blank=True, on_delete=models.CASCADE)
     collect_count = models.IntegerField(default=0)
 
-    dungeon_to_clear = models.ForeignKey('world.DungeonTemplate', null=True, blank=True, on_delete=models.CASCADE)
+    dungeon_to_clear = models.ForeignKey('world.NormalDungeonTemplate', null=True, blank=True, on_delete=models.CASCADE)
     clear_count = models.IntegerField(default=0)
 
     def __str__(self):

@@ -69,7 +69,7 @@ class ActiveEffect(models.Model):
     # Link to combat
     combat_instance = models.ForeignKey('battles.CombatInstance', on_delete=models.CASCADE, related_name='active_effects')
     target = models.ForeignKey('battles.Combatant', on_delete=models.CASCADE, related_name='active_effects')
-    effect_template = models.ForeignKey('abilities.EffectTemplate', on_delete=models.CASCADE)
+    effect_template = models.ForeignKey('skilles.EffectTemplate', on_delete=models.CASCADE)
     remaining_turns = models.IntegerField() #Number of turns the effect will last
     current_stacks = models.IntegerField(default=1) #Current stacks of the effect, if applicable
     caster = models.ForeignKey('battles.Combatant', null=True, blank=True, on_delete=models.SET_NULL, related_name='casted_effects') #Combatant who applied the effect

@@ -1,49 +1,5 @@
 from django.db import models
 
-class SkillTemplate(models.Model):
-    """
-    Template for all skills in the game.
-    """
-    class TargetType(models.TextChoices):
-        SELF = 'SELF', 'Self'
-        ALLY = 'ALLY', 'Single Ally'
-        ENEMY = 'ENEMY', 'Single Enemy'
-        E_AREA = 'E_AREA', 'Enemy Area'
-        A_AREA = 'A_AREA', 'Ally Area'
-        GLOBAL = 'GLOBAL', 'Global'
-
-    class EffectType(models.TextChoices):
-        DAMAGE = 'DAMAGE', 'Deal Damage'
-        HEAL = 'HEAL', 'Healing'
-        EFFECT = 'EFFECT', 'Apply Effect'
-
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=50) #Skill name
-    description = models.TextField(blank=True) #Description of the skill
-
-    # Requirement
-    # Job having skill, null for skill all job or monster skill
-    job = models.ForeignKey('classes.Job', on_delete=models.SET_NULL, null=True, blank=True, related_name='skills')
-    required_level = models.IntegerField(default=1) #Level required to using the skill
-
-    #Attribute
-    mp_cost = models.IntegerField(default=0) #MP cost of the skill
-    cooldown = models.IntegerField(default=0) #Cooldown of the skill
-
-    #Type of ski;;
-    target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.ENEMY)
-    effect_type = models.CharField(max_length=10, choices=EffectType.choices, default=EffectType.DAMAGE)
-
-    base_power = models.FloatField(default=0) #Base power of the skill
-    power_ratio = models.FloatField(default=0) #Power ratio based on character's damage
-
-    applies_effect = models.ForeignKey('EffectTemplate', on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied by the skill")
-    class Meta:
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
 class SpecialEffectTag(models.Model):
     """
     Tag for special effects that can be applied by skills
@@ -54,8 +10,7 @@ class SpecialEffectTag(models.Model):
 
     def __str__(self):
         return self.name
-
-
+    
 class EffectTemplate(models.Model):
     """
     Additional effects for skills
@@ -108,3 +63,51 @@ class EffectTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+class SkillTemplate(models.Model):
+    """
+    Template for all skills in the game.
+    """
+    class TargetType(models.TextChoices):
+        SELF = 'SELF', 'Self'
+        ALLY = 'ALLY', 'Single Ally'
+        ENEMY = 'ENEMY', 'Single Enemy'
+        E_AREA = 'E_AREA', 'Enemy Area'
+        A_AREA = 'A_AREA', 'Ally Area'
+        GLOBAL = 'GLOBAL', 'Global'
+
+    class EffectType(models.TextChoices):
+        DAMAGE = 'DAMAGE', 'Deal Damage'
+        HEAL = 'HEAL', 'Healing'
+        EFFECT = 'EFFECT', 'Apply Effect'
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=50) #Skill name
+    description = models.TextField(blank=True) #Description of the skill
+
+    # Requirement
+    # Job having skill, null for skill all job or monster skill
+    job = models.ForeignKey('classes.Job', on_delete=models.SET_NULL, null=True, blank=True, related_name='skills')
+    required_level = models.IntegerField(default=1) #Level required to using the skill
+
+    #Attribute
+    mp_cost = models.IntegerField(default=0) #MP cost of the skill
+    cooldown = models.IntegerField(default=0) #Cooldown of the skill
+
+    #Type of ski;;
+    target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.ENEMY)
+    effect_type = models.CharField(max_length=10, choices=EffectType.choices, default=EffectType.DAMAGE)
+
+    base_power = models.FloatField(default=0) #Base power of the skill
+    power_ratio = models.FloatField(default=0) #Power ratio based on character's damage
+
+    applies_effect = models.ForeignKey(EffectTemplate, on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied by the skill")
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+
+
