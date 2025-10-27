@@ -19,16 +19,13 @@ class GameUserAdmin(UserAdmin):
     
     # Sắp xếp mặc định
     ordering = ('username',)
-    
-    # Biến trường ForeignKey thành ô tìm kiếm thông minh
-    autocomplete_fields = ['character']
 
     # Tùy chỉnh các trường hiển thị trong trang chi tiết.
     # Chúng ta định nghĩa lại 'fieldsets' để khớp với model GameUser.
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal Info', {'fields': ('email',)}),
-        ('Game Data', {'fields': ('lumis', 'nova', 'character')}),
+        ('Game Data', {'fields': ('lumis', 'nova')}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_admin', 'is_superuser'),
         }),
