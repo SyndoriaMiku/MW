@@ -255,3 +255,65 @@ class LumenEvent(models.Model):
     def __str__(self):
         return f"{self.name} (Active: {self.is_active})"
 
+
+MODIFIER_TYPE_CHOICES = [
+    ('REROLL_ALL', 'Reroll All Lines (Basic)'),
+    ('REROLL_CHOICE', 'Reroll All Lines & Choose (Before/After)'),
+    ('REROLL_TRIPLE_CHOICE', 'Reroll 3x Lines & Pick N'),
+    ('REROLL_SINGLE', 'Reroll a Single Selected Line'),
+    ('REPLACE_FIXED', 'Replace Single Line with Fixed Stat'),
+    ('REPLACE_SELECT', 'Replace Single Line with Selected Stat'),
+    ('FORCE_SET', 'Force Set Aurora Level and Fixed Lines'),
+]
+
+class AuroraModifierRule(models.Model):
+    """
+    Defines what an Aurora re-roll item (Cube/Scroll) does.
+    """
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='aurora_modifier_rule')
+    modifier_type = models.CharField(max_length=50, choices=MODIFIER_TYPE_CHOICES)
+    max_aurora_target = models.ForeignKey('items.AuroraProperty', on_delete=models.CASCADE, related_name='+', help_text="Max Aurora Level this item can affect")
+    tier_up_chance = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="Base chance to tier-up (increase Aurora Level) if applicable")
+    
+    # For REPLACE_FIXED and FORCE_SET
+    forced_aurora_level = models.IntegerField(null=True, blank=True, help_text="For FORCE_SET: The exact Aurora level to force the item to")
+    fixed_stat_type = models.CharField(max_length=20, choices=STATS_CHOICES, null=True, blank=True)
+    fixed_line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES, null=True, blank=True)
+    fixed_value = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Aurora Modifier Rule"
+        verbose_name_plural = "Aurora Modifier Rules"
+    
+    def __str__(self):
+        return f"{self.item_template.name} - {self.get_modifier_type_display()}"
+
+
+class AuroraEvent(models.Model):
+    """
+    Active events that modify Aurora tier-up rates
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=False)
+    tier_up_chance_multiplier = models.FloatField(default=1.0, help_text="Multiplier for Aurora tier-up rate (e.g. 1.5 for 1.5x tier-up chance)")
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Aurora Event"
+        verbose_name_plural = "Aurora Events"
+
+    def is_currently_active(self):
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        now = timezone.now()
+        if self.start_time and now < self.start_time:
+            return False
+        if self.end_time and now > self.end_time:
+            return False
+        return True
+
+    def __str__(self):
+        return f"{self.name} (Active: {self.is_active})"

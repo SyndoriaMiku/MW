@@ -1,25 +1,32 @@
 from rest_framework import serializers
-from .models import GameUser
+from django.contrib.auth import get_user_model
 
-class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True)
+User = get_user_model()
 
+class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = GameUser
-        fields = ['username', 'email', 'password']
+        model = User
+        fields = ('username', 'email', 'password')
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
 
     def create(self, validated_data):
-        return GameUser.objects.create_user(
+        user = User(
             username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password']
+            email=validated_data['email']
         )
-    def update(self, instance, validated_data):
-        password = validated_data.pop('password', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        if password:
-            instance.set_password(password)
-        instance.save()
-        return instance
+        user.set_password(validated_data['password'])
+        user.save()
+        return user
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    character_id = serializers.PrimaryKeyRelatedField(
+        read_only=True, 
+        source='character'
+    )
+
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'lumis', 'nova', 'character_id')
+        read_only_fields = ('username', 'email', 'lumis', 'nova')

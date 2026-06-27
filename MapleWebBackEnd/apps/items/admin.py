@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule,
-    AuroraLinePool, LumenAscendRule, LumenEvent
+    AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent
 )
 
 # ===================================================================
@@ -102,6 +102,18 @@ class AuroraPropertyAdmin(admin.ModelAdmin):
 @admin.register(LumenEvent)
 class LumenEventAdmin(admin.ModelAdmin):
     list_display = ('name', 'is_active', 'success_flat_bonus', 'heavy_failure_multiplier', 'bonus_levels', 'start_time', 'end_time')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'description')
+
+@admin.register(AuroraModifierRule)
+class AuroraModifierRuleAdmin(admin.ModelAdmin):
+    list_display = ('item_template', 'modifier_type', 'max_aurora_target', 'tier_up_chance')
+    list_filter = ('modifier_type',)
+    search_fields = ('item_template__name',)
+
+@admin.register(AuroraEvent)
+class AuroraEventAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'tier_up_chance_multiplier', 'start_time', 'end_time')
     list_filter = ('is_active',)
     search_fields = ('name', 'description')
 

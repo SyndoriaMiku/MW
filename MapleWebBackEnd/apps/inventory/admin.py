@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import InventoryItem, AuroraLine
+from .models import InventoryItem, AuroraLine, PendingAuroraRoll
 
 class AuroraLineInline(admin.TabularInline):
     """
@@ -59,5 +59,11 @@ class AuroraLineAdmin(admin.ModelAdmin):
     """
     list_display = ('inventory_item', 'stat_type', 'line_type', 'value')
     list_filter = ('stat_type', 'line_type')
+    search_fields = ('inventory_item__template__name',)
+    autocomplete_fields = ['inventory_item']
+
+@admin.register(PendingAuroraRoll)
+class PendingAuroraRollAdmin(admin.ModelAdmin):
+    list_display = ('inventory_item', 'modifier_type', 'created_at')
     search_fields = ('inventory_item__template__name',)
     autocomplete_fields = ['inventory_item']
