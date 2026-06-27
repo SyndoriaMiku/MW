@@ -68,6 +68,20 @@ class EnemyTemplateAdmin(admin.ModelAdmin):
 # SECTION: DUNGEON TEMPLATES
 # ===================================================================
 
+from .models import NormalStageEnemy, BossStageEnemy
+
+class NormalStageEnemyInline(admin.TabularInline):
+    model = NormalStageEnemy
+    extra = 1
+    autocomplete_fields = ['enemy']
+    verbose_name_plural = "Enemies in this Stage (Max total count: 6)"
+
+class BossStageEnemyInline(admin.TabularInline):
+    model = BossStageEnemy
+    extra = 1
+    autocomplete_fields = ['enemy']
+    verbose_name_plural = "Enemies in this Stage (Max total count: 6)"
+
 @admin.register(NormalDungeonTemplate)
 class NormalDungeonTemplateAdmin(admin.ModelAdmin):
     """
@@ -75,8 +89,8 @@ class NormalDungeonTemplateAdmin(admin.ModelAdmin):
     """
     list_display = ('name', 'required_level', 'stamina_cost', 'exp_reward')
     search_fields = ('name',)
-    filter_horizontal = ('enemies',)
     readonly_fields = ('id',)
+    inlines = [NormalStageEnemyInline]
     
     fieldsets = (
         ('Dungeon Information', {
@@ -84,9 +98,6 @@ class NormalDungeonTemplateAdmin(admin.ModelAdmin):
         }),
         ('Requirements & Cost', {
             'fields': ('required_level', 'stamina_cost')
-        }),
-        ('Content', {
-            'fields': ('enemies',)
         }),
         ('Completion Rewards', {
             'fields': ('exp_reward', 'lumis_reward')
@@ -102,8 +113,8 @@ class BossDungeonTemplateAdmin(admin.ModelAdmin):
     list_display = ('name', 'required_level', 'time_type', 'max_party_size')
     list_filter = ('time_type',)
     search_fields = ('name',)
-    filter_horizontal = ('enemies',)
     readonly_fields = ('id',)
+    inlines = [BossStageEnemyInline]
     
     fieldsets = (
         ('Dungeon Information', {
@@ -111,9 +122,6 @@ class BossDungeonTemplateAdmin(admin.ModelAdmin):
         }),
         ('Requirements & Rules', {
             'fields': ('required_level', 'time_type', 'max_party_size')
-        }),
-        ('Content', {
-            'fields': ('enemies',)
         }),
         ('Completion Rewards', {
             'fields': ('exp_reward', 'lumis_reward')

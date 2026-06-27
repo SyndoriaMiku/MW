@@ -12,6 +12,8 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if not hasattr(self.request.user, 'character') or not self.request.user.character:
+            return InventoryItem.objects.none()
         return self.request.user.character.inventory_items.all()
 
     @action(detail=True, methods=['post'])
@@ -70,4 +72,7 @@ class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if not hasattr(self.request.user, 'character') or not self.request.user.character:
+            from apps.characters.models import EquippedItem
+            return EquippedItem.objects.none()
         return self.request.user.character.equipped_items.all()

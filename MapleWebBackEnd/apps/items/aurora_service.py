@@ -1,7 +1,7 @@
 import random
 from django.db import transaction
 from apps.items.models import (
-    AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate
+    AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate, AuroraLineCountConfig
 )
 from apps.inventory.models import InventoryItem, AuroraLine, PendingAuroraRoll
 
@@ -9,18 +9,13 @@ class AuroraService:
     @staticmethod
     def get_max_lines_for_item(item_template):
         """
-        Determine the maximum number of Aurora lines based on item's minimum_level.
-        < 60: 1 line
-        60-99: 2 lines
-        >= 100: 3 lines
+        Return the maximum number of Aurora lines configured globally based on minimum level.
         """
         lvl = item_template.minimum_level
-        if lvl < 60:
-            return 1
-        elif lvl < 100:
-            return 2
-        else:
-            return 3
+        config = AuroraLineCountConfig.objects.filter(min_item_level__lte=lvl).first()
+        if config:
+            return config.max_lines
+        return 1
 
     @staticmethod
     def get_active_tier_up_multiplier():
@@ -37,12 +32,12 @@ class AuroraService:
         Pulls a random line from AuroraLinePool based on weights.
         Returns a dict of line data.
         """
-        pools = AuroraLinePool.objects.filter(
+        pools_queryset = AuroraLinePool.objects.filter(
             aurora_property=aurora_property,
-            item_type=item_type,
             aurora_level=aurora_level
         )
-        if not pools.exists():
+        pools = [p for p in pools_queryset if item_type in p.item_types]
+        if not pools:
             return None
 
         # Weighted random selection
@@ -195,7 +190,7 @@ class AuroraService:
         rule = modifier_item.template.aurora_modifier_rule
 
         # Validate target max tier
-        if target_item.aurora_level > rule.max_aurora_target.tier:
+        if target_item.aurora_level > rule.max_aurora_target:
             return {"success": False, "message": "This item cannot be used on an item with this Aurora Level."}
 
         # Deduct modifier item
@@ -207,7 +202,7 @@ class AuroraService:
 
         # Check Tier Up
         tier_up_occurred = False
-        if target_item.aurora_level < rule.max_aurora_target.tier:
+        if target_item.aurora_level < rule.max_aurora_target:
             event_mult = AuroraService.get_active_tier_up_multiplier()
             final_chance = rule.tier_up_chance * event_mult
             if random.random() < final_chance:
@@ -231,7 +226,7 @@ class AuroraService:
             msg = "Rerolled successfully."
             if tier_up_occurred:
                 msg = "TIER UP! " + msg
-            return {"success": True, "message": msg, "tier_up": tier_up_occurred}
+            return {"success": True, "message": msg, "tier_up": tier_up_occurred, "new_lines": new_lines}
 
         elif mod_type == 'REROLL_CHOICE':
             new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)

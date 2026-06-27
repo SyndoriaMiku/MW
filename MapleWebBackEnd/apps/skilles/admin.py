@@ -84,7 +84,7 @@ class SkillTemplateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Core Information', {
-            'fields': ('id', 'name', 'description')
+            'fields': ('id', 'name', 'description', 'is_basic_attack')
         }),
         ('Requirements', {
             'fields': ('job', 'required_level')

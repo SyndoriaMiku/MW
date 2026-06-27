@@ -120,10 +120,11 @@ class Character(models.Model):
             if level > 0 and item.template.lumen_tier:
                 rules = LumenAscendRule.objects.filter(
                     lumen_tier=item.template.lumen_tier, 
-                    lumen_level__lte=level, 
-                    item_type=item.template.item_type
+                    lumen_level__lte=level
                 )
                 for rule in rules:
+                    if item.template.item_type not in rule.item_types:
+                        continue
                     mods['hp']['base_flat'] += rule.hp_boost
                     mods['mp']['base_flat'] += rule.mp_boost
                     mods['att']['base_flat'] += rule.att_boost
@@ -178,8 +179,8 @@ class Character(models.Model):
         """
         Get all the bonus modifiers from equipment and other sources.
         """
-        stat_keys = ['hp', 'mp', 'att', 'str', 'agi', 'int', 'drop_rate']
-        mods = {key: {'flat': 0, 'percent': 0} for key in stat_keys}
+        stat_keys = ['hp', 'mp', 'att', 'str', 'agi', 'int', 'drop_rate', 'exp_rate']
+        mods = {key: {'base_flat': 0, 'percent': 0.0, 'extra_flat': 0} for key in stat_keys}
         
         equipped_items = self._get_equipped_items()
 
@@ -224,9 +225,8 @@ class Character(models.Model):
             main_stat_value = stats.get(main_stat, 0)
             
         # Step 1: Base Damage
-        dmg_att = self.total_att * job.att_weight
         dmg_stat = main_stat_value * job.main_stat_weight
-        base_damage = (dmg_stat * dmg_att) / 100.0
+        base_damage = (dmg_stat * self.total_att) / 100.0
         
         # Step 2: Character Damage (amplified by final damage)
         char_damage = base_damage * (1 + self.total_final_damage)

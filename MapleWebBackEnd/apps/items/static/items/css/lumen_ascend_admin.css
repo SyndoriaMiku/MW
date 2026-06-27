@@ -1,0 +1,16 @@
+td.field-item_types > ul,
+td.field-item_types div[id^="id_"] {
+    column-count: 2;
+    column-gap: 10px;
+    padding: 0;
+    margin: 0;
+    list-style-type: none;
+    min-width: 250px;
+}
+
+td.field-item_types > ul > li,
+td.field-item_types div[id^="id_"] > div {
+    break-inside: avoid;
+    white-space: nowrap;
+    margin-bottom: 2px;
+}

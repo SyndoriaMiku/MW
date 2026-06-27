@@ -107,6 +107,21 @@ class SkillTemplate(models.Model):
     class Meta:
         ordering = ['name']
 
+    @property
+    def formatted_description(self):
+        desc = self.description
+        if not desc:
+            return ""
+        try:
+            # Replace placeholders with actual values
+            desc = desc.replace('{power_ratio}', str(int(self.power_ratio * 100)))
+            desc = desc.replace('{base_power}', str(int(self.base_power)))
+            desc = desc.replace('{mp_cost}', str(self.mp_cost))
+            desc = desc.replace('{cooldown}', str(self.cooldown))
+        except Exception:
+            pass
+        return desc
+
     def __str__(self):
         return self.name
 

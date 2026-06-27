@@ -39,6 +39,9 @@ class LumenService:
         if not item.template.lumen_tier:
             return {"success": False, "message": "Item cannot be upgraded."}
 
+        if item.template.item_type in ['consume', 'etc']:
+            return {"success": False, "message": "Consume and Etc items cannot be upgraded."}
+
         current_level = item.lumen_ascend_level
         if current_level >= item.template.lumen_tier.max_lumen_level:
             return {"success": False, "message": "Item is already at max level."}

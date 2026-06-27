@@ -31,22 +31,42 @@ class BattleService:
         # Create Combatants for Enemies
         # Start enemy positions after max party size (e.g., 5)
         enemy_start_position = 5 
-        for index, enemy_template in enumerate(enemies):
-            cooldowns = {}
-            for es in enemy_template.enemy_skills.all():
-                cooldowns[str(es.skill_template.id)] = es.initial_cd
+        current_index = 0
+        
+        # Determine if enemies is a list of StageEnemy or EnemyTemplate
+        # For backward compatibility or direct calls
+        for item in enemies:
+            if hasattr(item, 'count'):
+                # This is a StageEnemy
+                enemy_template = item.enemy
+                count = item.count
+            else:
+                enemy_template = item
+                count = 1
+                
+            for _ in range(count):
+                if current_index >= 6:
+                    break # MAX 6 ENEMIES TOTAL
+                    
+                cooldowns = {}
+                for es in enemy_template.enemy_skills.all():
+                    cooldowns[str(es.skill_template.id)] = es.initial_cd
 
-            Combatant.objects.create(
-                combat_instance=combat_instance,
-                content_type=ContentType.objects.get_for_model(enemy_template),
-                objects_id=enemy_template.id,
-                entity=enemy_template,
-                is_player=False,
-                current_hp=enemy_template.base_hp,
-                current_mp=enemy_template.base_mp,
-                position=enemy_start_position + index,
-                skill_cooldowns=cooldowns
-            )
+                Combatant.objects.create(
+                    combat_instance=combat_instance,
+                    content_type=ContentType.objects.get_for_model(enemy_template),
+                    objects_id=enemy_template.id,
+                    entity=enemy_template,
+                    is_player=False,
+                    current_hp=enemy_template.base_hp,
+                    current_mp=enemy_template.base_mp,
+                    position=enemy_start_position + current_index,
+                    skill_cooldowns=cooldowns
+                )
+                current_index += 1
+                
+            if current_index >= 6:
+                break
         
         return combat_instance
 

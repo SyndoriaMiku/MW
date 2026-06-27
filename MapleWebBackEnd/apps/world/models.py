@@ -91,46 +91,73 @@ class BaseStageTemplate(models.Model):
 
     # Requirement
     required_level = models.IntegerField(default=1) #Minimum level to enter the dungeon
-    # Content
-    enemies = models.ManyToManyField('world.EnemyTemplate', related_name='%(class)s_stages', blank=True)
+    
     # Reward
     exp_reward = models.IntegerField(default=0) #EXP rewarded for completing this stage
     lumis_reward = models.IntegerField(default=0) #Lumis rewarded for completing this
-
+    
     class Meta:
         abstract = True
         ordering = ['required_level', 'id']
 
     def __str__(self):
         return self.name
-    
+
 class NormalDungeonTemplate(BaseStageTemplate):
     """
     Normal dungeon template
     """
     stamina_cost = models.PositiveIntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(100)]) #Stamina cost to enter the dungeon
     
+    enemies = models.ManyToManyField('world.EnemyTemplate', through='NormalStageEnemy', related_name='normal_stages', blank=True)
 
     class Meta(BaseStageTemplate.Meta):
         verbose_name = "Normal Dungeon Template"
         verbose_name_plural = "Normal Dungeon Templates"
+
+class NormalStageEnemy(models.Model):
+    stage = models.ForeignKey(NormalDungeonTemplate, on_delete=models.CASCADE, related_name='stage_enemies')
+    enemy = models.ForeignKey('world.EnemyTemplate', on_delete=models.CASCADE, related_name='normal_stage_appearances')
+    count = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(6)], help_text="Number of enemies of this type. Max 6.")
+
+    class Meta:
+        unique_together = ('stage', 'enemy')
+        verbose_name = "Normal Stage Enemy"
+        verbose_name_plural = "Normal Stage Enemies"
+
+    def __str__(self):
+        return f"{self.count}x {self.enemy.name} in {self.stage.name}"
 
 class BossDungeonTemplate(BaseStageTemplate):
     """
     Boss dungeon template
     """
     class TimeType(models.TextChoices):
-        DAILY = 'daily', 'Can be done once per day'
-        WEEKLY = 'weekly', 'Can be done once per week'
-        MONTHLY = 'monthly', 'Can be done once per month'
+        DAILY = 'daily', 'Daily'
+        WEEKLY = 'weekly', 'Weekly'
+        MONTHLY = 'monthly', 'Monthly'
 
-    max_party_size = models.IntegerField(default=4, validators=[MinValueValidator(1), MaxValueValidator(10)]) #Maximum party size
-    time_type = models.CharField(max_length=10, choices=TimeType.choices,default=TimeType.DAILY) #How often the dungeon can be done
-
+    time_type = models.CharField(max_length=10, choices=TimeType.choices, default=TimeType.DAILY)
+    max_party_size = models.IntegerField(default=4)
+    
+    enemies = models.ManyToManyField('world.EnemyTemplate', through='BossStageEnemy', related_name='boss_stages', blank=True)
 
     class Meta(BaseStageTemplate.Meta):
         verbose_name = "Boss Dungeon Template"
         verbose_name_plural = "Boss Dungeon Templates"
+
+class BossStageEnemy(models.Model):
+    stage = models.ForeignKey(BossDungeonTemplate, on_delete=models.CASCADE, related_name='stage_enemies')
+    enemy = models.ForeignKey('world.EnemyTemplate', on_delete=models.CASCADE, related_name='boss_stage_appearances')
+    count = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(6)], help_text="Number of enemies of this type. Max 6.")
+
+    class Meta:
+        unique_together = ('stage', 'enemy')
+        verbose_name = "Boss Stage Enemy"
+        verbose_name_plural = "Boss Stage Enemies"
+
+    def __str__(self):
+        return f"{self.count}x {self.enemy.name} in {self.stage.name}"
 
 
 # ===================================================================
