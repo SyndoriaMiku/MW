@@ -29,6 +29,14 @@ class LootTableInline(admin.TabularInline):
     verbose_name_plural = "Loot Table (Bảng vật phẩm rơi ra)"
     fields = ('item_template', 'base_drop_rate', 'min_quantity', 'max_quantity', 'drop_type')
 
+class EnemySkillInline(admin.TabularInline):
+    from .models import EnemySkill
+    model = EnemySkill
+    extra = 1
+    autocomplete_fields = ['skill_template']
+    verbose_name_plural = "Enemy Skills (Kỹ năng của Quái vật)"
+    fields = ('skill_template', 'initial_cd', 'priority_index')
+
 
 @admin.register(EnemyTemplate)
 class EnemyTemplateAdmin(admin.ModelAdmin):
@@ -38,7 +46,7 @@ class EnemyTemplateAdmin(admin.ModelAdmin):
     list_display = ('name', 'level', 'is_boss', 'base_hp', 'base_att', 'exp_reward')
     list_filter = ('is_boss', 'level')
     search_fields = ('name',)
-    filter_horizontal = ('skills',)
+    filter_horizontal = ()
     readonly_fields = ('id',)
     
     fieldsets = (
@@ -51,12 +59,9 @@ class EnemyTemplateAdmin(admin.ModelAdmin):
         ('Rewards', {
             'fields': ('exp_reward', ('lumis_reward_min', 'lumis_reward_max'))
         }),
-        ('Abilities', {
-            'fields': ('skills',)
-        }),
     )
     
-    inlines = [LootTableInline]
+    inlines = [EnemySkillInline, LootTableInline]
 
 
 # ===================================================================

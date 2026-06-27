@@ -58,6 +58,7 @@ class ItemTemplate(models.Model):
     class_restriction = models.ManyToManyField('classes.CharacterClass', blank=True) #Class restriction (empty means no restriction)
     job_restriction = models.ManyToManyField('classes.Job', blank=True) #Job restriction (empty means no restriction)
     is_tradeable = models.BooleanField(default=True) #If the item can be traded
+    is_trade_once = models.BooleanField(default=False, help_text="If True, item becomes untradeable after 1 trade")
     is_sellable = models.BooleanField(default=True) #If the item can be sold to NPC
     # Upgrade information
     lumen_tier = models.ForeignKey('items.LumenTierProperty', on_delete=models.SET_NULL, null=True, blank=True, help_text="Lumen Tier for this item (if upgradable)")

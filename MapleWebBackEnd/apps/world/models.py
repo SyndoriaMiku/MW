@@ -21,7 +21,7 @@ class EnemyTemplate(models.Model):
     name = models.CharField(max_length=100)
     level = models.IntegerField()
     is_boss = models.BooleanField(default=False) #True if boss, False if normal monster
-    skills = models.ManyToManyField('skilles.SkillTemplate', blank=True, related_name='enemies') #Skills that the enemy can use
+    skills = models.ManyToManyField('skilles.SkillTemplate', through='EnemySkill', blank=True, related_name='enemies') #Skills that the enemy can use
 
     base_hp = models.IntegerField()
     base_mp = models.IntegerField()
@@ -32,6 +32,23 @@ class EnemyTemplate(models.Model):
     lumis_reward_min = models.IntegerField() #Lumis rewarded for defeating this enemy
     lumis_reward_max = models.IntegerField() #Lumis rewarded for defeating this enemy
 
+class EnemySkill(models.Model):
+    """
+    Skill mapping for an enemy, defining initial cooldown and priority.
+    """
+    enemy_template = models.ForeignKey(EnemyTemplate, on_delete=models.CASCADE, related_name='enemy_skills')
+    skill_template = models.ForeignKey('skilles.SkillTemplate', on_delete=models.CASCADE)
+    initial_cd = models.IntegerField(default=0, help_text="Initial turns to wait before first use")
+    priority_index = models.IntegerField(default=1, help_text="Higher number means higher priority. Must be unique per enemy.")
+
+    class Meta:
+        unique_together = (('enemy_template', 'priority_index'), ('enemy_template', 'skill_template'))
+        verbose_name = "Enemy Skill"
+        verbose_name_plural = "Enemy Skills"
+        ordering = ['-priority_index']
+
+    def __str__(self):
+        return f"{self.enemy_template.name} - {self.skill_template.name} (Priority {self.priority_index})"
 
 class LootTable(models.Model):
     """
@@ -50,9 +67,10 @@ class LootTable(models.Model):
     max_quantity = models.IntegerField(default=1) #Maximum quantity dropped
 
     drop_type = models.CharField(max_length=10, choices=DropType.choices, default=DropType.COMMON)
+    is_party_shared = models.BooleanField(default=False, help_text="If True, this item drops for the whole party pool, and the Party Leader distributes it.")
 
     class Meta:
-        unique_together = ('enemy', 'item_template')
+        unique_together = ('enemy', 'item_template', 'is_party_shared')
         verbose_name = "Loot Table"
         verbose_name_plural = "Loot Tables"
         ordering = ['enemy', 'item_template']

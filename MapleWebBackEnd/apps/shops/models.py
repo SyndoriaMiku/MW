@@ -40,11 +40,18 @@ class ShopCategory(models.Model):
         return self.name
     
 class ShopItem(models.Model):
+    class ResetCycle(models.TextChoices):
+        NONE = 'none', 'None (Lifetime)'
+        DAILY = 'daily', 'Daily'
+        WEEKLY = 'weekly', 'Weekly'
+        MONTHLY = 'monthly', 'Monthly'
+
     id = models.AutoField(primary_key=True)
     category = models.ForeignKey('shops.ShopCategory', on_delete=models.CASCADE, related_name='shop_items')
     item_template = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE)
     price = models.PositiveBigIntegerField(default=0)
-    stock = models.PositiveIntegerField(default=0, help_text="0 means unlimited stock")
+    stock = models.PositiveIntegerField(default=0, help_text="0 means unlimited stock per user per cycle")
+    reset_cycle = models.CharField(max_length=10, choices=ResetCycle.choices, default=ResetCycle.NONE)
     order = models.PositiveIntegerField(default=0)
 
     # Requirement
@@ -69,6 +76,20 @@ class ShopItem(models.Model):
         ordering = ['order']
     def __str__(self):
         return f"{self.item_template.name} in {self.category.name} for {self.price} {self.category.currency_type}"
+
+class UserShopPurchase(models.Model):
+    user = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='shop_purchases')
+    shop_item = models.ForeignKey('shops.ShopItem', on_delete=models.CASCADE)
+    quantity_bought = models.PositiveIntegerField(default=0)
+    last_purchased_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Shop Purchase"
+        verbose_name_plural = "User Shop Purchases"
+        unique_together = ('user', 'shop_item')
+
+    def __str__(self):
+        return f"{self.user.username} bought {self.quantity_bought} of {self.shop_item.item_template.name}"
 
 class SpecialShopItem(models.Model):
     """

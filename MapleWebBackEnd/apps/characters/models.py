@@ -101,16 +101,16 @@ class Character(models.Model):
         """Get stat from ItemTemplate."""
         for item in equipped_items:
             template = item.template
-            mods['hp']['flat'] += template.hp_boost
-            mods['mp']['flat'] += template.mp_boost
-            mods['att']['flat'] += template.att_boost
-            mods['str']['flat'] += template.str_boost
-            mods['agi']['flat'] += template.agi_boost
-            mods['int']['flat'] += template.int_boost
+            mods['hp']['base_flat'] += template.hp_boost
+            mods['mp']['base_flat'] += template.mp_boost
+            mods['att']['base_flat'] += template.att_boost
+            mods['str']['base_flat'] += template.str_boost
+            mods['agi']['base_flat'] += template.agi_boost
+            mods['int']['base_flat'] += template.int_boost
 
             if template.all_stats_boost > 0:
                 for stat in ['str', 'agi', 'int']:
-                    mods[stat]['flat'] += template.all_stats_boost
+                    mods[stat]['base_flat'] += template.all_stats_boost
     
     def _get_lumen_ascend_mods(self, mods, equipped_items):
         """Get stat from Lumen Ascend. Stack all levels up to current."""
@@ -124,12 +124,12 @@ class Character(models.Model):
                     item_type=item.template.item_type
                 )
                 for rule in rules:
-                    mods['hp']['flat'] += rule.hp_boost
-                    mods['mp']['flat'] += rule.mp_boost
-                    mods['att']['flat'] += rule.att_boost
-                    mods['str']['flat'] += rule.str_boost
-                    mods['agi']['flat'] += rule.agi_boost
-                    mods['int']['flat'] += rule.int_boost
+                    mods['hp']['base_flat'] += rule.hp_boost
+                    mods['mp']['base_flat'] += rule.mp_boost
+                    mods['att']['base_flat'] += rule.att_boost
+                    mods['str']['base_flat'] += rule.str_boost
+                    mods['agi']['base_flat'] += rule.agi_boost
+                    mods['int']['base_flat'] += rule.int_boost
 
     def _get_aurora_line_mods(self, mods, equipped_items):
         """Get stat from Aurora."""
@@ -140,7 +140,7 @@ class Character(models.Model):
                 if stat == 'all':
                     for s in ['str', 'agi', 'int']:
                         if line.line_type == 'flat':
-                            mods[s]['flat'] += value
+                            mods[s]['base_flat'] += value
                         elif line.line_type == 'percent':
                             mods[s]['percent'] += value / 100.0
                 else:
@@ -148,7 +148,7 @@ class Character(models.Model):
                     stat_key = 'drop_rate' if stat == 'drop' else stat
                     if stat_key in mods:
                         if line.line_type == 'flat':
-                            mods[stat_key]['flat'] += value
+                            mods[stat_key]['base_flat'] += value
                         elif line.line_type == 'percent':
                             mods[stat_key]['percent'] += value / 100.0
 
@@ -162,16 +162,16 @@ class Character(models.Model):
         for item_set, count in set_counts.items():
             effects = item_set.effects.filter(required_count__lte=count)
             for effect in effects:
-                mods['hp']['flat'] += effect.hp_boost
-                mods['mp']['flat'] += effect.mp_boost
-                mods['att']['flat'] += effect.att_boost
-                mods['str']['flat'] += effect.str_boost
-                mods['agi']['flat'] += effect.agi_boost
-                mods['int']['flat'] += effect.int_boost
+                mods['hp']['base_flat'] += effect.hp_boost
+                mods['mp']['base_flat'] += effect.mp_boost
+                mods['att']['base_flat'] += effect.att_boost
+                mods['str']['base_flat'] += effect.str_boost
+                mods['agi']['base_flat'] += effect.agi_boost
+                mods['int']['base_flat'] += effect.int_boost
                 
                 if effect.all_stats_boost > 0:
                     for stat in ['str', 'agi', 'int']:
-                        mods[stat]['flat'] += effect.all_stats_boost
+                        mods[stat]['base_flat'] += effect.all_stats_boost
 
     @cached_property
     def _all_stat_modifiers(self):
@@ -243,32 +243,50 @@ class Character(models.Model):
     @cached_property
     def total_str(self):
         mods = self._all_stat_modifiers['str']
-        return round((self.base_str + mods['flat']) * (1 + mods['percent']))
+        base = self.base_str + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_agi(self):
         mods = self._all_stat_modifiers['agi']
-        return round((self.base_agi + mods['flat']) * (1 + mods['percent']))
+        base = self.base_agi + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
         
     @cached_property
     def total_int(self):
         mods = self._all_stat_modifiers['int']
-        return round((self.base_int + mods['flat']) * (1 + mods['percent']))
+        base = self.base_int + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
+
+    @cached_property
+    def total_drop_rate(self):
+        mods = self._all_stat_modifiers.get('drop_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
+        # Base drop rate modifier is 1.0 (100%), buffs add to it.
+        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+
+    @cached_property
+    def total_exp_rate(self):
+        mods = self._all_stat_modifiers.get('exp_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
+        # Base exp rate modifier is 1.0 (100%), buffs add to it.
+        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
 
     @cached_property
     def total_hp(self):
         mods = self._all_stat_modifiers['hp']
-        return round((self.base_hp + mods['flat']) * (1 + mods['percent']))
+        base = self.base_hp + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_mp(self):
         mods = self._all_stat_modifiers['mp']
-        return round((self.base_mp + mods['flat']) * (1 + mods['percent']))
+        base = self.base_mp + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_att(self):
         mods = self._all_stat_modifiers['att']
-        return round((self.base_att + mods['flat']) * (1 + mods['percent']))
+        base = self.base_att + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     # ===================================================================
     # SECTION: LEVELING METHODS

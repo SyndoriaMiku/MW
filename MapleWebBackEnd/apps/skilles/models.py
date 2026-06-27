@@ -95,9 +95,10 @@ class SkillTemplate(models.Model):
     mp_cost = models.IntegerField(default=0) #MP cost of the skill
     cooldown = models.IntegerField(default=0) #Cooldown of the skill
 
-    #Type of ski;;
+    #Type of skill
     target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.ENEMY)
     effect_type = models.CharField(max_length=10, choices=EffectType.choices, default=EffectType.DAMAGE)
+    is_basic_attack = models.BooleanField(default=False, help_text="Designates this skill as the normal attack for its job")
 
     base_power = models.FloatField(default=0) #Base power of the skill
     power_ratio = models.FloatField(default=0) #Power ratio based on character's damage

@@ -25,3 +25,7 @@ class CharacterSerializer(serializers.ModelSerializer):
             'base_str', 'base_agi', 'base_int', 'drop_rate', 'job',
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update'
         ]
+
+    def to_representation(self, instance):
+        instance.update_stamina()
+        return super().to_representation(instance)

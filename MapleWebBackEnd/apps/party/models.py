@@ -65,5 +65,21 @@ class PartyInvitation(models.Model):
 
     def __str__(self):
         return f"Invitation from {self.sender.name} to {self.receiver.name} for Party {self.party.name} - Status: {self.status}"
-    
 
+class PendingPartyLoot(models.Model):
+    """
+    Stores shared loot dropped for the party during combat.
+    The Party Leader can distribute these items to party members.
+    """
+    party = models.ForeignKey('party.Party', on_delete=models.CASCADE, related_name='pending_loots')
+    item_template = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
+    dropped_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Pending Party Loot"
+        verbose_name_plural = "Pending Party Loots"
+        ordering = ['-dropped_at']
+
+    def __str__(self):
+        return f"{self.quantity}x {self.item_template.name} (Party {self.party.name})"
