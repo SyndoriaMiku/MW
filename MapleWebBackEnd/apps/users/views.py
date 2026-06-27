@@ -42,14 +42,12 @@ class UserDetailView (APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user #Get the user object
-        if not user:
-            return Response({"userMsg": "Không tìm thấy người dùng"}, status=status.HTTP_404_NOT_FOUND)
-        
+        user = request.user
         data = {
             "username": user.username,
             "email": user.email,
             "lumis": user.lumis,
+            "nova": user.nova,
             "character": user.character.name if user.character else None
         }
         return Response(data, status=status.HTTP_200_OK)

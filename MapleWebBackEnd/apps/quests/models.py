@@ -62,3 +62,43 @@ class QuestReward(models.Model):
 
     def __str__(self):
         return f"Reward for {self.quest.name}"
+
+
+class CharacterQuest(models.Model):
+    """Tracks a character's progress on a quest."""
+    class Status(models.TextChoices):
+        IN_PROGRESS = 'in_progress', 'In Progress'
+        COMPLETED = 'completed', 'Completed'
+        CLAIMED = 'claimed', 'Reward Claimed'
+
+    character = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='quests')
+    quest = models.ForeignKey('quests.QuestTemplate', on_delete=models.CASCADE, related_name='character_quests')
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.IN_PROGRESS)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('character', 'quest')
+        verbose_name = "Character Quest"
+        verbose_name_plural = "Character Quests"
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"{self.character.name} - {self.quest.name} ({self.status})"
+
+
+class CharacterQuestObjective(models.Model):
+    """Tracks progress on individual quest objectives."""
+    character_quest = models.ForeignKey('quests.CharacterQuest', on_delete=models.CASCADE, related_name='objective_progress')
+    objective = models.ForeignKey('quests.QuestObjective', on_delete=models.CASCADE)
+    current_count = models.IntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('character_quest', 'objective')
+        verbose_name = "Quest Objective Progress"
+        verbose_name_plural = "Quest Objective Progress"
+        ordering = ['character_quest', 'objective']
+
+    def __str__(self):
+        return f"{self.character_quest} - {self.objective} ({self.current_count})"

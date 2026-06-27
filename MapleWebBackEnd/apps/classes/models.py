@@ -10,6 +10,7 @@ class CharacterClass(models.Model):
         STRENGTH = 'str', 'Strength'
         AGILITY = 'agi', 'Agility'
         INTELLIGENCE = 'int', 'Intelligence'
+        ALL = 'all', 'All Stats'
     main_stat = models.CharField(max_length=3, choices=MainStat.choices, help_text="Main stat for the class")
 
     #Growth rate of stats
@@ -31,7 +32,6 @@ class Job(models.Model):
     
     att_weight = models.FloatField(default=1.0, help_text="Damage gain each att point")
     main_stat_weight = models.FloatField(default=1.0, help_text="Damage gain each main stat point")
-    secondary_stat_weight = models.FloatField(default=0.5, help_text="Damage gain each secondary stat point")
 
     def __str__(self):
         return f"{self.name} with main stat {self.character_class.main_stat}"

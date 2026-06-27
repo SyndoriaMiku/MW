@@ -1,7 +1,11 @@
 from django.contrib import admin
-from .models import Character, Equipment, CharacterSkill
+from .models import Character, EquipmentSlotConfig, EquippedItem, CharacterSkill
 
-# Inline Admin for Character's Skills
+
+# ===================================================================
+# SECTION: INLINE DEFINITIONS
+# ===================================================================
+
 class CharacterSkillInline(admin.TabularInline):
     """
     Hiển thị và cho phép chỉnh sửa kỹ năng của nhân vật ngay trên trang Character.
@@ -10,25 +14,20 @@ class CharacterSkillInline(admin.TabularInline):
     extra = 1  # Hiển thị 1 dòng trống để thêm kỹ năng mới
     autocomplete_fields = ['skill_template'] # Giúp tìm kiếm skill dễ dàng
 
-# Inline Admin for Character's Equipment
-class EquipmentInline(admin.StackedInline):
-    """
-    Hiển thị và quản lý trang bị của nhân vật.
-    StackedInline phù hợp hơn vì có nhiều trường.
-    """
-    model = Equipment
-    can_delete = False
-    verbose_name_plural = 'Equipped Items'
-    
-    # Giúp việc chọn nhẫn dễ hơn khi có nhiều
-    filter_horizontal = ('rings',)
-    
-    # Biến các trường ForeignKey thành ô tìm kiếm thông minh
-    autocomplete_fields = [
-        'pendant', 'earring', 'belt', 'face', 'eye', 'hat', 'top', 
-        'bottom', 'shoes', 'cape', 'gloves', 'shoulder', 'weapon'
-    ]
 
+class EquippedItemInline(admin.TabularInline):
+    """
+    Hiển thị và quản lý trang bị của nhân vật thông qua hệ thống slot động.
+    """
+    model = EquippedItem
+    extra = 1
+    autocomplete_fields = ['slot', 'item']
+    fields = ('slot', 'slot_index', 'item')
+
+
+# ===================================================================
+# SECTION: MAIN MODEL ADMINS
+# ===================================================================
 
 @admin.register(Character)
 class CharacterAdmin(admin.ModelAdmin):
@@ -36,12 +35,12 @@ class CharacterAdmin(admin.ModelAdmin):
     Tùy chỉnh giao diện quản lý chi tiết cho Character.
     """
     # Gắn các inline đã tạo vào trang admin của Character
-    inlines = [EquipmentInline, CharacterSkillInline]
+    inlines = [EquippedItemInline, CharacterSkillInline]
 
     # Các cột hiển thị trên trang danh sách
     list_display = (
         'name', 
-        'owner', 
+        'get_owner_username', 
         'level', 
         'character_class', 
         'job'
@@ -51,7 +50,7 @@ class CharacterAdmin(admin.ModelAdmin):
     list_filter = ('level', 'character_class', 'job')
     
     # Thanh tìm kiếm (tìm theo tên nhân vật hoặc tên người sở hữu)
-    search_fields = ('name', 'owner__username')
+    search_fields = ('name', 'user__username')
     
     # Các trường chỉ đọc
     readonly_fields = (
@@ -63,7 +62,7 @@ class CharacterAdmin(admin.ModelAdmin):
     # Nhóm các trường lại cho giao diện gọn gàng, dễ hiểu
     fieldsets = (
         ('Core Information', {
-            'fields': ('id', 'name', 'owner', 'character_class', 'job')
+            'fields': ('id', 'name', 'character_class', 'job', 'current_location')
         }),
         ('Leveling & Experience', {
             'fields': ('level', 'current_exp')
@@ -87,6 +86,11 @@ class CharacterAdmin(admin.ModelAdmin):
             'fields': ('max_stamina', 'current_stamina', 'last_stamina_update')
         }),
     )
+
+    # Display owner username via reverse OneToOne relation
+    @admin.display(description='Owner', ordering='user__username')
+    def get_owner_username(self, obj):
+        return obj.user.username if hasattr(obj, 'user') and obj.user else '—'
 
     # Các phương thức để hiển thị các @cached_property trong admin
     def display_total_hp(self, obj):
@@ -117,6 +121,18 @@ class CharacterAdmin(admin.ModelAdmin):
         return obj.total_int
     display_total_int.short_description = 'Total INT'
 
-# Đăng ký các model còn lại với giao diện admin mặc định (nếu cần truy cập riêng)
-# admin.site.register(Equipment)
-# admin.site.register(CharacterSkill)
+
+# ===================================================================
+# SECTION: EQUIPMENT SLOT CONFIG
+# ===================================================================
+
+@admin.register(EquipmentSlotConfig)
+class EquipmentSlotConfigAdmin(admin.ModelAdmin):
+    """
+    Quản lý cấu hình các slot trang bị.
+    Thêm/sửa/xóa slot ở đây — không cần migration.
+    """
+    list_display = ('slot_type', 'display_name', 'max_count', 'allowed_item_types', 'order')
+    search_fields = ('slot_type', 'display_name')
+    ordering = ('order',)
+    list_editable = ('display_name', 'max_count', 'order')

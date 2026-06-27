@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule,
-    AuroraLinePool, LumenAscendRule
+    AuroraLinePool, LumenAscendRule, LumenEvent
 )
 
 # ===================================================================
@@ -98,6 +98,12 @@ class AuroraPropertyAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     inlines = [AuroraLinePoolInline]
 
+
+@admin.register(LumenEvent)
+class LumenEventAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'success_flat_bonus', 'heavy_failure_multiplier', 'bonus_levels', 'start_time', 'end_time')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'description')
 
 # ===================================================================
 # SECTION: OPTIONAL RULE ADMINS (for global view)

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import QuestTemplate, QuestObjective, QuestReward
+from .models import QuestTemplate, QuestObjective, QuestReward, CharacterQuest, CharacterQuestObjective
 
 # ===================================================================
 # SECTION: INLINE DEFINITIONS
@@ -73,3 +73,24 @@ class QuestTemplateAdmin(admin.ModelAdmin):
     
     # Gắn các inline đã tạo vào trang chi tiết
     inlines = [QuestObjectiveInline, QuestRewardInline]
+
+
+# ===================================================================
+# SECTION: PLAYER QUEST TRACKING
+# ===================================================================
+
+class CharacterQuestObjectiveInline(admin.TabularInline):
+    model = CharacterQuestObjective
+    extra = 0
+    readonly_fields = ('objective', 'current_count', 'is_completed')
+    can_delete = False
+
+
+@admin.register(CharacterQuest)
+class CharacterQuestAdmin(admin.ModelAdmin):
+    list_display = ('character', 'quest', 'status', 'started_at', 'completed_at')
+    list_filter = ('status', 'quest__quest_type')
+    search_fields = ('character__name', 'quest__name')
+    autocomplete_fields = ['character', 'quest']
+    readonly_fields = ('started_at',)
+    inlines = [CharacterQuestObjectiveInline]

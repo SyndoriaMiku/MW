@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.conf import settings
 from apps.characters.models import generate_hex_id
@@ -13,7 +15,6 @@ class Party(models.Model):
 
     # Members of the party
     leader = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='led_parties')
-    members = models.ManyToManyField('characters.Character', related_name='parties')
 
     max_size = models.PositiveIntegerField(default=4)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -32,8 +33,7 @@ class PartyMember(models.Model):
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('party', 'character')
-        unique_together = ('party', 'position')
+        unique_together = (('party', 'character'), ('party', 'position'))
         ordering = ['party', 'position']
     def __str__(self):
         return f"{self.character.name} in Party {self.party.name} at position {self.position}"
@@ -60,7 +60,7 @@ class PartyInvitation(models.Model):
     def save(self, *args, **kwargs):
         # Set expiration time to 24 hours from creation if not set
         if not self.expires_at:
-            self.expires_at = timezone.now() + timezone.timedelta(minutes=5) # For testing, set to 5 minutes
+            self.expires_at = timezone.now() + timedelta(minutes=5) # For testing, set to 5 minutes
         super().save(*args, **kwargs)
 
     def __str__(self):

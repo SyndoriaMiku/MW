@@ -15,6 +15,7 @@ class InventoryItem(models.Model):
 
     is_untrade = models.BooleanField(default=False) #Some item cannot trade if eqquipped or expired
     expired_at = models.DateTimeField(null=True, blank=True) #Expiration date of the item, null if not expiring
+    is_destroyed = models.BooleanField(default=False, help_text="Item is destroyed (fragment) and cannot be equipped until restored")
  
 class AuroraLine(models.Model):
     """

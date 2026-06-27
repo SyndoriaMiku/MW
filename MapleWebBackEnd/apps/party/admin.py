@@ -41,17 +41,11 @@ class PartyAdmin(admin.ModelAdmin):
     list_display = ('name', 'leader', 'get_member_count', 'max_size', 'created_at')
     search_fields = ('name', 'leader__name')
     autocomplete_fields = ('leader',)
-    filter_horizontal = ('members',) # Giao diện thân thiện cho trường ManyToMany
     readonly_fields = ('id', 'created_at')
 
     fieldsets = (
         ('Party Information', {
             'fields': ('id', 'name', 'leader', 'max_size', 'created_at')
-        }),
-        ('Manage Members (Quick Select)', {
-            'classes': ('collapse',),
-            'fields': ('members',),
-            'description': "Đây là trường ManyToMany gốc. Nên quản lý thành viên và vị trí ở bảng bên dưới."
         }),
     )
 

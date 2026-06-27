@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.utils.functional import cached_property
 from collections import defaultdict
@@ -23,7 +25,13 @@ class Character(models.Model):
         editable=False
     )
     name = models.CharField(max_length=20)
-    owner = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='characters')
+
+    # Location in the world
+    current_location = models.ForeignKey(
+        'world.Location', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='characters_here',
+        help_text="Character's current location in the world"
+    )
     
     #stats
     
@@ -75,27 +83,18 @@ class Character(models.Model):
             self.current_stamina = new_stamina
             #Update last update time to account for partial intervals
             seconds_used = stamina_to_regen * self.STAMINA_REGEN_RATE
-            self.last_stamina_update += timezone.timedelta(seconds=seconds_used)
+            self.last_stamina_update += timedelta(seconds=seconds_used)
             self.save(update_fields=['current_stamina', 'last_stamina_update'])
         return self.current_stamina
 
     def _get_equipped_items(self):
-        """Helper method to get all equipped items."""
-        if not hasattr(self, 'equipment'):
-            return []
-            
+        """Helper method to get all equipped InventoryItems via the dynamic equipment system."""
         if not hasattr(self, '_cached_equipment'):
-            equipment = []
-            slot_fields = [
-                'hat', 'top', 'bottom', 'shoes', 'cape', 'gloves', 'shoulder',
-                'weapon', 'face', 'eye', 'belt', 'earring', 'pendant'
+            self._cached_equipment = [
+                eq.item for eq in self.equipped_items.select_related(
+                    'item__template', 'slot'
+                ).all()
             ]
-            for field in slot_fields:
-                item = getattr(self.equipment, field, None)
-                if item:
-                    equipment.append(item)
-            equipment.extend(self.equipment.rings.all())
-            self._cached_equipment = equipment
         return self._cached_equipment
     
     def _get_base_equipment_mods(self, mods, equipped_items):
@@ -114,12 +113,16 @@ class Character(models.Model):
                     mods[stat]['flat'] += template.all_stats_boost
     
     def _get_lumen_ascend_mods(self, mods, equipped_items):
-        """Get stat from Lumen Ascend."""
+        """Get stat from Lumen Ascend. Stack all levels up to current."""
         from apps.items.models import LumenAscendRule
         for item in equipped_items:
             level = item.lumen_ascend_level
             if level > 0 and item.template.lumen_tier:
-                rules = LumenAscendRule.objects.filter(tier=item.template.lumen_tier, level=level, item_type=item.template.item_type)
+                rules = LumenAscendRule.objects.filter(
+                    lumen_tier=item.template.lumen_tier, 
+                    lumen_level__lte=level, 
+                    item_type=item.template.item_type
+                )
                 for rule in rules:
                     mods['hp']['flat'] += rule.hp_boost
                     mods['mp']['flat'] += rule.mp_boost
@@ -140,11 +143,14 @@ class Character(models.Model):
                             mods[s]['flat'] += value
                         elif line.line_type == 'percent':
                             mods[s]['percent'] += value / 100.0
-                elif stat in mods:
-                    if line.line_type == 'flat':
-                        mods[stat]['flat'] += value
-                    elif line.line_type == 'percent':
-                        mods[stat]['percent'] += value / 100.0
+                else:
+                    # Map 'drop' to 'drop_rate' key in mods dict
+                    stat_key = 'drop_rate' if stat == 'drop' else stat
+                    if stat_key in mods:
+                        if line.line_type == 'flat':
+                            mods[stat_key]['flat'] += value
+                        elif line.line_type == 'percent':
+                            mods[stat_key]['percent'] += value / 100.0
 
     def _get_item_set_mods(self, mods, equipped_items):
         """Get stat from Item Set effects."""
@@ -185,27 +191,47 @@ class Character(models.Model):
         
         return mods
     @cached_property
+    def total_final_damage(self):
+        """
+        Total final damage multiplier from active buffs.
+        Placeholder for future buff system integration.
+        Returns percentage (e.g. 0.2 for 20% bonus).
+        """
+        return 0.0
+
+    @cached_property
     def total_damage(self):
         """
-        Calculate total damage based on total stats and class ratios.
+        Calculate base damage using the multiplicative formula:
+        Base Damage = [(Main_Stat * Stat_Weight) * (Total_ATT * ATT_Weight)] / 100
+        Char Damage = Base Damage * (1 + Char_Final_Damage)
         """
         if not self.job or not self.character_class:
             return self.total_att
         
         job = self.job
         main_stat = self.character_class.main_stat
-        stats = {
-            "str": self.total_str,
-            "agi": self.total_agi,
-            "int": self.total_int,
-        }
-        total_main_stats = stats.pop(main_stat)
-
+        
+        # Calculate Main Stat Value
+        if main_stat == 'all':
+            main_stat_value = self.total_str + self.total_agi + self.total_int
+        else:
+            stats = {
+                "str": self.total_str,
+                "agi": self.total_agi,
+                "int": self.total_int,
+            }
+            main_stat_value = stats.get(main_stat, 0)
+            
+        # Step 1: Base Damage
         dmg_att = self.total_att * job.att_weight
-        dmg_stat = total_main_stats * job.main_stat_weight
-        final_dmg = dmg_att + dmg_stat
-
-        return round(final_dmg)
+        dmg_stat = main_stat_value * job.main_stat_weight
+        base_damage = (dmg_stat * dmg_att) / 100.0
+        
+        # Step 2: Character Damage (amplified by final damage)
+        char_damage = base_damage * (1 + self.total_final_damage)
+        
+        return round(char_damage)
         
 
 
@@ -243,37 +269,127 @@ class Character(models.Model):
     def total_att(self):
         mods = self._all_stat_modifiers['att']
         return round((self.base_att + mods['flat']) * (1 + mods['percent']))
-            
- 
-class Equipment(models.Model):
-    character = models.OneToOneField(
-        Character,
-        on_delete=models.CASCADE,
-        primary_key=True,
-        related_name='equipment'
+
+    # ===================================================================
+    # SECTION: LEVELING METHODS
+    # ===================================================================
+
+    def gain_exp(self, amount):
+        """
+        Add EXP and automatically level up if threshold is met.
+        Uses ExperienceTable for thresholds and CharacterClass growth rates for stat gains.
+        """
+        from apps.world.models import ExperienceTable
+        self.current_exp += amount
+
+        leveled_up = False
+        while True:
+            try:
+                exp_table = ExperienceTable.objects.get(level=self.level)
+            except ExperienceTable.DoesNotExist:
+                break  # Max level reached
+
+            if self.current_exp >= exp_table.required_exp:
+                self.current_exp -= exp_table.required_exp
+                self._level_up()
+                leveled_up = True
+            else:
+                break
+
+        self.save(update_fields=[
+            'level', 'current_exp',
+            'base_hp', 'base_mp', 'base_str', 'base_agi', 'base_int'
+        ])
+        return leveled_up
+
+    def _level_up(self):
+        """Apply growth rates from CharacterClass when leveling up."""
+        self.level += 1
+        if self.character_class:
+            cc = self.character_class
+            self.base_hp += int(cc.hp_growth)
+            self.base_mp += int(cc.mp_growth)
+            self.base_str += int(cc.str_growth)
+            self.base_agi += int(cc.agi_growth)
+            self.base_int += int(cc.int_growth)
+
+
+# ===================================================================
+# SECTION: DYNAMIC EQUIPMENT SYSTEM
+# ===================================================================
+
+class EquipmentSlotConfig(models.Model):
+    """
+    Admin-configurable equipment slot definitions.
+    Adding/removing/resizing slots requires NO code changes or migrations.
+    """
+    slot_type = models.CharField(
+        max_length=30, unique=True,
+        help_text="Internal identifier, e.g. 'hat', 'ring', 'weapon'"
     )
-    rings = models.ManyToManyField("inventory.InventoryItem",blank=True,related_name='+',limit_choices_to={'template__item_type': 'ring'})
-    pendant = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='pendant_equipped')
-    earring = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='earring_equipped')
-    belt = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='belt_equipped')
-    face = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='face_equipped')
-    eye = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='eye_equipped')    
-    hat = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='hat_equipped')
-    top = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='top_equipped')
-    bottom = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='bottom_equipped')
-    shoes = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='shoes_equipped')
-    cape = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='cape_equipped')
-    gloves = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='gloves_equipped')
-    shoulder = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='shoulder_equipped')
-    weapon = models.ForeignKey("inventory.InventoryItem", on_delete=models.SET_NULL, null=True, blank=True, related_name='weapon_equipped')
-    
+    display_name = models.CharField(
+        max_length=50,
+        help_text="Human-readable name, e.g. 'Hat', 'Ring', 'Weapon'"
+    )
+    max_count = models.PositiveIntegerField(
+        default=1,
+        help_text="How many items can be equipped in this slot type (e.g. 4 for rings)"
+    )
+    allowed_item_types = models.JSONField(
+        default=list,
+        help_text="List of item_type values allowed in this slot, e.g. ['hat'] or ['ring']"
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Display order in equipment UI"
+    )
+
+    class Meta:
+        verbose_name = "Equipment Slot Config"
+        verbose_name_plural = "Equipment Slot Configs"
+        ordering = ['order']
+
     def __str__(self):
-        return f"{self.character.name}'s Equipped"    
+        count_str = f" (x{self.max_count})" if self.max_count > 1 else ""
+        return f"{self.display_name}{count_str}"
+
+
+class EquippedItem(models.Model):
+    """
+    An item currently equipped on a character in a specific slot.
+    """
+    character = models.ForeignKey(
+        Character, on_delete=models.CASCADE,
+        related_name='equipped_items'
+    )
+    slot = models.ForeignKey(
+        EquipmentSlotConfig, on_delete=models.CASCADE,
+        related_name='equipped_items'
+    )
+    slot_index = models.PositiveIntegerField(
+        default=0,
+        help_text="Index within the slot (0 for single slots, 0-3 for 4-slot rings)"
+    )
+    item = models.OneToOneField(
+        'inventory.InventoryItem', on_delete=models.CASCADE,
+        related_name='equipped_in',
+        help_text="The inventory item that is equipped"
+    )
+
+    class Meta:
+        unique_together = ('character', 'slot', 'slot_index')
+        verbose_name = "Equipped Item"
+        verbose_name_plural = "Equipped Items"
+        ordering = ['slot__order', 'slot_index']
+
+    def __str__(self):
+        return f"{self.character.name} [{self.slot.display_name}] = {self.item.template.name}"
     
 class CharacterSkill(models.Model):
     character = models.ForeignKey(Character, on_delete=models.CASCADE, related_name='skills')
     skill_template = models.ForeignKey('skilles.SkillTemplate', on_delete=models.CASCADE)
     level = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(10)])
+    bonus_final_damage = models.FloatField(default=0.0, help_text="Bonus final damage multiplier for this specific skill (e.g. 0.2 for +20% dmg)")
     
     class Meta:
         unique_together = ('character', 'skill_template')

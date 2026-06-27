@@ -113,3 +113,64 @@ class BossDungeonTemplate(BaseStageTemplate):
     class Meta(BaseStageTemplate.Meta):
         verbose_name = "Boss Dungeon Template"
         verbose_name_plural = "Boss Dungeon Templates"
+
+
+# ===================================================================
+# SECTION: WORLD MAP MODELS
+# ===================================================================
+
+class Region(models.Model):
+    """Represents a large area in the game world (e.g., Henesys, Perion)."""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    required_level = models.IntegerField(default=1)
+    order = models.PositiveIntegerField(default=0, help_text="Display order")
+
+    class Meta:
+        verbose_name = "Region"
+        verbose_name_plural = "Regions"
+        ordering = ['order']
+
+    def __str__(self):
+        return self.name
+
+
+class Location(models.Model):
+    """A specific location within a region (e.g., Henesys Hunting Ground 1)."""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    region = models.ForeignKey('world.Region', on_delete=models.CASCADE, related_name='locations')
+    required_level = models.IntegerField(default=1)
+
+    # Link to dungeon templates (if this location is a dungeon entrance)
+    normal_dungeon = models.ForeignKey('world.NormalDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='locations', help_text="Linked normal dungeon, if any")
+    boss_dungeon = models.ForeignKey('world.BossDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='locations', help_text="Linked boss dungeon, if any")
+
+    # Field enemies for open-world hunting at this location
+    field_enemies = models.ManyToManyField('world.EnemyTemplate', blank=True, related_name='field_locations', help_text="Enemies that can be encountered in the field")
+
+    has_shop = models.BooleanField(default=False, help_text="Whether this location has an NPC shop")
+    order = models.PositiveIntegerField(default=0, help_text="Display order within region")
+
+    class Meta:
+        verbose_name = "Location"
+        verbose_name_plural = "Locations"
+        ordering = ['region', 'order']
+
+    def __str__(self):
+        return f"{self.region.name} - {self.name}"
+
+
+class DungeonClearLog(models.Model):
+    """Tracks dungeon clear records for cooldown enforcement (daily/weekly/monthly boss)."""
+    character = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='dungeon_clears')
+    dungeon = models.ForeignKey('world.BossDungeonTemplate', on_delete=models.CASCADE, related_name='clear_logs')
+    cleared_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Dungeon Clear Log"
+        verbose_name_plural = "Dungeon Clear Logs"
+        ordering = ['-cleared_at']
+
+    def __str__(self):
+        return f"{self.character.name} cleared {self.dungeon.name} at {self.cleared_at}"

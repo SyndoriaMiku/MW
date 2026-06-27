@@ -86,7 +86,7 @@ class SpecialShopItem(models.Model):
         verbose_name_plural = "Special Shop Items"
         ordering = ['id']
     def __str__(self):
-        return f"Special Item {self.item.name} for {self.exchange.name}"    
+        return f"Special Item: {self.item.name}"
 
 class SpecialShopItemRecipe(models.Model):
     """

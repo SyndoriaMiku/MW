@@ -8,7 +8,7 @@ class JobInline(admin.TabularInline):
     """
     model = Job
     extra = 1  # Hiển thị 1 dòng trống để thêm Job mới
-    fields = ('name', 'att_weight', 'main_stat_weight', 'secondary_stat_weight')
+    fields = ('name', 'att_weight', 'main_stat_weight')
     verbose_name_plural = "Associated Jobs"
 
 

@@ -104,6 +104,7 @@ class ItemSetEffect(models.Model):
     str_boost = models.IntegerField(default=0)
     agi_boost = models.IntegerField(default=0)
     int_boost = models.IntegerField(default=0)
+    all_stats_boost = models.IntegerField(default=0)
     
     def __str__(self):
         return f"{self.item_set.name} {self.required_count} Set Items Effect"
@@ -154,7 +155,8 @@ class LumenCostRule(models.Model):
     heavy_failure_rate = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="Heavy failure rate, item lost level to certain point")
 
     def clean(self):
-        if self.success_rate + self.failure_rate + self.heavy_failure_rate != 1.0:
+        total = self.success_rate + self.failure_rate + self.heavy_failure_rate
+        if abs(total - 1.0) > 1e-9:
             raise ValidationError("The sum of success, failure, and heavy failure rates must equal 1.")
 
     class Meta:
@@ -190,7 +192,7 @@ class AuroraLinePool(models.Model):
     
     def __str__(self):
         return (
-            f"{self.item_type} (Level {self.min_level}+): "
+            f"{self.item_type} (Level {self.aurora_level}+): "
             f"{self.stat_type} {self.value} ({self.line_type})"
         )
 
@@ -220,4 +222,36 @@ class LumenAscendRule(models.Model):
         return (
             f"Lumen Tier {self.lumen_tier.tier} - {self.item_type} - Level {self.lumen_level}"
         )
+
+
+class LumenEvent(models.Model):
+    """
+    Active events that modify Lumen Ascend rates and results
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=False)
+    success_flat_bonus = models.FloatField(default=0.0, help_text="Flat bonus to success rate (e.g. 0.05 for +5%)")
+    heavy_failure_multiplier = models.FloatField(default=1.0, help_text="Multiplier for heavy failure rate (e.g. 0.0 for no boom, 0.5 for half boom)")
+    bonus_levels = models.IntegerField(default=0, help_text="Extra levels gained on success (e.g. 1 means +2 levels total)")
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Lumen Event"
+        verbose_name_plural = "Lumen Events"
+
+    def is_currently_active(self):
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        now = timezone.now()
+        if self.start_time and now < self.start_time:
+            return False
+        if self.end_time and now > self.end_time:
+            return False
+        return True
+
+    def __str__(self):
+        return f"{self.name} (Active: {self.is_active})"
 
