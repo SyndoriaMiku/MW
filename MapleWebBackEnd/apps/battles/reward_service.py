@@ -24,6 +24,11 @@ class RewardService:
         
         if not alive_players or not defeated_enemies:
             return {"message": "No alive players or no defeated enemies."}
+            
+        # (S2 fix) Provision active quests for all alive players ONCE per battle
+        from apps.quests.services import QuestService
+        for player in alive_players:
+            QuestService.get_active_quests(player)
 
         num_players = len(alive_players)
 
@@ -51,8 +56,14 @@ class RewardService:
 
         party = combat_instance.party
 
+        from apps.quests.services import QuestService
+
         # 3. Distribute EXP, Lumis, and Items
         for enemy in defeated_enemies:
+            # Update quests for defeated enemy
+            for player in alive_players:
+                QuestService.update_progress(player, 'DEFEAT_ENEMY', enemy_id=enemy.id, count=1)
+
             # Process Loot Table
             for loot in enemy.loot_tables.all():
                 if loot.is_party_shared:
@@ -95,6 +106,10 @@ class RewardService:
                                 )
                                 inventory_item.quantity += qty
                                 inventory_item.save(update_fields=['quantity'])
+                            
+                            # Trigger Quest Progress for item collection
+                            QuestService.update_progress(player, 'COLLECT_ITEM', item_id=loot.item_template.id, count=qty)
+                            
                             logs[player.name]["items_dropped"].append({"name": loot.item_template.name, "qty": qty})
 
         # Add Dungeon specific rewards and logs
@@ -116,6 +131,9 @@ class RewardService:
                     # Or we let it slide since it should be checked at entry.
                     player.current_stamina = 0
                     player.save(update_fields=['current_stamina'])
+                
+                # Update quest progress for Normal Dungeon clear
+                QuestService.update_progress(player, 'CLEAR_NORMAL_DUNGEON', dungeon_id=dungeon.id)
                     
         elif combat_instance.boss_dungeon:
             dungeon = combat_instance.boss_dungeon
@@ -131,6 +149,9 @@ class RewardService:
                     character=player,
                     dungeon=dungeon
                 )
+                
+                # Update quest progress for Boss Dungeon clear
+                QuestService.update_progress(player, 'CLEAR_BOSS_DUNGEON', boss_dungeon_id=dungeon.id)
 
         # Apply EXP and Lumis
         for player in alive_players:
@@ -139,7 +160,7 @@ class RewardService:
             final_lumis = int(base_lumis_per_player * player.total_drop_rate)
 
             # Give Lumis
-            game_user = player.gameuser
+            game_user = player.user
             if game_user:
                 game_user.lumis += final_lumis
                 game_user.save(update_fields=['lumis'])

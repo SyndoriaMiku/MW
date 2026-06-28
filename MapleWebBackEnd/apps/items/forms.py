@@ -18,7 +18,7 @@ class LumenAscendRuleForm(forms.ModelForm):
 
 class AuroraLinePoolForm(forms.ModelForm):
     item_types = forms.MultipleChoiceField(
-        choices=[c for c in TYPE_CHOICES if c[0] not in ['consume', 'etc']],
+        choices=[c for c in TYPE_CHOICES if c[0] not in ['use', 'etc']],
         widget=forms.CheckboxSelectMultiple,
         help_text="Select one or more item types for this pool."
     )

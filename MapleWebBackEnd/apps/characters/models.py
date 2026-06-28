@@ -316,8 +316,14 @@ class Character(models.Model):
 
         self.save(update_fields=[
             'level', 'current_exp',
-            'base_hp', 'base_mp', 'base_str', 'base_agi', 'base_int'
+            'base_hp', 'base_mp', 'base_str', 'base_agi', 'base_int', 'base_att'
         ])
+        
+        # (C10 fix) Clear cached properties to ensure stats are recalculated
+        for prop in ['total_hp', 'total_mp', 'total_str', 'total_agi', 'total_int', 'total_damage', 'total_drop_rate']:
+            if prop in self.__dict__:
+                del self.__dict__[prop]
+                
         return leveled_up
 
     def _level_up(self):

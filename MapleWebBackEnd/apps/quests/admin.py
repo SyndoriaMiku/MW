@@ -14,7 +14,7 @@ class QuestObjectiveInline(admin.TabularInline):
     verbose_name_plural = 'Quest Objectives (Mục tiêu nhiệm vụ)'
     
     # Kích hoạt tìm kiếm cho các ForeignKey
-    autocomplete_fields = ['enemy_to_defeat', 'item_to_collect', 'dungeon_to_clear']
+    autocomplete_fields = ['enemy_to_defeat', 'item_to_collect', 'dungeon_to_clear', 'boss_dungeon_to_clear']
     
     # Nhóm các trường lại cho gọn gàng
     fieldsets = (
@@ -23,6 +23,7 @@ class QuestObjectiveInline(admin.TabularInline):
                 ('enemy_to_defeat', 'defeat_count'),
                 ('item_to_collect', 'collect_count'),
                 ('dungeon_to_clear', 'clear_count'),
+                ('boss_dungeon_to_clear', 'boss_clear_count'),
             )
         }),
     )

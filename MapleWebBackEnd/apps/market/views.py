@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -74,7 +74,7 @@ class ListingViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError("This item cannot be traded.")
         
         # Verify ownership
-        if item.owner.gameuser != self.request.user:
+        if item.owner.user != self.request.user:
             raise serializers.ValidationError("You do not own this item.")
 
         serializer.save(seller=self.request.user)
@@ -179,7 +179,7 @@ class TradeViewSet(viewsets.ModelViewSet):
         except InventoryItem.DoesNotExist:
             return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        if getattr(item.owner, 'gameuser', None) != user:
+        if getattr(item.owner, 'user', None) != user:
             return Response({"detail": "You do not own this item."}, status=status.HTTP_400_BAD_REQUEST)
         if item.is_untrade or item.is_destroyed:
             return Response({"detail": "Item is untradeable."}, status=status.HTTP_400_BAD_REQUEST)

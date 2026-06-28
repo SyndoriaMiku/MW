@@ -78,6 +78,7 @@ class ActiveEffect(models.Model):
     effect_template = models.ForeignKey('skilles.EffectTemplate', on_delete=models.CASCADE)
     remaining_turns = models.IntegerField() #Number of turns the effect will last
     current_stacks = models.IntegerField(default=1) #Current stacks of the effect, if applicable
+    remaining_shield_points = models.IntegerField(default=0) # Tracks the remaining shield points
     caster = models.ForeignKey('battles.Combatant', null=True, blank=True, on_delete=models.SET_NULL, related_name='casted_effects') #Combatant who applied the effect
     created_at = models.DateTimeField(auto_now_add=True)
 

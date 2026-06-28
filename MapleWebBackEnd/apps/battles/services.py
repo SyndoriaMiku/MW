@@ -119,6 +119,18 @@ class BattleService:
             combat_instance.turn_phase = CombatInstance.TURN_PHASE.PLAYER_PHASE
             combat_instance.turn_count += 1
             
+            # Decrement player cooldowns at the start of a new round
+            for p in combat_instance.combatants.filter(is_player=True):
+                cooldowns = p.skill_cooldowns
+                changed = False
+                for skill_id in list(cooldowns.keys()):
+                    if cooldowns[skill_id] > 0:
+                        cooldowns[skill_id] -= 1
+                        changed = True
+                if changed:
+                    p.skill_cooldowns = cooldowns
+                    p.save(update_fields=['skill_cooldowns'])
+            
             # Reset to first player
             first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
             if first_player:
@@ -186,6 +198,32 @@ class BattleService:
         return logs
 
     @staticmethod
+    def apply_damage_with_shield(target, damage: int) -> int:
+        """
+        Applies damage to a target, reducing it via active shields first.
+        Returns the actual damage applied to HP.
+        """
+        if damage <= 0:
+            return 0
+        
+        # Find active shields
+        shields = target.active_effects.filter(remaining_shield_points__gt=0).order_by('created_at')
+        actual_hp_damage = damage
+        for shield in shields:
+            if actual_hp_damage <= 0:
+                break
+            absorbed = min(shield.remaining_shield_points, actual_hp_damage)
+            shield.remaining_shield_points -= absorbed
+            actual_hp_damage -= absorbed
+            shield.save(update_fields=['remaining_shield_points'])
+            
+        target.current_hp -= actual_hp_damage
+        if target.current_hp < 0:
+            target.current_hp = 0
+        target.save(update_fields=['current_hp'])
+        return actual_hp_damage
+
+    @staticmethod
     def process_active_effects(combat_instance: CombatInstance):
         """
         Process all active effects for the combat instance.
@@ -217,6 +255,14 @@ class BattleService:
             "message": ""
         }
 
+        if combatant.current_hp <= 0:
+            result_log["message"] = f"{result_log['actor']} tried to act but is dead."
+            return result_log
+            
+        if target.current_hp <= 0:
+            result_log["message"] = f"{result_log['target']} is already dead."
+            return result_log
+
         attacker_entity = combatant.entity
 
         # Reroute Player ATTACK to their Basic Attack SKILL if they have one
@@ -236,11 +282,10 @@ class BattleService:
                 damage = int(getattr(attacker_entity, 'base_att', 10))
                 skill_name = "Đánh thường"
             
-            target.current_hp -= damage
-            target.save()
+            actual_damage = BattleService.apply_damage_with_shield(target, damage)
             
-            result_log["damage"] = damage
-            result_log["message"] = f"{result_log['actor']} used {skill_name} and dealt {damage} damage to {result_log['target']}."
+            result_log["damage"] = actual_damage
+            result_log["message"] = f"{result_log['actor']} used {skill_name} and dealt {actual_damage} damage to {result_log['target']}."
 
         elif action_type == 'SKILL':
             skill_id = kwargs.get('skill_id')
@@ -258,6 +303,12 @@ class BattleService:
                 template = char_skill.skill_template
                 bonus_final_damage = char_skill.bonus_final_damage
                 total_damage = attacker_entity.total_damage
+                
+                # Check player cooldown
+                current_cd = combatant.skill_cooldowns.get(str(template.id), 0)
+                if current_cd > 0:
+                    result_log["message"] = f"{template.name} is on cooldown for {current_cd} more turns."
+                    return result_log
             else:
                 from apps.skilles.models import SkillTemplate
                 try:
@@ -277,6 +328,12 @@ class BattleService:
             combatant.current_mp -= template.mp_cost
             combatant.save(update_fields=['current_mp'])
             
+            if combatant.is_player and template.cooldown > 0:
+                cooldowns = combatant.skill_cooldowns
+                cooldowns[str(template.id)] = template.cooldown
+                combatant.skill_cooldowns = cooldowns
+                combatant.save(update_fields=['skill_cooldowns'])
+            
             result_log["skill_name"] = template.name
 
             # Calculate Effect
@@ -285,11 +342,10 @@ class BattleService:
                 final_skill_dmg = base_dmg * (1 + bonus_final_damage)
                 damage = int(final_skill_dmg)
                 
-                target.current_hp -= damage
-                target.save()
+                actual_damage = BattleService.apply_damage_with_shield(target, damage)
                 
-                result_log["damage"] = damage
-                result_log["message"] = f"{result_log['actor']} used {template.name} and dealt {damage} damage to {result_log['target']}."
+                result_log["damage"] = actual_damage
+                result_log["message"] = f"{result_log['actor']} used {template.name} and dealt {actual_damage} damage to {result_log['target']}."
 
             elif template.effect_type == 'HEAL':
                 base_heal = (total_damage * template.power_ratio) + template.base_power
@@ -316,6 +372,7 @@ class BattleService:
                     target=target,
                     effect_template=template.applies_effect,
                     remaining_turns=template.applies_effect.duration_turns,
+                    remaining_shield_points=template.applies_effect.shields_points,
                     caster=combatant
                 )
                 result_log["message"] += f" Applied {template.applies_effect.name}."
