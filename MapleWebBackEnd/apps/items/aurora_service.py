@@ -1,5 +1,6 @@
 import random
 from django.db import transaction
+from django.db.models import F
 from apps.items.models import (
     AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate, AuroraLineCountConfig
 )
@@ -52,7 +53,7 @@ class AuroraService:
                 break
         
         if not selected_pool:
-            selected_pool = pools.first()
+            selected_pool = pools[0]
 
         return {
             'line_index': line_index,
@@ -95,8 +96,9 @@ class AuroraService:
         """
         First time revealing lines for an item.
         """
+        # (C-3 fix) Lock item row to prevent concurrent reveals creating duplicate lines
         try:
-            item = InventoryItem.objects.get(id=inventory_item_id, owner__user=user)
+            item = InventoryItem.objects.select_for_update().get(id=inventory_item_id, owner__user=user)
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Item not found."}
 
@@ -112,6 +114,10 @@ class AuroraService:
             item.save(update_fields=['aurora_level'])
 
         lines_data = AuroraService._generate_lines_for_item(item)
+        expected_lines = AuroraService.get_max_lines_for_item(item.template)
+        if len(lines_data) != expected_lines:
+            transaction.set_rollback(True)
+            return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
         
         # Save lines to DB
         for data in lines_data:
@@ -125,14 +131,16 @@ class AuroraService:
 
         return {"success": True, "message": "Aurora lines revealed successfully."}
 
+
     @staticmethod
     @transaction.atomic
     def apply_modifier(user, target_item_id, modifier_item_id=None, use_lumis=False, target_line_index=None):
         """
         Apply a modifier (Cube/Scroll) or use Lumis to reroll.
         """
+        # (C-3 fix) Lock target item row — prevents concurrent cube usage on same item
         try:
-            target_item = InventoryItem.objects.get(id=target_item_id, owner__user=user)
+            target_item = InventoryItem.objects.select_for_update().get(id=target_item_id, owner__user=user)
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Target item not found."}
 
@@ -153,13 +161,19 @@ class AuroraService:
         # -------------------------------------------------------------------
         if use_lumis:
             cost = 500 # Define cost logic later
-            if user.lumis < cost:
+            # (C-3 fix) Lock user row and re-check balance under lock
+            from apps.users.models import GameUser
+            locked_user = GameUser.objects.select_for_update().get(pk=user.pk)
+            if locked_user.lumis < cost:
                 return {"success": False, "message": f"Not enough Lumis. Need {cost}."}
-            user.lumis -= cost
-            user.save(update_fields=['lumis'])
+            # (C-3 fix) Use F() for atomic deduction
+            GameUser.objects.filter(pk=locked_user.pk).update(lumis=F('lumis') - cost)
 
             # Lumis roll is REROLL_ALL without tier-up chance
             new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)
+            if len(new_lines) != max_lines:
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
             
             # Delete old lines and save new ones immediately
             target_item.aurora_lines.all().delete()
@@ -180,7 +194,8 @@ class AuroraService:
             return {"success": False, "message": "Must provide a modifier item or use Lumis."}
 
         try:
-            modifier_item = InventoryItem.objects.get(id=modifier_item_id, owner__user=user)
+            # (C-3 fix) Lock modifier item — prevents same cube being used in concurrent requests
+            modifier_item = InventoryItem.objects.select_for_update().get(id=modifier_item_id, owner__user=user)
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Modifier item not found."}
 
@@ -188,6 +203,44 @@ class AuroraService:
             return {"success": False, "message": "This item is not a valid Aurora modifier."}
 
         rule = modifier_item.template.aurora_modifier_rule
+        mod_type = rule.modifier_type
+
+        if modifier_item.pk == target_item.pk:
+            return {"success": False, "message": "The target item cannot also be the modifier item."}
+        if modifier_item.quantity <= 0:
+            return {"success": False, "message": "Modifier item has no remaining quantity."}
+
+        implemented_types = {
+            'REROLL_ALL', 'REROLL_CHOICE', 'REROLL_TRIPLE_CHOICE',
+            'REROLL_SINGLE', 'REPLACE_FIXED', 'FORCE_SET',
+        }
+        if mod_type not in implemented_types:
+            return {"success": False, "message": "This modifier type is not implemented."}
+
+        if mod_type in {'REROLL_SINGLE', 'REPLACE_FIXED'}:
+            if target_line_index is None:
+                return {"success": False, "message": "Must specify a target line index."}
+            try:
+                target_line_index = int(target_line_index)
+            except (TypeError, ValueError):
+                return {"success": False, "message": "Target line index must be an integer."}
+            if target_line_index < 0 or target_line_index >= max_lines:
+                return {"success": False, "message": "Target line index is out of range."}
+            if not target_item.aurora_lines.filter(line_index=target_line_index).exists():
+                return {"success": False, "message": "Target Aurora line does not exist."}
+
+        if mod_type in {'REPLACE_FIXED', 'FORCE_SET'}:
+            if rule.fixed_stat_type is None or rule.fixed_line_type is None or rule.fixed_value is None:
+                return {"success": False, "message": "Modifier fixed-line configuration is incomplete."}
+
+        if mod_type == 'FORCE_SET':
+            max_aurora_level = target_item.template.aurora_tier.max_aurora_level
+            if (
+                rule.forced_aurora_level is None
+                or rule.forced_aurora_level < 1
+                or rule.forced_aurora_level > max_aurora_level
+            ):
+                return {"success": False, "message": "Forced Aurora level is invalid for this item."}
 
         # Validate target max tier
         if target_item.aurora_level > rule.max_aurora_target:
@@ -204,16 +257,17 @@ class AuroraService:
         tier_up_occurred = False
         if target_item.aurora_level < rule.max_aurora_target:
             event_mult = AuroraService.get_active_tier_up_multiplier()
-            final_chance = rule.tier_up_chance * event_mult
+            final_chance = min(1.0, max(0.0, rule.tier_up_chance * event_mult))
             if random.random() < final_chance:
                 tier_up_occurred = True
                 target_item.aurora_level += 1
                 target_item.save(update_fields=['aurora_level'])
 
-        mod_type = rule.modifier_type
-
         if mod_type == 'REROLL_ALL':
             new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)
+            if len(new_lines) != max_lines:
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
             target_item.aurora_lines.all().delete()
             for data in new_lines:
                 AuroraLine.objects.create(
@@ -230,6 +284,9 @@ class AuroraService:
 
         elif mod_type == 'REROLL_CHOICE':
             new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)
+            if len(new_lines) != max_lines:
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
             PendingAuroraRoll.objects.create(
                 inventory_item=target_item,
                 modifier_type=mod_type,
@@ -242,6 +299,9 @@ class AuroraService:
 
         elif mod_type == 'REROLL_TRIPLE_CHOICE':
             new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines * 3)
+            if len(new_lines) != max_lines * 3:
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
             # Give each line a unique temp index for the frontend to pick from
             for idx, line in enumerate(new_lines):
                 line['temp_id'] = idx
@@ -254,27 +314,24 @@ class AuroraService:
             return {"success": True, "message": "Select your desired lines.", "pending": True, "choices": new_lines}
 
         elif mod_type == 'REROLL_SINGLE':
-            if target_line_index is None:
-                return {"success": False, "message": "Must specify a target line index."}
             new_line = AuroraService._generate_random_line(target_item.template.aurora_tier, target_item.template.item_type, target_item.aurora_level, target_line_index)
+            if new_line is None:
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No Aurora line pool is configured for this item."}
             # Update immediately
-            line_obj = target_item.aurora_lines.filter(line_index=target_line_index).first()
-            if line_obj and new_line:
-                line_obj.stat_type = new_line['stat_type']
-                line_obj.line_type = new_line['line_type']
-                line_obj.value = new_line['value']
-                line_obj.save()
+            line_obj = target_item.aurora_lines.get(line_index=target_line_index)
+            line_obj.stat_type = new_line['stat_type']
+            line_obj.line_type = new_line['line_type']
+            line_obj.value = new_line['value']
+            line_obj.save()
             return {"success": True, "message": f"Line {target_line_index} rerolled."}
 
         elif mod_type == 'REPLACE_FIXED':
-            if target_line_index is None:
-                return {"success": False, "message": "Must specify a target line index."}
-            line_obj = target_item.aurora_lines.filter(line_index=target_line_index).first()
-            if line_obj:
-                line_obj.stat_type = rule.fixed_stat_type
-                line_obj.line_type = rule.fixed_line_type
-                line_obj.value = rule.fixed_value
-                line_obj.save()
+            line_obj = target_item.aurora_lines.get(line_index=target_line_index)
+            line_obj.stat_type = rule.fixed_stat_type
+            line_obj.line_type = rule.fixed_line_type
+            line_obj.value = rule.fixed_value
+            line_obj.save()
             return {"success": True, "message": f"Line {target_line_index} replaced with fixed stat."}
 
         elif mod_type == 'FORCE_SET':
@@ -292,6 +349,7 @@ class AuroraService:
             )
             return {"success": True, "message": "Item forced to fixed state."}
 
+        transaction.set_rollback(True)
         return {"success": False, "message": "Modifier type not fully implemented."}
 
     @staticmethod
@@ -300,8 +358,9 @@ class AuroraService:
         """
         action: 'keep_old', 'take_new', 'select_specific'
         """
+        # (C-3 fix) Lock item row to prevent concurrent confirm requests
         try:
-            item = InventoryItem.objects.get(id=inventory_item_id, owner__user=user)
+            item = InventoryItem.objects.select_for_update().get(id=inventory_item_id, owner__user=user)
             pending = item.pending_aurora_roll
         except (InventoryItem.DoesNotExist, PendingAuroraRoll.DoesNotExist):
             return {"success": False, "message": "No pending roll found."}
@@ -324,10 +383,17 @@ class AuroraService:
             return {"success": True, "message": "New lines applied."}
 
         elif action == 'select_specific' and pending.modifier_type == 'REROLL_TRIPLE_CHOICE':
-            if not selected_temp_ids or len(selected_temp_ids) != AuroraService.get_max_lines_for_item(item.template):
+            expected_count = AuroraService.get_max_lines_for_item(item.template)
+            if (
+                not isinstance(selected_temp_ids, list)
+                or len(selected_temp_ids) != expected_count
+                or len(set(selected_temp_ids)) != expected_count
+            ):
                 return {"success": False, "message": "Invalid number of selections."}
                 
             selected_lines = [l for l in pending.generated_lines_data if l['temp_id'] in selected_temp_ids]
+            if len(selected_lines) != expected_count:
+                return {"success": False, "message": "One or more selected lines are invalid."}
             
             item.aurora_lines.all().delete()
             for idx, data in enumerate(selected_lines):

@@ -55,11 +55,12 @@ class EffectTemplateAdmin(admin.ModelAdmin):
         }),
         ('Rate Modifiers', {
             'classes': ('collapse',),
-            'fields': ('drop_rate_change', 'exp_rate_change')
+            'fields': ('drop_rate_change', 'exp_rate_change', 'lumis_rate_change')
         }),
         ('Special Modifiers', {
             'classes': ('collapse',),
             'fields': (
+                'final_damage_modifier',
                 ('damage_taken_modifier', 'damage_dealt_modifier'),
                 ('health_received_modifier', 'mana_received_modifier'),
                 ('health_dealt_modifier', 'mana_dealt_modifier'),

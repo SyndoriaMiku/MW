@@ -34,4 +34,6 @@ urlpatterns = [
     path('api/world/', include('apps.world.urls')),
     path('api/market/', include('apps.market.urls')),
     path('api/shops/', include('apps.shops.urls')),
+    path('api/battles/', include('apps.battles.urls')),
+    path('api/quests/', include('apps.quests.urls')),
 ]

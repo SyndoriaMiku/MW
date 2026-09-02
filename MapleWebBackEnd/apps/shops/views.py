@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
@@ -101,7 +102,7 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
                 user_profile.save(update_fields=['nova'])
 
             # Give Item
-            if shop_item.item_template.item_type in ['equipment', 'weapon']:
+            if not shop_item.item_template.is_stackable:
                 for _ in range(quantity):
                     InventoryItem.objects.create(
                         template=shop_item.item_template,
@@ -109,14 +110,17 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
                         quantity=1
                     )
             else:
+                # (B-4 fix) Atomic F() increment prevents quantity race condition
                 inv_item, created = InventoryItem.objects.get_or_create(
                     template=shop_item.item_template,
                     owner=character,
                     is_destroyed=False,
-                    defaults={'quantity': 0}
+                    defaults={'quantity': quantity}
                 )
-                inv_item.quantity += quantity
-                inv_item.save(update_fields=['quantity'])
+                if not created:
+                    InventoryItem.objects.filter(pk=inv_item.pk).update(
+                        quantity=F('quantity') + quantity
+                    )
 
         return Response({"detail": f"Successfully purchased {quantity}x {shop_item.item_template.name}."})
 
@@ -150,11 +154,12 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
                 req_qty = req.quantity * quantity
                 # We need to find if the user has enough of this template in inventory
                 # We will only consume stackable items that are not destroyed and not untradeable (or maybe untradeable is fine for crafting)
-                inv_items = InventoryItem.objects.filter(
+                # (C-6 fix) Lock inventory rows to prevent concurrent exchange consuming same materials
+                inv_items = InventoryItem.objects.select_for_update().filter(
                     owner=character, 
                     template=req.item, 
                     is_destroyed=False
-                ).order_by('quantity') # consume smaller stacks first
+                ).order_by('quantity')  # consume smaller stacks first
 
                 total_has = sum(i.quantity for i in inv_items)
                 if total_has < req_qty:
@@ -174,7 +179,7 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
                         remaining_to_deduct = 0
 
             # Give the target item
-            if special_item.item.item_type in ['equipment', 'weapon']:
+            if not special_item.item.is_stackable:
                 for _ in range(quantity):
                     InventoryItem.objects.create(
                         template=special_item.item,
@@ -182,13 +187,16 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
                         quantity=1
                     )
             else:
+                # (B-4 fix) Atomic F() increment
                 new_item, created = InventoryItem.objects.get_or_create(
                     template=special_item.item,
                     owner=character,
                     is_destroyed=False,
-                    defaults={'quantity': 0}
+                    defaults={'quantity': quantity}
                 )
-                new_item.quantity += quantity
-                new_item.save(update_fields=['quantity'])
+                if not created:
+                    InventoryItem.objects.filter(pk=new_item.pk).update(
+                        quantity=F('quantity') + quantity
+                    )
 
         return Response({"detail": f"Successfully exchanged for {quantity}x {special_item.item.name}."})

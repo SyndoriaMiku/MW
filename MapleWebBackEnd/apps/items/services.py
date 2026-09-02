@@ -1,4 +1,6 @@
 import random
+from django.db import transaction
+from django.db.models import F
 from apps.items.models import LumenCostRule, LumenEvent
 from apps.inventory.models import InventoryItem
 
@@ -23,13 +25,18 @@ class LumenService:
         return success_bonus, heavy_fail_mult, bonus_lvls
 
     @staticmethod
+    @transaction.atomic
     def attempt_lumen_ascend(user, inventory_item_id):
         """
         Attempt to upgrade an item using the Lumen Ascend system.
         Returns a dictionary with success status, result, and message.
         """
+        # (RC-1/TS-2 fix) Lock user row to prevent double-click currency exploit
+        from apps.users.models import GameUser
+        user = GameUser.objects.select_for_update().get(pk=user.pk)
+
         try:
-            item = InventoryItem.objects.get(id=inventory_item_id, owner__user=user)
+            item = InventoryItem.objects.select_for_update().get(id=inventory_item_id, owner__user=user)
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Item not found or not owned."}
 
@@ -107,7 +114,6 @@ class LumenService:
         
         else:
             # Normal Failure (Level remains the same)
-            # This corresponds to the remaining probability (final_fail)
             return {
                 "success": True, 
                 "result": "failure", 
@@ -115,13 +121,15 @@ class LumenService:
             }
 
     @staticmethod
+    @transaction.atomic
     def restore_fragment(user, fragment_item_id, sacrifice_item_id=None):
         """
         Restore a destroyed item (fragment) using a sacrifice item (phôi trắng).
         Note: Logic for restoring via special points/items during events can be added here in the future.
         """
+        # (C-2 fix) Lock fragment row first to prevent concurrent restores
         try:
-            fragment = InventoryItem.objects.get(id=fragment_item_id, owner__user=user)
+            fragment = InventoryItem.objects.select_for_update().get(id=fragment_item_id, owner__user=user)
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Fragment not found."}
 
@@ -136,7 +144,8 @@ class LumenService:
         # Method: Using a Sacrifice Item (Phôi)
         if sacrifice_item_id:
             try:
-                sacrifice = InventoryItem.objects.get(id=sacrifice_item_id, owner__user=user)
+                # (C-2 fix) Lock sacrifice row — prevents same item being used in concurrent restores
+                sacrifice = InventoryItem.objects.select_for_update().get(id=sacrifice_item_id, owner__user=user)
             except InventoryItem.DoesNotExist:
                 return {"success": False, "message": "Sacrifice item not found."}
 
@@ -157,3 +166,4 @@ class LumenService:
             return {"success": True, "message": "Fragment restored successfully using a sacrifice item!"}
             
         return {"success": False, "message": "Must provide a sacrifice item to restore the fragment."}
+

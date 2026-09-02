@@ -171,7 +171,7 @@ REST_FRAMEWORK = {
 
 # SimpleJWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  # (B-6) 30 phút — giới hạn rủi ro khi token bị đánh cắp
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,

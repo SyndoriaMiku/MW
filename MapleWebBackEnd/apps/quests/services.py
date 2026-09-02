@@ -1,5 +1,7 @@
 from django.utils import timezone
-from .models import QuestTemplate, CharacterQuest, CharacterQuestObjective
+from django.db import transaction
+from django.db.models import F
+from .models import QuestTemplate, QuestReward, CharacterQuest, CharacterQuestObjective
 
 class QuestService:
     @staticmethod
@@ -153,3 +155,82 @@ class QuestService:
             
             if quest_updated:
                 QuestService.check_quest_completion(cq)
+
+    @staticmethod
+    @transaction.atomic
+    def claim_reward(character, quest_id):
+        """
+        Claims the reward for a completed quest.
+        Distributes EXP, Lumis, and Item rewards to the character.
+        Returns a dict with success status and details.
+        """
+        try:
+            # (RC-3 fix) Lock quest row to prevent double-claim
+            cq = CharacterQuest.objects.select_for_update().select_related('quest').get(
+                character=character, quest_id=quest_id
+            )
+        except CharacterQuest.DoesNotExist:
+            return {"success": False, "message": "Quest not found for this character."}
+
+        if cq.status != CharacterQuest.Status.COMPLETED:
+            if cq.status == CharacterQuest.Status.CLAIMED:
+                return {"success": False, "message": "Rewards already claimed."}
+            return {"success": False, "message": "Quest is not yet completed."}
+
+        template = cq.quest
+        rewards_log = {"exp": 0, "lumis": 0, "items": []}
+
+        # Grant EXP
+        if template.exp_reward > 0:
+            character.gain_exp(template.exp_reward)
+            rewards_log["exp"] = template.exp_reward
+
+        # Grant Lumis (RC-4 fix: atomic F() increment)
+        if template.lumis_reward > 0:
+            from apps.users.models import GameUser
+            GameUser.objects.filter(pk=character.user.pk).update(
+                lumis=F('lumis') + template.lumis_reward
+            )
+            rewards_log["lumis"] = template.lumis_reward
+
+        # Grant Item Rewards
+        from apps.inventory.models import InventoryItem
+        for reward in template.rewards.select_related('item_template').all():
+            item_template = reward.item_template
+            qty = reward.quantity
+
+            if not item_template.is_stackable:
+                # Equipment: create individual items
+                for _ in range(qty):
+                    InventoryItem.objects.create(
+                        template=item_template,
+                        owner=character,
+                        quantity=1
+                    )
+            else:
+                # Stackable items (RC-2 fix: atomic F() increment)
+                inv_item, created = InventoryItem.objects.get_or_create(
+                    template=item_template,
+                    owner=character,
+                    is_destroyed=False,
+                    defaults={'quantity': qty}
+                )
+                if not created:
+                    InventoryItem.objects.filter(pk=inv_item.pk).update(
+                        quantity=F('quantity') + qty
+                    )
+
+            rewards_log["items"].append({
+                "name": item_template.name,
+                "quantity": qty
+            })
+
+        # Mark quest as claimed
+        cq.status = CharacterQuest.Status.CLAIMED
+        cq.save(update_fields=['status'])
+
+        return {
+            "success": True,
+            "message": "Rewards claimed successfully!",
+            "rewards": rewards_log
+        }

@@ -17,6 +17,10 @@ class ListingViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ListingSerializer
     permission_classes = [IsAuthenticated]
+    # Listings are immutable after creation.  In particular, allowing the
+    # ModelViewSet defaults here would let any authenticated user PATCH the
+    # item/price of any active listing returned by get_queryset().
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
 
     def get_queryset(self):
         queryset = Listing.objects.filter(is_active=True).select_related('item', 'seller')
@@ -70,14 +74,48 @@ class ListingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         item = serializer.validated_data['item']
         # Prevent listing untradeable items
-        if item.is_untrade or item.is_destroyed:
+        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed:
             raise serializers.ValidationError("This item cannot be traded.")
+
+        price = serializer.validated_data['price']
+        quantity = serializer.validated_data.get('quantity', 1)
+        if price <= 0:
+            raise serializers.ValidationError({"price": "Price must be greater than zero."})
+        if quantity <= 0:
+            raise serializers.ValidationError({"quantity": "Quantity must be greater than zero."})
+        if item.template.is_stackable:
+            if quantity > item.quantity:
+                raise serializers.ValidationError({"quantity": "Quantity exceeds the owned stack."})
+        elif quantity != 1:
+            raise serializers.ValidationError({"quantity": "Equipment listings must have quantity 1."})
         
         # Verify ownership
         if item.owner.user != self.request.user:
             raise serializers.ValidationError("You do not own this item.")
 
+        # (RC-6 fix) Prevent listing items that are currently equipped
+        if hasattr(item, 'equipped_in') and item.equipped_in is not None:
+            raise serializers.ValidationError("Cannot list an item that is currently equipped. Please unequip it first.")
+
+        # (C-5 fix) Prevent listing the same item multiple times
+        if Listing.objects.filter(item=item, is_active=True).exists():
+            raise serializers.ValidationError("This item is already listed on the market.")
+        if TradeItem.objects.filter(item=item, trade__status='pending').exists():
+            raise serializers.ValidationError("An item in a pending trade cannot be listed.")
+
         serializer.save(seller=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        """Only the seller may cancel a listing; keep the row for audit/history."""
+        listing = self.get_object()
+        if listing.seller_id != request.user.pk:
+            return Response(
+                {"detail": "You may only cancel your own listing."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        listing.is_active = False
+        listing.save(update_fields=['is_active'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
     def buy(self, request, pk=None):
@@ -86,7 +124,11 @@ class ListingViewSet(viewsets.ModelViewSet):
 
         if listing.seller == buyer:
             return Response({"detail": "You cannot buy your own listing."}, status=status.HTTP_400_BAD_REQUEST)
+        buyer_character = getattr(buyer, 'character', None)
+        if buyer_character is None:
+            return Response({"detail": "Create a character before buying items."}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Fast-fail before entering lock (stale check is fine here for UX)
         if buyer.lumis < listing.price:
             return Response({"detail": "Not enough Lumis."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -95,9 +137,32 @@ class ListingViewSet(viewsets.ModelViewSet):
             listing = Listing.objects.select_for_update().get(pk=listing.pk)
             if not listing.is_active:
                 return Response({"detail": "This listing is no longer active."}, status=status.HTTP_400_BAD_REQUEST)
+
+            item = InventoryItem.objects.select_for_update().select_related(
+                'template', 'owner__user'
+            ).get(pk=listing.item_id)
+            owner_user = getattr(item.owner, 'user', None)
+            if owner_user is None or owner_user.pk != listing.seller_id or item.is_destroyed or item.is_untrade:
+                listing.is_active = False
+                listing.save(update_fields=['is_active'])
+                return Response({"detail": "This listing is no longer valid."}, status=status.HTTP_400_BAD_REQUEST)
+            if listing.quantity <= 0 or listing.quantity > item.quantity:
+                listing.is_active = False
+                listing.save(update_fields=['is_active'])
+                return Response({"detail": "The listed quantity is no longer available."}, status=status.HTTP_400_BAD_REQUEST)
             
-            buyer_profile = GameUser.objects.select_for_update().get(pk=buyer.pk)
-            seller_profile = GameUser.objects.select_for_update().get(pk=listing.seller.pk)
+            # (H-4 fix) Lock users in ascending PK order to prevent deadlock
+            user_pks = sorted([buyer.pk, listing.seller.pk])
+            locked_users = {
+                u.pk: u
+                for u in GameUser.objects.select_for_update().filter(pk__in=user_pks).order_by('pk')
+            }
+            buyer_profile = locked_users[buyer.pk]
+            seller_profile = locked_users[listing.seller.pk]
+
+            # (C-4 fix) Re-check balance UNDER lock — prevents concurrent buy going negative
+            if buyer_profile.lumis < listing.price:
+                return Response({"detail": "Not enough Lumis."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Transfer Lumis
             buyer_profile.lumis -= listing.price
@@ -105,14 +170,25 @@ class ListingViewSet(viewsets.ModelViewSet):
             buyer_profile.save(update_fields=['lumis'])
             seller_profile.save(update_fields=['lumis'])
 
-            # Transfer Item
-            item = listing.item
-            item.owner = getattr(buyer, 'character', None)
-            
-            if item.template.is_trade_once:
-                item.is_untrade = True
-            
-            item.save(update_fields=['owner', 'is_untrade'])
+
+            # Transfer either the whole inventory row or a split from a
+            # stackable row.  The listing price is the price for the listed
+            # quantity as a whole.
+            becomes_untradeable = item.template.is_trade_once
+            if item.template.is_stackable and listing.quantity < item.quantity:
+                item.quantity -= listing.quantity
+                item.save(update_fields=['quantity'])
+                InventoryItem.objects.create(
+                    template=item.template,
+                    owner=buyer_character,
+                    quantity=listing.quantity,
+                    is_untrade=becomes_untradeable,
+                )
+            else:
+                item.owner = buyer_character
+                if becomes_untradeable:
+                    item.is_untrade = True
+                item.save(update_fields=['owner', 'is_untrade'])
 
             # Complete transaction
             listing.is_active = False
@@ -127,12 +203,16 @@ class ListingViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Item purchased successfully."})
 
 
+
 class TradeViewSet(viewsets.ModelViewSet):
     """
     P2P Trading ViewSet.
     """
     serializer_class = TradeSerializer
     permission_classes = [IsAuthenticated]
+    # Trade offers may only change through the explicit actions below.  This
+    # prevents generic PATCH from changing both parties' Lumis or trade state.
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
         user = self.request.user
@@ -151,7 +231,12 @@ class TradeViewSet(viewsets.ModelViewSet):
         if receiver == self.request.user:
             raise serializers.ValidationError({"receiver_id": "Cannot trade with yourself."})
 
-        serializer.save(sender=self.request.user, receiver=receiver)
+        serializer.save(
+            sender=self.request.user,
+            receiver=receiver,
+            sender_lumis=0,
+            receiver_lumis=0,
+        )
 
     def _get_role(self, trade, user):
         if trade.sender == user: return 'sender'
@@ -181,8 +266,13 @@ class TradeViewSet(viewsets.ModelViewSet):
         
         if getattr(item.owner, 'user', None) != user:
             return Response({"detail": "You do not own this item."}, status=status.HTTP_400_BAD_REQUEST)
-        if item.is_untrade or item.is_destroyed:
+        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed:
             return Response({"detail": "Item is untradeable."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if hasattr(item, 'equipped_in'):
+            return Response({"detail": "Equipped items cannot be traded."}, status=status.HTTP_400_BAD_REQUEST)
+        if Listing.objects.filter(item=item, is_active=True).exists():
+            return Response({"detail": "Listed items cannot be added to a trade."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Ensure item not already in trade
         if TradeItem.objects.filter(item=item).exists():
@@ -206,10 +296,15 @@ class TradeViewSet(viewsets.ModelViewSet):
         trade = self.get_object()
         user = request.user
         role = self._get_role(trade, user)
-        lumis = int(request.data.get('lumis', 0))
+        try:
+            lumis = int(request.data.get('lumis', 0))
+        except (TypeError, ValueError):
+            return Response({"detail": "Lumis must be a non-negative integer."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not role or trade.status != 'pending':
             return Response({"detail": "Invalid state."}, status=status.HTTP_400_BAD_REQUEST)
+        if lumis < 0:
+            return Response({"detail": "Lumis must be a non-negative integer."}, status=status.HTTP_400_BAD_REQUEST)
         if (role == 'sender' and trade.sender_ready) or (role == 'receiver' and trade.receiver_ready):
             return Response({"detail": "Cannot modify lumis while ready."}, status=status.HTTP_400_BAD_REQUEST)
         if user.lumis < lumis:
@@ -246,30 +341,72 @@ class TradeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
-        trade = self.get_object()
-        role = self._get_role(trade, request.user)
-        
-        if not role or trade.status != 'pending':
-            return Response({"detail": "Invalid state."}, status=status.HTTP_400_BAD_REQUEST)
-        if not trade.sender_ready or not trade.receiver_ready:
-            return Response({"detail": "Both parties must be ready to accept."}, status=status.HTTP_400_BAD_REQUEST)
+        # (TS-3 fix) Entire accept logic must be atomic with row lock
+        with transaction.atomic():
+            trade = Trade.objects.select_for_update().get(pk=pk)
+            role = self._get_role(trade, request.user)
+            
+            if not role or trade.status != 'pending':
+                return Response({"detail": "Invalid state."}, status=status.HTTP_400_BAD_REQUEST)
+            if not trade.sender_ready or not trade.receiver_ready:
+                return Response({"detail": "Both parties must be ready to accept."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if role == 'sender': trade.sender_accepted = True
-        else: trade.receiver_accepted = True
-        trade.save()
+            if role == 'sender': trade.sender_accepted = True
+            else: trade.receiver_accepted = True
+            trade.save(update_fields=['sender_accepted', 'receiver_accepted'])
 
-        # Execute trade if both accepted
-        if trade.sender_accepted and trade.receiver_accepted:
-            with transaction.atomic():
-                trade = Trade.objects.select_for_update().get(pk=trade.pk)
-                sender = GameUser.objects.select_for_update().get(pk=trade.sender.pk)
-                receiver = GameUser.objects.select_for_update().get(pk=trade.receiver.pk)
+            # Execute trade if both accepted
+            if trade.sender_accepted and trade.receiver_accepted:
+                # (H-4 fix) Always lock users in ascending PK order to prevent deadlock.
+                # If A locks A→B while B locks B→A, they deadlock. Sorted order eliminates this.
+                user_pks = sorted([trade.sender.pk, trade.receiver.pk])
+                locked_users = {
+                    u.pk: u
+                    for u in GameUser.objects.select_for_update().filter(pk__in=user_pks).order_by('pk')
+                }
+                sender = locked_users[trade.sender.pk]
+                receiver = locked_users[trade.receiver.pk]
+
+                sender_character = getattr(sender, 'character', None)
+                receiver_character = getattr(receiver, 'character', None)
+                if sender_character is None or receiver_character is None:
+                    return Response(
+                        {"detail": "Both participants must have a character."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                trade_items = list(
+                    TradeItem.objects.select_for_update().select_related(
+                        'item__template', 'item__owner__user'
+                    ).filter(trade=trade)
+                )
+                for trade_item in trade_items:
+                    item = trade_item.item
+                    expected_owner = sender if trade_item.is_sender else receiver
+                    actual_owner = getattr(item.owner, 'user', None)
+                    invalid_item = (
+                        actual_owner is None
+                        or actual_owner.pk != expected_owner.pk
+                        or item.is_destroyed
+                        or item.is_untrade
+                        or not item.template.is_tradeable
+                        or hasattr(item, 'equipped_in')
+                        or Listing.objects.filter(item=item, is_active=True).exists()
+                    )
+                    if invalid_item:
+                        trade.status = 'cancelled'
+                        trade.save(update_fields=['status'])
+                        return Response(
+                            {"detail": "Trade cancelled because an offered item is no longer valid."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
                 # Check Lumis again
                 if sender.lumis < trade.sender_lumis or receiver.lumis < trade.receiver_lumis:
                     trade.status = 'cancelled'
-                    trade.save()
+                    trade.save(update_fields=['status'])
                     return Response({"detail": "Trade cancelled due to insufficient lumis."}, status=status.HTTP_400_BAD_REQUEST)
+
 
                 # Transfer Lumis
                 sender.lumis = sender.lumis - trade.sender_lumis + trade.receiver_lumis
@@ -278,12 +415,12 @@ class TradeViewSet(viewsets.ModelViewSet):
                 receiver.save(update_fields=['lumis'])
 
                 # Transfer Items
-                for ti in trade.items.all():
+                for ti in trade_items:
                     item = ti.item
                     if ti.is_sender:
-                        item.owner = getattr(receiver, 'character', None)
+                        item.owner = receiver_character
                     else:
-                        item.owner = getattr(sender, 'character', None)
+                        item.owner = sender_character
                         
                     if item.template.is_trade_once:
                         item.is_untrade = True
@@ -291,7 +428,7 @@ class TradeViewSet(viewsets.ModelViewSet):
                     item.save(update_fields=['owner', 'is_untrade'])
 
                 trade.status = 'accepted'
-                trade.save()
+                trade.save(update_fields=['status'])
                 return Response({"detail": "Trade successful."})
 
         return Response({"detail": "Accepted. Waiting for other party."})
