@@ -25,7 +25,7 @@ class GameUserAdmin(UserAdmin):
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal Info', {'fields': ('email',)}),
-        ('Game Data', {'fields': ('lumis', 'nova')}),
+        ('Game Data', {'fields': ('character', 'lumis', 'nova')}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_admin', 'is_superuser'),
         }),

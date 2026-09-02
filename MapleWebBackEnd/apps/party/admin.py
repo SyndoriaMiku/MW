@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Party, PartyMember, PartyInvitation
+from .models import Party, PartyMember, PartyInvitation, PendingPartyLoot
 
 # ===================================================================
 # SECTION: INLINE DEFINITIONS
@@ -68,5 +68,11 @@ class PartyInvitationAdmin(admin.ModelAdmin):
     autocomplete_fields = ('party', 'sender', 'receiver')
     readonly_fields = ('created_at', 'expires_at')
 
-# Tùy chọn: Đăng ký PartyMember để có thể xem tất cả thành viên của mọi party
 # admin.site.register(PartyMember)
+
+@admin.register(PendingPartyLoot)
+class PendingPartyLootAdmin(admin.ModelAdmin):
+    list_display = ('party', 'item_template', 'quantity', 'dropped_at')
+    search_fields = ('party__name', 'item_template__name')
+    autocomplete_fields = ('party', 'item_template')
+    readonly_fields = ('dropped_at',)

@@ -41,6 +41,7 @@ class EffectTemplate(models.Model):
     percent_int_change = models.FloatField(default=0) #Percentage intelligence change, positive for buff, negative for debuff
     drop_rate_change = models.FloatField(default=0) #Drop rate change, positive for buff, negative for debuff
     exp_rate_change = models.FloatField(default=0) #EXP rate change, positive for buff, negative for debuff
+    lumis_rate_change = models.FloatField(default=0, help_text="Lumis gain rate change, positive for buff, negative for debuff")
     final_damage_modifier = models.FloatField(default=0, help_text="Final damage percent modifier, positive for buff, negative for debuff")
 
     shields_points = models.IntegerField(default=0, help_text="Amount of damage the shield can absorb") #Amount of damage the shield can absorb
@@ -95,9 +96,10 @@ class SkillTemplate(models.Model):
     mp_cost = models.IntegerField(default=0) #MP cost of the skill
     cooldown = models.IntegerField(default=0) #Cooldown of the skill
 
-    #Type of ski;;
+    #Type of skill
     target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.ENEMY)
     effect_type = models.CharField(max_length=10, choices=EffectType.choices, default=EffectType.DAMAGE)
+    is_basic_attack = models.BooleanField(default=False, help_text="Designates this skill as the normal attack for its job")
 
     base_power = models.FloatField(default=0) #Base power of the skill
     power_ratio = models.FloatField(default=0) #Power ratio based on character's damage
@@ -105,6 +107,21 @@ class SkillTemplate(models.Model):
     applies_effect = models.ForeignKey(EffectTemplate, on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied by the skill")
     class Meta:
         ordering = ['name']
+
+    @property
+    def formatted_description(self):
+        desc = self.description
+        if not desc:
+            return ""
+        try:
+            # Replace placeholders with actual values
+            desc = desc.replace('{power_ratio}', str(int(self.power_ratio * 100)))
+            desc = desc.replace('{base_power}', str(int(self.base_power)))
+            desc = desc.replace('{mp_cost}', str(self.mp_cost))
+            desc = desc.replace('{cooldown}', str(self.cooldown))
+        except Exception:
+            pass
+        return desc
 
     def __str__(self):
         return self.name

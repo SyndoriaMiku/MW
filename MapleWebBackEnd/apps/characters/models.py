@@ -88,11 +88,18 @@ class Character(models.Model):
         return self.current_stamina
 
     def _get_equipped_items(self):
-        """Helper method to get all equipped InventoryItems via the dynamic equipment system."""
+        """Helper method to get all equipped InventoryItems via the dynamic equipment system.
+        (DB-1 fix) Prefetches all sub-relations needed by stat methods in ONE query set,
+        eliminating N+1 on aurora_lines, lumen_tier, item_sets, and set effects.
+        """
         if not hasattr(self, '_cached_equipment'):
             self._cached_equipment = [
                 eq.item for eq in self.equipped_items.select_related(
-                    'item__template', 'slot'
+                    'item__template__lumen_tier',
+                    'slot'
+                ).prefetch_related(
+                    'item__aurora_lines',
+                    'item__template__item_sets__effects'
                 ).all()
             ]
         return self._cached_equipment
@@ -101,35 +108,50 @@ class Character(models.Model):
         """Get stat from ItemTemplate."""
         for item in equipped_items:
             template = item.template
-            mods['hp']['flat'] += template.hp_boost
-            mods['mp']['flat'] += template.mp_boost
-            mods['att']['flat'] += template.att_boost
-            mods['str']['flat'] += template.str_boost
-            mods['agi']['flat'] += template.agi_boost
-            mods['int']['flat'] += template.int_boost
+            mods['hp']['base_flat'] += template.hp_boost
+            mods['mp']['base_flat'] += template.mp_boost
+            mods['att']['base_flat'] += template.att_boost
+            mods['str']['base_flat'] += template.str_boost
+            mods['agi']['base_flat'] += template.agi_boost
+            mods['int']['base_flat'] += template.int_boost
 
             if template.all_stats_boost > 0:
                 for stat in ['str', 'agi', 'int']:
-                    mods[stat]['flat'] += template.all_stats_boost
+                    mods[stat]['base_flat'] += template.all_stats_boost
     
     def _get_lumen_ascend_mods(self, mods, equipped_items):
-        """Get stat from Lumen Ascend. Stack all levels up to current."""
+        """Get stat from Lumen Ascend. Stack all levels up to current.
+        (DB-1 fix) LumenAscendRule now queried once per tier group instead of per item.
+        """
         from apps.items.models import LumenAscendRule
+        # Group items by lumen_tier to batch the rule lookups
+        tier_items = defaultdict(list)
         for item in equipped_items:
             level = item.lumen_ascend_level
             if level > 0 and item.template.lumen_tier:
-                rules = LumenAscendRule.objects.filter(
-                    lumen_tier=item.template.lumen_tier, 
-                    lumen_level__lte=level, 
-                    item_type=item.template.item_type
-                )
-                for rule in rules:
-                    mods['hp']['flat'] += rule.hp_boost
-                    mods['mp']['flat'] += rule.mp_boost
-                    mods['att']['flat'] += rule.att_boost
-                    mods['str']['flat'] += rule.str_boost
-                    mods['agi']['flat'] += rule.agi_boost
-                    mods['int']['flat'] += rule.int_boost
+                tier_items[item.template.lumen_tier].append((item, level))
+
+        for tier, items_in_tier in tier_items.items():
+            max_level = max(lvl for _, lvl in items_in_tier)
+            # Single query for all rules up to the max level used in this tier
+            rules_qs = LumenAscendRule.objects.filter(
+                lumen_tier=tier, lumen_level__lte=max_level
+            ).order_by('lumen_level')
+            rules_by_level = {r.lumen_level: r for r in rules_qs}
+
+            for item, level in items_in_tier:
+                for lv in range(1, level + 1):
+                    rule = rules_by_level.get(lv)
+                    if not rule:
+                        continue
+                    if item.template.item_type not in rule.item_types:
+                        continue
+                    mods['hp']['base_flat'] += rule.hp_boost
+                    mods['mp']['base_flat'] += rule.mp_boost
+                    mods['att']['base_flat'] += rule.att_boost
+                    mods['str']['base_flat'] += rule.str_boost
+                    mods['agi']['base_flat'] += rule.agi_boost
+                    mods['int']['base_flat'] += rule.int_boost
 
     def _get_aurora_line_mods(self, mods, equipped_items):
         """Get stat from Aurora."""
@@ -140,7 +162,7 @@ class Character(models.Model):
                 if stat == 'all':
                     for s in ['str', 'agi', 'int']:
                         if line.line_type == 'flat':
-                            mods[s]['flat'] += value
+                            mods[s]['base_flat'] += value
                         elif line.line_type == 'percent':
                             mods[s]['percent'] += value / 100.0
                 else:
@@ -148,38 +170,44 @@ class Character(models.Model):
                     stat_key = 'drop_rate' if stat == 'drop' else stat
                     if stat_key in mods:
                         if line.line_type == 'flat':
-                            mods[stat_key]['flat'] += value
+                            mods[stat_key]['base_flat'] += value
                         elif line.line_type == 'percent':
                             mods[stat_key]['percent'] += value / 100.0
 
     def _get_item_set_mods(self, mods, equipped_items):
-        """Get stat from Item Set effects."""
+        """Get stat from Item Set effects.
+        (DB-1 fix) item_sets and effects are already prefetched via _get_equipped_items,
+        so this loops over Python objects in memory — zero extra queries.
+        """
         set_counts = defaultdict(int)
         for item in equipped_items:
+            # .all() on a prefetched relation hits cache, not DB
             for item_set in item.template.item_sets.all():
                 set_counts[item_set] += 1
 
         for item_set, count in set_counts.items():
-            effects = item_set.effects.filter(required_count__lte=count)
-            for effect in effects:
-                mods['hp']['flat'] += effect.hp_boost
-                mods['mp']['flat'] += effect.mp_boost
-                mods['att']['flat'] += effect.att_boost
-                mods['str']['flat'] += effect.str_boost
-                mods['agi']['flat'] += effect.agi_boost
-                mods['int']['flat'] += effect.int_boost
+            # .all() on prefetched item_set.effects hits cache
+            for effect in item_set.effects.all():
+                if effect.required_count > count:
+                    continue
+                mods['hp']['base_flat'] += effect.hp_boost
+                mods['mp']['base_flat'] += effect.mp_boost
+                mods['att']['base_flat'] += effect.att_boost
+                mods['str']['base_flat'] += effect.str_boost
+                mods['agi']['base_flat'] += effect.agi_boost
+                mods['int']['base_flat'] += effect.int_boost
                 
                 if effect.all_stats_boost > 0:
                     for stat in ['str', 'agi', 'int']:
-                        mods[stat]['flat'] += effect.all_stats_boost
+                        mods[stat]['base_flat'] += effect.all_stats_boost
 
     @cached_property
     def _all_stat_modifiers(self):
         """
         Get all the bonus modifiers from equipment and other sources.
         """
-        stat_keys = ['hp', 'mp', 'att', 'str', 'agi', 'int', 'drop_rate']
-        mods = {key: {'flat': 0, 'percent': 0} for key in stat_keys}
+        stat_keys = ['hp', 'mp', 'att', 'str', 'agi', 'int', 'drop_rate', 'exp_rate', 'lumis_rate']
+        mods = {key: {'base_flat': 0, 'percent': 0.0, 'extra_flat': 0} for key in stat_keys}
         
         equipped_items = self._get_equipped_items()
 
@@ -224,9 +252,8 @@ class Character(models.Model):
             main_stat_value = stats.get(main_stat, 0)
             
         # Step 1: Base Damage
-        dmg_att = self.total_att * job.att_weight
         dmg_stat = main_stat_value * job.main_stat_weight
-        base_damage = (dmg_stat * dmg_att) / 100.0
+        base_damage = (dmg_stat * self.total_att) / 100.0
         
         # Step 2: Character Damage (amplified by final damage)
         char_damage = base_damage * (1 + self.total_final_damage)
@@ -243,32 +270,56 @@ class Character(models.Model):
     @cached_property
     def total_str(self):
         mods = self._all_stat_modifiers['str']
-        return round((self.base_str + mods['flat']) * (1 + mods['percent']))
+        base = self.base_str + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_agi(self):
         mods = self._all_stat_modifiers['agi']
-        return round((self.base_agi + mods['flat']) * (1 + mods['percent']))
+        base = self.base_agi + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
         
     @cached_property
     def total_int(self):
         mods = self._all_stat_modifiers['int']
-        return round((self.base_int + mods['flat']) * (1 + mods['percent']))
+        base = self.base_int + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
+
+    @cached_property
+    def total_drop_rate(self):
+        mods = self._all_stat_modifiers.get('drop_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
+        # Base drop rate modifier is 1.0 (100%), buffs add to it.
+        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+
+    @cached_property
+    def total_exp_rate(self):
+        mods = self._all_stat_modifiers.get('exp_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
+        # Base exp rate modifier is 1.0 (100%), buffs add to it.
+        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+
+    @cached_property
+    def total_lumis_rate(self):
+        mods = self._all_stat_modifiers.get('lumis_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
+        # Base lumis gain rate is 1.0 (100%), buffs add to it.
+        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
 
     @cached_property
     def total_hp(self):
         mods = self._all_stat_modifiers['hp']
-        return round((self.base_hp + mods['flat']) * (1 + mods['percent']))
+        base = self.base_hp + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_mp(self):
         mods = self._all_stat_modifiers['mp']
-        return round((self.base_mp + mods['flat']) * (1 + mods['percent']))
+        base = self.base_mp + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
     def total_att(self):
         mods = self._all_stat_modifiers['att']
-        return round((self.base_att + mods['flat']) * (1 + mods['percent']))
+        base = self.base_att + mods['base_flat']
+        return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     # ===================================================================
     # SECTION: LEVELING METHODS
@@ -300,6 +351,14 @@ class Character(models.Model):
             'level', 'current_exp',
             'base_hp', 'base_mp', 'base_str', 'base_agi', 'base_int'
         ])
+        
+        # (C10 fix) Clear cached properties to ensure stats are recalculated
+        for prop in ['total_hp', 'total_mp', 'total_att', 'total_str', 'total_agi', 'total_int',
+                      'total_damage', 'total_drop_rate', 'total_exp_rate', 'total_final_damage',
+                      '_all_stat_modifiers']:
+            if prop in self.__dict__:
+                del self.__dict__[prop]
+                
         return leveled_up
 
     def _level_up(self):

@@ -5,16 +5,14 @@ class QuestTemplate(models.Model):
     Quest Template model to define quests in the game.
     """
     class QuestType(models.TextChoices):
-        MAIN = 'main', 'Main Quest'
-        SIDE = 'side', 'Side Quest'
         DAILY = 'daily', 'Daily Quest'
         WEEKLY = 'weekly', 'Weekly Quest'
-        EVENT = 'event', 'Event Quest'
+        ONCE = 'once', 'One-time Quest'
 
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     description = models.TextField()
-    quest_type = models.CharField(max_length=10, choices=QuestType.choices, default=QuestType.SIDE)
+    quest_type = models.CharField(max_length=10, choices=QuestType.choices, default=QuestType.ONCE)
 
     #Requirements to start the quest
     required_level = models.IntegerField(default=1)
@@ -43,6 +41,9 @@ class QuestObjective(models.Model):
 
     dungeon_to_clear = models.ForeignKey('world.NormalDungeonTemplate', null=True, blank=True, on_delete=models.CASCADE)
     clear_count = models.IntegerField(default=0)
+
+    boss_dungeon_to_clear = models.ForeignKey('world.BossDungeonTemplate', null=True, blank=True, on_delete=models.CASCADE)
+    boss_clear_count = models.IntegerField(default=0)
 
     def __str__(self):
         return f"Objective for {self.quest.name}"
@@ -76,6 +77,9 @@ class CharacterQuest(models.Model):
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.IN_PROGRESS)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    
+    from django.utils import timezone
+    last_reset_at = models.DateTimeField(default=timezone.now, help_text="Used to track daily/weekly resets")
 
     class Meta:
         unique_together = ('character', 'quest')

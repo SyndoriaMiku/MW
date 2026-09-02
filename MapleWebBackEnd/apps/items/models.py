@@ -26,6 +26,7 @@ WEAPON_TYPE_CHOICES = [
     ('1hs', 'One Handed Sword'),
     ('2hs', 'Two Handed Sword'),
     ('1ha', 'One Handed Axe'),
+    ('blunt', 'Blunt Weapon'),
     ('bow', 'Bow'),
     ('staff', 'Staff'),
     ('wand', 'Wand'),
@@ -58,8 +59,9 @@ class ItemTemplate(models.Model):
     class_restriction = models.ManyToManyField('classes.CharacterClass', blank=True) #Class restriction (empty means no restriction)
     job_restriction = models.ManyToManyField('classes.Job', blank=True) #Job restriction (empty means no restriction)
     is_tradeable = models.BooleanField(default=True) #If the item can be traded
+    is_trade_once = models.BooleanField(default=False, help_text="If True, item becomes untradeable after 1 trade")
     is_sellable = models.BooleanField(default=True) #If the item can be sold to NPC
-    # Upgrade information
+    # Upgrade systems
     lumen_tier = models.ForeignKey('items.LumenTierProperty', on_delete=models.SET_NULL, null=True, blank=True, help_text="Lumen Tier for this item (if upgradable)")
     aurora_tier = models.ForeignKey('items.AuroraProperty', on_delete=models.SET_NULL, null=True, blank=True, help_text="Aurora Tier for this item (if upgradable)")
     # Stats boost based
@@ -119,7 +121,6 @@ class LumenTierProperty(models.Model):
     name = models.CharField(max_length=255, unique=True)
     tier = models.IntegerField()
     max_lumen_level = models.IntegerField(default=0, help_text="Maximum Lumen Ascend Level for this tier")
-    heavy_failure_level = models.IntegerField(default=0, help_text="Level to drop to on heavy failure") 
     class Meta:
         verbose_name = "Lumen Tier Property"
         verbose_name_plural = "Lumen Tier Properties"
@@ -141,6 +142,22 @@ class AuroraProperty(models.Model):
         ordering = ['tier']
     def __str__(self):
         return f"Tier {self.tier} - {self.name} (Max Level {self.max_aurora_level})"   
+
+class AuroraLineCountConfig(models.Model):
+    """
+    Configures max Aurora lines based on Item's Minimum Level
+    """
+    min_item_level = models.IntegerField(unique=True, help_text="Minimum item level to apply this rule")
+    max_lines = models.IntegerField(default=1, help_text="Max Aurora lines allowed")
+
+    class Meta:
+        verbose_name = "Aurora Line Count Config"
+        verbose_name_plural = "Aurora Line Count Configs"
+        ordering = ['-min_item_level']
+
+    def __str__(self):
+        return f"Level {self.min_item_level}+ -> {self.max_lines} lines"
+
      
 class LumenCostRule(models.Model):
     """
@@ -166,8 +183,8 @@ class LumenCostRule(models.Model):
     def __str__(self):
         return (
             f"Lumen Tier {self.lumen_tier.tier} - Level {self.current_level}: "
-            f"Cost {self.lumis_cost} Lumis, Success {self.success_rate}%, "
-            f"Failure {self.failure_rate}%, Heavy Failure {self.heavy_failure_rate}%"
+            f"Cost {self.lumis_cost} Lumis, Success {self.success_rate * 100}%, "
+            f"Failure {self.failure_rate * 100}%, Heavy Failure {self.heavy_failure_rate * 100}%"
         )
 # ===================================================================
 # SECTION: STAT RULE MODELS
@@ -178,21 +195,27 @@ class AuroraLinePool(models.Model):
     Pool of Aurora Lines
     """
     aurora_property = models.ForeignKey('items.AuroraProperty', on_delete=models.CASCADE, related_name='line_pools')
-    item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, help_text="Item type")
+    item_types = models.JSONField(default=list, help_text="List of item types applicable")
     aurora_level = models.IntegerField(help_text="Aurora Level")
     stat_type = models.CharField(max_length=20, choices=STATS_CHOICES, help_text="Type of the line that stat boost")
     line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES, help_text="Type of the line")
     value = models.FloatField(help_text="Value of the line")
     weight = models.IntegerField(default=1, help_text="Relative weight for random selection")
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.item_types:
+            raise ValidationError("You must select at least one item type.")
+
     class Meta:
         verbose_name = "Aurora Line Pool"
         verbose_name_plural = "Aurora Line Pools"
-        ordering = ['aurora_property', 'item_type', 'aurora_level', 'stat_type', 'line_type', 'value']
+        ordering = ['aurora_property', 'aurora_level', 'stat_type', 'line_type', 'value']
     
     def __str__(self):
+        types_str = ", ".join(self.item_types) if self.item_types else "None"
         return (
-            f"{self.item_type} (Level {self.aurora_level}+): "
+            f"[{types_str}] (Level {self.aurora_level}+): "
             f"{self.stat_type} {self.value} ({self.line_type})"
         )
 
@@ -201,7 +224,7 @@ class LumenAscendRule(models.Model):
     Stat boost rules for Lumen Ascend
     """
     lumen_tier = models.ForeignKey('items.LumenTierProperty', on_delete=models.CASCADE, related_name='ascend_rules')
-    item_type = models.CharField(max_length=20, choices=TYPE_CHOICES, help_text="Item type applicable for this rule")
+    item_types = models.JSONField(default=list, help_text="List of item types applicable for this rule")
     #Stat gain on this level up, e.g at level 1 gain 5hp, so lumen_level 1 hp_boost 5
     lumen_level = models.PositiveIntegerField(help_text="Lumen Ascend Level")
 
@@ -213,14 +236,31 @@ class LumenAscendRule(models.Model):
     agi_boost = models.IntegerField(default=0)
     int_boost = models.IntegerField(default=0)
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.item_types:
+            raise ValidationError("You must select at least one item type.")
+        
+        # Check for overlapping rules for the same level and tier
+        if self.lumen_tier_id:
+            overlapping_rules = LumenAscendRule.objects.filter(
+                lumen_tier=self.lumen_tier,
+                lumen_level=self.lumen_level
+            ).exclude(id=self.id)
+            
+            for rule in overlapping_rules:
+                intersection = set(self.item_types).intersection(set(rule.item_types))
+                if intersection:
+                    types_str = ", ".join(intersection)
+                    raise ValidationError(f"Item type(s) '{types_str}' already have a rule for this Lumen Tier at level {self.lumen_level}.")
     class Meta:
-        unique_together = ('lumen_tier', 'item_type', 'lumen_level')
         verbose_name = "Lumen Ascend Stat Rule"
         verbose_name_plural = "Lumen Ascend Stat Rules"
-        ordering = ['lumen_tier', 'item_type', 'lumen_level']
+        ordering = ['lumen_tier', 'lumen_level']
     def __str__(self):
+        types_str = ", ".join(self.item_types) if self.item_types else "None"
         return (
-            f"Lumen Tier {self.lumen_tier.tier} - {self.item_type} - Level {self.lumen_level}"
+            f"Lumen Tier {self.lumen_tier.tier} - [{types_str}] - Level {self.lumen_level}"
         )
 
 
@@ -255,3 +295,65 @@ class LumenEvent(models.Model):
     def __str__(self):
         return f"{self.name} (Active: {self.is_active})"
 
+
+MODIFIER_TYPE_CHOICES = [
+    ('REROLL_ALL', 'Reroll All Lines (Basic)'),
+    ('REROLL_CHOICE', 'Reroll All Lines & Choose (Before/After)'),
+    ('REROLL_TRIPLE_CHOICE', 'Reroll 3x Lines & Pick N'),
+    ('REROLL_SINGLE', 'Reroll a Single Selected Line'),
+    ('REPLACE_FIXED', 'Replace Single Line with Fixed Stat'),
+    ('REPLACE_SELECT', 'Replace Single Line with Selected Stat'),
+    ('FORCE_SET', 'Force Set Aurora Level and Fixed Lines'),
+]
+
+class AuroraModifierRule(models.Model):
+    """
+    Defines what an Aurora re-roll item (Cube/Scroll) does.
+    """
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='aurora_modifier_rule')
+    modifier_type = models.CharField(max_length=50, choices=MODIFIER_TYPE_CHOICES)
+    max_aurora_target = models.IntegerField(default=0, help_text="Max Aurora Level of this item")
+    tier_up_chance = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="Base chance to tier-up (e.g. 0.01 = 1%, 0.1 = 10%)")
+    
+    # For REPLACE_FIXED and FORCE_SET
+    forced_aurora_level = models.IntegerField(null=True, blank=True, help_text="For FORCE_SET: The exact Aurora level to force the item to")
+    fixed_stat_type = models.CharField(max_length=20, choices=STATS_CHOICES, null=True, blank=True)
+    fixed_line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES, null=True, blank=True)
+    fixed_value = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Aurora Modifier Rule"
+        verbose_name_plural = "Aurora Modifier Rules"
+    
+    def __str__(self):
+        return f"{self.item_template.name} - {self.get_modifier_type_display()}"
+
+
+class AuroraEvent(models.Model):
+    """
+    Active events that modify Aurora tier-up rates
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=False)
+    tier_up_chance_multiplier = models.FloatField(default=1.0, help_text="Multiplier for Aurora tier-up rate (e.g. 1.5 for 1.5x tier-up chance)")
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Aurora Event"
+        verbose_name_plural = "Aurora Events"
+
+    def is_currently_active(self):
+        from django.utils import timezone
+        if not self.is_active:
+            return False
+        now = timezone.now()
+        if self.start_time and now < self.start_time:
+            return False
+        if self.end_time and now > self.end_time:
+            return False
+        return True
+
+    def __str__(self):
+        return f"{self.name} (Active: {self.is_active})"

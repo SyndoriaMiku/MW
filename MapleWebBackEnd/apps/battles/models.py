@@ -23,7 +23,10 @@ class CombatInstance(models.Model):
     #Link to party 
     party = models.ForeignKey('party.Party', on_delete=models.CASCADE, related_name='combat_instances')
     current_player_position = models.PositiveIntegerField(default=1) #Track current player position in party for turn order
-    #Link to enemy group
+    
+    #Link to dungeon
+    normal_dungeon = models.ForeignKey('world.NormalDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='combat_instances')
+    boss_dungeon = models.ForeignKey('world.BossDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='combat_instances')
 
     #Status
     status = models.CharField(max_length=20, choices=CombatStatus.choices, default=CombatStatus.IN_PROGRESS)
@@ -53,7 +56,10 @@ class Combatant(models.Model):
     current_mp = models.IntegerField()
 
     #Position in turn
-    position =models.PositiveIntegerField()
+    position = models.PositiveIntegerField()
+
+    # Skill Tracking
+    skill_cooldowns = models.JSONField(default=dict, blank=True, help_text="Stores current cooldowns: {skill_id: turns_left}")
 
     class Meta:
         unique_together = ('combat_instance', 'position') #Ensure unique position per combat instance
@@ -72,6 +78,7 @@ class ActiveEffect(models.Model):
     effect_template = models.ForeignKey('skilles.EffectTemplate', on_delete=models.CASCADE)
     remaining_turns = models.IntegerField() #Number of turns the effect will last
     current_stacks = models.IntegerField(default=1) #Current stacks of the effect, if applicable
+    remaining_shield_points = models.IntegerField(default=0) # Tracks the remaining shield points
     caster = models.ForeignKey('battles.Combatant', null=True, blank=True, on_delete=models.SET_NULL, related_name='casted_effects') #Combatant who applied the effect
     created_at = models.DateTimeField(auto_now_add=True)
 

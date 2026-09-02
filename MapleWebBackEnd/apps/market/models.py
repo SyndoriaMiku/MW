@@ -20,6 +20,11 @@ class Trade(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     
+    sender_ready = models.BooleanField(default=False)
+    receiver_ready = models.BooleanField(default=False)
+    sender_accepted = models.BooleanField(default=False)
+    receiver_accepted = models.BooleanField(default=False)
+    
     def __str__(self):
         return f"{self.sender.username} to {self.receiver.username}"
     
@@ -30,7 +35,7 @@ class TradeItem(models.Model):
     
     def __str__(self):
         role = 'Sender' if self.is_sender else 'Receiver'
-        return f"{role}: {self.item.name}"
+        return f"{role}: {self.item.template.name}"
     
 class Listing(models.Model):
     #User listing this item
@@ -47,7 +52,7 @@ class Listing(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     
     def __str__(self):
-        return f"{self.item.name} listed by {self.seller.username}"
+        return f"{self.item.template.name} listed by {self.seller.username}"
     
 class Transaction(models.Model):
     #ID of the transaction

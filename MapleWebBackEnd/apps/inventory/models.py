@@ -22,11 +22,28 @@ class AuroraLine(models.Model):
     Aurora Line for an item
     """
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='aurora_lines')
+    line_index = models.IntegerField(default=0, help_text="Index of the line (0, 1, 2) to distinguish lines")
     stat_type = models.CharField(max_length=20, choices=STATS_CHOICES)
     line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES)
     value = models.FloatField() #Value of the line
     
     def __str__(self):
         return f"{self.stat_type} {self.value} {self.line_type}"
+
+
+class PendingAuroraRoll(models.Model):
+    """
+    Stores temporarily rolled Aurora Lines for items like Choice Cubes
+    until the user confirms which ones to keep.
+    """
+    inventory_item = models.OneToOneField(InventoryItem, on_delete=models.CASCADE, related_name='pending_aurora_roll')
+    modifier_type = models.CharField(max_length=50, help_text="The type of modifier used (e.g. REROLL_CHOICE, REROLL_TRIPLE_CHOICE)")
+    generated_lines_data = models.JSONField(default=list, help_text="JSON storing the newly rolled lines data")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Pending Aurora Roll"
+        verbose_name_plural = "Pending Aurora Rolls"
     
-    
+    def __str__(self):
+        return f"Pending roll for {self.inventory_item}"

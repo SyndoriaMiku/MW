@@ -29,9 +29,7 @@ class Job(models.Model):
     
     name = models.CharField(max_length=50, unique=True) #Job name
     character_class = models.ForeignKey('classes.CharacterClass', on_delete=models.CASCADE) #Class that job belongs to
-    
-    att_weight = models.FloatField(default=1.0, help_text="Damage gain each att point")
-    main_stat_weight = models.FloatField(default=1.0, help_text="Damage gain each main stat point")
+    main_stat_weight = models.FloatField(default=1.0, help_text="Weight for main stat in damage calculation")
 
     def __str__(self):
         return f"{self.name} with main stat {self.character_class.main_stat}"
