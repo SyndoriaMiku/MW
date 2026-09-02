@@ -127,5 +127,57 @@ class SkillTemplate(models.Model):
         return self.name
 
 
+class SkillLevelConfig(models.Model):
+    """
+    Defines requirements and stats for each level of a skill.
 
+    - `required_char_level`: Character must reach this level to auto-unlock/upgrade.
+    - `damage_multiplier`: Configurable per level in DB (e.g. 1.00, 1.50, 1.75).
+    - `required_materials`: If non-empty, upgrade must be triggered manually by the player
+      (consuming inventory items). If empty, upgrade happens automatically on level-up.
+    """
+    skill = models.ForeignKey(
+        SkillTemplate, on_delete=models.CASCADE,
+        related_name='level_configs'
+    )
+    skill_level = models.IntegerField(
+        help_text="Which level of the skill this config applies to. 1 = first unlock."
+    )
+    required_char_level = models.IntegerField(
+        help_text="Character must be at or above this level to unlock/upgrade this skill level."
+    )
+    damage_multiplier = models.FloatField(
+        default=1.0,
+        help_text=(
+            "Damage multiplier at this skill level applied to the base skill damage formula. "
+            "e.g. 1.0 = 100%, 1.5 = 150%, 1.75 = 175%."
+        )
+    )
+    # Future: material-based upgrade support
+    # If empty list → auto-upgrade when char reaches required_char_level
+    # If non-empty  → player must POST to /skills/{id}/upgrade/ and consume items
+    required_materials = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            'List of materials required for manual upgrade. '
+            'Empty means auto-upgrade on level-up. '
+            'Format: [{"item_template_id": 1, "quantity": 5}, ...]'
+        )
+    )
 
+    class Meta:
+        unique_together = ('skill', 'skill_level')
+        ordering = ['skill', 'skill_level']
+        verbose_name = "Skill Level Config"
+        verbose_name_plural = "Skill Level Configs"
+
+    def __str__(self):
+        return (
+            f"{self.skill.name} Lv{self.skill_level} "
+            f"({int(self.damage_multiplier * 100)}% dmg, req char lv {self.required_char_level})"
+        )
+
+    @property
+    def requires_materials(self):
+        return bool(self.required_materials)

@@ -372,6 +372,10 @@ class Character(models.Model):
             self.base_agi += int(cc.agi_growth)
             self.base_int += int(cc.int_growth)
 
+        # Auto-unlock / upgrade skills that have a milestone at this level
+        from apps.characters.skill_service import SkillService
+        SkillService.auto_sync_skills(self)
+
 
 # ===================================================================
 # SECTION: DYNAMIC EQUIPMENT SYSTEM

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SpecialEffectTag, EffectTemplate, SkillTemplate
+from .models import SpecialEffectTag, EffectTemplate, SkillTemplate, SkillLevelConfig
 
 @admin.register(SpecialEffectTag)
 class SpecialEffectTagAdmin(admin.ModelAdmin):
@@ -72,6 +72,17 @@ class EffectTemplateAdmin(admin.ModelAdmin):
     )
 
 
+class SkillLevelConfigInline(admin.TabularInline):
+    """
+    Inline for editing all level milestones of a skill directly from the SkillTemplate admin page.
+    Each row = one level (skill_level, required_char_level, damage_multiplier, required_materials).
+    """
+    model = SkillLevelConfig
+    extra = 1
+    fields = ('skill_level', 'required_char_level', 'damage_multiplier', 'required_materials')
+    ordering = ('skill_level',)
+
+
 @admin.register(SkillTemplate)
 class SkillTemplateAdmin(admin.ModelAdmin):
     """
@@ -82,6 +93,7 @@ class SkillTemplateAdmin(admin.ModelAdmin):
     search_fields = ('name', 'description')
     autocomplete_fields = ['job', 'applies_effect']
     readonly_fields = ('id',)
+    inlines = [SkillLevelConfigInline]
 
     fieldsets = (
         ('Core Information', {
@@ -98,4 +110,4 @@ class SkillTemplateAdmin(admin.ModelAdmin):
                 'applies_effect'
             )
         }),
-    )
+    )

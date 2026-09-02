@@ -3,8 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Character
-from .serializers import CharacterSerializer
+from .models import Character, CharacterSkill
+from .serializers import CharacterSerializer, CharacterSkillSerializer
+
 
 class MyCharacterView(viewsets.ViewSet):
     """
@@ -35,7 +36,7 @@ class MyCharacterView(viewsets.ViewSet):
     def my(self, request):
         """
         GET /my/
-        Retrieve the current user's character.
+        Retrieve the current user's character (includes skills).
         """
         if getattr(request.user, 'character', None) is not None:
             serializer = CharacterSerializer(request.user.character)
@@ -44,3 +45,42 @@ class MyCharacterView(viewsets.ViewSet):
             {"detail": "User has no character."},
             status=status.HTTP_404_NOT_FOUND
         )
+
+    @action(detail=False, methods=['get'], url_path='my/skills')
+    def my_skills(self, request):
+        """
+        GET /my/skills/
+        List all skills the character currently owns with level and upgrade info.
+        """
+        character = getattr(request.user, 'character', None)
+        if not character:
+            return Response({"detail": "User has no character."}, status=status.HTTP_404_NOT_FOUND)
+
+        skills = CharacterSkill.objects.filter(character=character).select_related(
+            'skill_template', 'skill_template__job', 'skill_template__applies_effect'
+        )
+        serializer = CharacterSkillSerializer(skills, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='my/skills/(?P<char_skill_id>[0-9]+)/upgrade')
+    def upgrade_skill(self, request, char_skill_id=None):
+        """
+        POST /my/skills/{char_skill_id}/upgrade/
+        Manually upgrade a skill using required materials (for material-gated skill levels).
+        Auto-upgraded skills (no materials) are handled on level-up automatically.
+        """
+        character = getattr(request.user, 'character', None)
+        if not character:
+            return Response({"detail": "User has no character."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .skill_service import SkillService
+        success, message = SkillService.manual_upgrade(character, char_skill_id)
+        if success:
+            skill = CharacterSkill.objects.select_related('skill_template').get(
+                id=char_skill_id, character=character
+            )
+            return Response({
+                "detail": message,
+                "skill": CharacterSkillSerializer(skill).data,
+            })
+        return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)

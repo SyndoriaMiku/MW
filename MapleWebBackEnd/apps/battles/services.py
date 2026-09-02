@@ -536,20 +536,35 @@ class BattleService:
                 # Add flat ATT buff from active effects to total_damage
                 buffed_damage = total_damage + attacker_mods['flat_att']
                 buffed_damage = int(buffed_damage * (1 + attacker_mods['percent_att']))
-                
+
                 base_dmg = (buffed_damage * template.power_ratio) + template.base_power
+
+                # (Skill System) Read damage_multiplier for this skill level from DB
+                # e.g. Lv1=1.00 (100%), Lv2=1.50 (150%), Lv3=1.75 (175%)
+                if combatant.is_player:
+                    from apps.skilles.models import SkillLevelConfig
+                    level_config = SkillLevelConfig.objects.filter(
+                        skill=template, skill_level=char_skill.level
+                    ).first()
+                    level_dmg_multiplier = level_config.damage_multiplier if level_config else 1.0
+                else:
+                    # Monsters don't have SkillLevelConfig — always 1.0
+                    level_dmg_multiplier = 1.0
+
+                base_dmg *= level_dmg_multiplier
                 final_skill_dmg = base_dmg * (1 + bonus_final_damage + attacker_mods['final_damage_modifier'])
-                
+
                 # Apply damage_dealt (attacker buff) and damage_taken (target debuff)
                 final_skill_dmg *= (1 + attacker_mods['damage_dealt_modifier'])
                 final_skill_dmg *= (1 + target_mods['damage_taken_modifier'])
-                
+
                 damage = max(0, int(final_skill_dmg))
-                
+
                 actual_damage = BattleService.apply_damage_with_shield(target, damage)
-                
+
                 result_log["damage"] = actual_damage
                 result_log["message"] = f"{result_log['actor']} used {template.name} and dealt {actual_damage} damage to {result_log['target']}."
+
 
             elif template.effect_type == 'HEAL':
                 base_heal = (total_damage * template.power_ratio) + template.base_power
