@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from .models import Character
-from .serializers import CharacterSerializer
+from .serializers import CharacterSerializer, CharacterSkillSerializer
 
 class MyCharacterView(viewsets.ViewSet):
     """
@@ -44,3 +44,15 @@ class MyCharacterView(viewsets.ViewSet):
             {"detail": "User has no character."},
             status=status.HTTP_404_NOT_FOUND
         )
+
+    @action(detail=False, methods=['get'])
+    def skills(self, request):
+        """Return skills owned by the authenticated user's character."""
+        character = getattr(request.user, 'character', None)
+        if character is None:
+            return Response(
+                {"detail": "User has no character."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        skills = character.skills.select_related('skill_template').all()
+        return Response(CharacterSkillSerializer(skills, many=True).data)
