@@ -61,7 +61,10 @@ class ItemTemplateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'description', ('item_type', 'weapon_type'), 'sell_price')
+            'fields': (
+                'name', 'description', ('item_type', 'weapon_type'),
+                ('icon_key', 'visual_key'), 'sell_price'
+            )
         }),
         ('Requirements & Restrictions', {
             'fields': ('minimum_level', 'class_restriction', 'job_restriction', ('is_tradeable', 'is_sellable'))

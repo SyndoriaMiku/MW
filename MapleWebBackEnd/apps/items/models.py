@@ -53,6 +53,20 @@ LINE_TYPE_CHOICES = [
 class ItemTemplate(models.Model):
     # Item template
     name = models.CharField(max_length=100)
+    icon_key = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text='Stable frontend key for the inventory/shop icon.',
+    )
+    visual_key = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text='Stable frontend key for the equipped or in-world visual.',
+    )
     item_type = models.CharField(max_length=20, choices=TYPE_CHOICES) #Item type
     weapon_type = models.CharField(max_length=20, choices=WEAPON_TYPE_CHOICES, blank=True, null=True) #Weapon type (only for weapons)
     minimum_level = models.IntegerField(default=1) #Minimum level to equip the item

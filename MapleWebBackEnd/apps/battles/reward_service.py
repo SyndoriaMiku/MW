@@ -14,6 +14,9 @@ class RewardService:
         """
         Calculates and distributes rewards (EXP, Lumis, Items) for a victorious combat instance.
         """
+        combat_instance = CombatInstance.objects.select_for_update().select_related(
+            'normal_dungeon', 'boss_dungeon'
+        ).get(pk=combat_instance.pk)
         logs = {}
         
         # (M5 fix) Bulk-resolve entities: 2 queries instead of N

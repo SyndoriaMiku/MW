@@ -8,8 +8,9 @@ from rest_framework.test import APITestCase
 from apps.characters.models import Character
 from apps.party.models import Party, PartyMember
 from apps.users.models import GameUser
-from apps.world.models import EnemyTemplate
+from apps.world.models import EnemyTemplate, NormalDungeonTemplate, NormalStageEnemy
 
+from .models import CombatInstance
 from .serializers import PlayerActionSerializer
 from .services import BattleService
 from .urls import urlpatterns
@@ -179,3 +180,73 @@ class NormalAttackSceneContractTests(APITestCase):
         response = self.client.get(reverse('battles:active-battle'))
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_entering_normal_dungeon_checks_but_does_not_charge_stamina(self):
+        dungeon = NormalDungeonTemplate.objects.create(
+            name='Training Ground', stamina_cost=10, required_level=1
+        )
+        enemy = EnemyTemplate.objects.create(
+            name='Entry Slime', level=1, base_hp=10, base_mp=0, base_att=1,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        NormalStageEnemy.objects.create(stage=dungeon, enemy=enemy, count=1)
+        stamina_before = self.character.current_stamina
+
+        response = self.client.post(reverse('normal-dungeon-enter', args=[dungeon.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.character.refresh_from_db()
+        self.assertEqual(self.character.current_stamina, stamina_before)
+        combat_id = response.data['combat_instance_id']
+        battle = CombatInstance.objects.get(pk=combat_id)
+        self.assertEqual(battle.stamina_cost_on_victory, 10)
+        self.assertFalse(battle.stamina_charged)
+
+    def test_entering_normal_dungeon_still_requires_enough_stamina(self):
+        self.character.current_stamina = 9
+        self.character.save(update_fields=['current_stamina'])
+        dungeon = NormalDungeonTemplate.objects.create(
+            name='Costly Training Ground', stamina_cost=10, required_level=1
+        )
+        enemy = EnemyTemplate.objects.create(
+            name='Guard Slime', level=1, base_hp=10, base_mp=0, base_att=1,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        NormalStageEnemy.objects.create(stage=dungeon, enemy=enemy, count=1)
+
+        response = self.client.post(reverse('normal-dungeon-enter', args=[dungeon.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['detail'], 'Not enough stamina.')
+        self.assertFalse(CombatInstance.objects.exists())
+
+    def test_victory_charges_snapshotted_stamina_once(self):
+        dungeon = NormalDungeonTemplate.objects.create(
+            name='Training Ground', stamina_cost=10, required_level=1
+        )
+        combat = self.create_battle(enemy_hp=1)
+        combat.normal_dungeon = dungeon
+        combat.stamina_cost_on_victory = dungeon.stamina_cost
+        combat.save(update_fields=['normal_dungeon', 'stamina_cost_on_victory'])
+        target = combat.combatants.get(is_player=False)
+        stamina_before = self.character.current_stamina
+
+        # A later admin edit must not alter the cost reserved when the battle began.
+        dungeon.stamina_cost = 25
+        dungeon.save(update_fields=['stamina_cost'])
+
+        response = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'ATTACK', 'target_id': target.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.character.refresh_from_db()
+        combat.refresh_from_db()
+        self.assertEqual(self.character.current_stamina, stamina_before - 10)
+        self.assertTrue(combat.stamina_charged)
+
+        BattleService.check_combat_status(combat)
+        self.character.refresh_from_db()
+        self.assertEqual(self.character.current_stamina, stamina_before - 10)

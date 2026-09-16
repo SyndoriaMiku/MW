@@ -50,6 +50,7 @@ class CharacterSkillSerializer(serializers.ModelSerializer):
 
 
 class CharacterSerializer(serializers.ModelSerializer):
+    required_exp = serializers.SerializerMethodField()
     total_str = serializers.IntegerField(read_only=True)
     total_agi = serializers.IntegerField(read_only=True)
     total_int = serializers.IntegerField(read_only=True)
@@ -65,7 +66,8 @@ class CharacterSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'current_location', 'base_hp', 'base_mp', 'base_att',
             'base_str', 'base_agi', 'base_int', 'drop_rate', 'character_class', 'job',
-            'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
+            'level', 'current_exp', 'required_exp',
+            'max_stamina', 'current_stamina', 'last_stamina_update',
             'total_str', 'total_agi', 'total_int', 'total_hp', 'total_mp', 'total_att',
             'total_damage', 'total_final_damage',
             'skills',
@@ -75,6 +77,14 @@ class CharacterSerializer(serializers.ModelSerializer):
             'base_str', 'base_agi', 'base_int', 'drop_rate', 'job',
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
         ]
+
+    def get_required_exp(self, obj):
+        """EXP required to advance from the character's current level."""
+        from apps.world.models import ExperienceTable
+
+        return ExperienceTable.objects.filter(
+            level=obj.level
+        ).values_list('required_exp', flat=True).first()
 
     def to_representation(self, instance):
         instance.update_stamina()
