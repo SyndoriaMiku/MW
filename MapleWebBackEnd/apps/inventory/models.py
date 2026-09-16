@@ -1,6 +1,6 @@
 from django.db import models
 from apps.items.models import STATS_CHOICES, LINE_TYPE_CHOICES
-    
+
 class InventoryItem(models.Model):
     """
     Item in inventory of a character
@@ -11,12 +11,15 @@ class InventoryItem(models.Model):
     lumen_ascend_level = models.IntegerField(default=0) #Level of lumen ascend
     aurora_level = models.IntegerField(default=0) #Level of aurora
 
-    quantity = models.IntegerField(default=1) #Quantity of the item (for stackable items)   
+    quantity = models.IntegerField(default=1) #Quantity of the item (for stackable items)
 
     is_untrade = models.BooleanField(default=False) #Some item cannot trade if eqquipped or expired
     expired_at = models.DateTimeField(null=True, blank=True) #Expiration date of the item, null if not expiring
     is_destroyed = models.BooleanField(default=False, help_text="Item is destroyed (fragment) and cannot be equipped until restored")
- 
+
+    def __str__(self):
+        return self.template.name
+
 class AuroraLine(models.Model):
     """
     Aurora Line for an item
@@ -26,7 +29,7 @@ class AuroraLine(models.Model):
     stat_type = models.CharField(max_length=20, choices=STATS_CHOICES)
     line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES)
     value = models.FloatField() #Value of the line
-    
+
     def __str__(self):
         return f"{self.stat_type} {self.value} {self.line_type}"
 
@@ -44,6 +47,6 @@ class PendingAuroraRoll(models.Model):
     class Meta:
         verbose_name = "Pending Aurora Roll"
         verbose_name_plural = "Pending Aurora Rolls"
-    
+
     def __str__(self):
-        return f"Pending roll for {self.inventory_item}"
+        return f"Pending roll for {self.inventory_item}"

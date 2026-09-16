@@ -33,6 +33,11 @@ class CombatInstance(models.Model):
     turn_phase = models.CharField(max_length=20, choices=TURN_PHASE.choices, default=TURN_PHASE.PLAYER_PHASE, help_text="Current phase of the turn")
     turn_count = models.IntegerField(default=1)
 
+    # Normal-dungeon stamina is validated on entry, but charged only after victory.
+    # Store the entry-time cost so later admin edits cannot change an active battle.
+    stamina_cost_on_victory = models.PositiveIntegerField(default=0)
+    stamina_charged = models.BooleanField(default=False)
+
     #Time
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

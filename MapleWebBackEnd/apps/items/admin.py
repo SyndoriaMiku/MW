@@ -67,7 +67,6 @@ class ItemTemplateAdmin(admin.ModelAdmin):
             'fields': ('minimum_level', 'class_restriction', 'job_restriction', ('is_tradeable', 'is_sellable'))
         }),
         ('Base Stats Boost', {
-            'classes': ('collapse',),
             'fields': (
                 ('hp_boost', 'mp_boost'),
                 ('att_boost',),

@@ -1,4 +1,5 @@
 import random
+from django.db import transaction
 from django.db.models import F
 from apps.battles.models import CombatInstance
 from apps.inventory.models import InventoryItem
@@ -6,8 +7,9 @@ from apps.party.models import PendingPartyLoot
 from apps.battles.services import _prefetch_entities
 
 class RewardService:
-    
+
     @staticmethod
+    @transaction.atomic
     def process_battle_rewards(combat_instance: CombatInstance) -> dict:
         """
         Calculates and distributes rewards (EXP, Lumis, Items) for a victorious combat instance.
@@ -117,6 +119,30 @@ class RewardService:
         # Add Dungeon specific rewards and logs
         if combat_instance.normal_dungeon:
             dungeon = combat_instance.normal_dungeon
+
+            # The entry check reserves eligibility only. Charge the snapshotted
+            # cost once the dungeon is actually defeated and rewards are granted.
+            if not combat_instance.stamina_charged:
+                from apps.characters.models import Character
+
+                participant_ids = [
+                    combatant.objects_id
+                    for combatant in combat_instance.combatants.filter(is_player=True)
+                ]
+                participants = Character.objects.select_for_update().filter(
+                    pk__in=participant_ids
+                )
+                for participant in participants:
+                    participant.update_stamina()
+                    participant.current_stamina = max(
+                        0,
+                        participant.current_stamina - combat_instance.stamina_cost_on_victory,
+                    )
+                    participant.save(update_fields=['current_stamina'])
+
+                combat_instance.stamina_charged = True
+                combat_instance.save(update_fields=['stamina_charged'])
+
             total_exp += dungeon.exp_reward
             total_lumis += dungeon.lumis_reward
             base_exp_per_player = total_exp // num_players

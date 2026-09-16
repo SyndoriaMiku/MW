@@ -11,6 +11,19 @@ from .serializers import (
 )
 from .services import BattleService
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_active_battle(request):
+    """Return the caller's current battle for scene recovery/reconnect."""
+    character = getattr(request.user, 'character', None)
+    if character is None:
+        return Response({"detail": "You don't have a character."}, status=status.HTTP_400_BAD_REQUEST)
+
+    combat = BattleService.get_active_combat_for_character(character)
+    if combat is None:
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(CombatInstanceSerializer(combat).data)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -64,7 +77,8 @@ def player_action(request, combat_id):
         return Response({"detail": "It's not the player phase."}, status=status.HTTP_400_BAD_REQUEST)
 
     action_type = serializer.validated_data['action_type']
-    target_position = serializer.validated_data['target_position']
+    target_id = serializer.validated_data.get('target_id')
+    target_position = serializer.validated_data.get('target_position')
     kwargs = {}
     if action_type == 'SKILL':
         skill_id = serializer.validated_data.get('skill_id')
@@ -98,28 +112,32 @@ def player_action(request, combat_id):
             return Response({"detail": "It's not your turn."}, status=status.HTTP_400_BAD_REQUEST)
 
         if player_combatant.current_hp <= 0:
-            BattleService.end_turn(combat)
+            events = BattleService.end_turn(combat)
             combat.refresh_from_db()
             return Response({
                 "detail": "Your character is dead. Turn skipped.",
+                "events": events,
                 "combat": CombatInstanceSerializer(combat).data
             })
 
         try:
-            target = combat.combatants.get(position=target_position)
+            target_lookup = {'id': target_id} if target_id is not None else {'position': target_position}
+            target = combat.combatants.get(**target_lookup)
         except Combatant.DoesNotExist:
             return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
 
         log = BattleService.execute_action(player_combatant, action_type, target, **kwargs)
+        events = [log]
 
         # Only advance turn if the action was actually executed (not blocked by cooldown/MP)
         if log.get("success", True):
             combat.refresh_from_db()
             if combat.status == 'in_progress':
-                BattleService.end_turn(combat)
+                events.extend(BattleService.end_turn(combat))
 
     combat.refresh_from_db()
     return Response({
         "action_log": log,
+        "events": events,
         "combat": CombatInstanceSerializer(combat).data
     })

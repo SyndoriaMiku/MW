@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
+
 from .models import InventoryItem, AuroraLine, PendingAuroraRoll
 
 class AuroraLineInline(admin.TabularInline):
@@ -34,14 +37,41 @@ class InventoryItemAdmin(admin.ModelAdmin):
     
     # Biến các trường ForeignKey thành ô tìm kiếm thông minh
     autocomplete_fields = ('template', 'owner')
+
+    readonly_fields = ('template_base_stats',)
+
+    @admin.display(description='Base Stats (from Item Template)')
+    def template_base_stats(self, obj):
+        """Show the shared template stats and provide the correct edit target."""
+        if not obj or not obj.template_id:
+            return 'Select an item template and save first.'
+
+        template = obj.template
+        change_url = reverse('admin:items_itemtemplate_change', args=(template.pk,))
+        summary = (
+            f'HP: {template.hp_boost} | MP: {template.mp_boost} | '
+            f'ATT: {template.att_boost} | STR: {template.str_boost} | '
+            f'AGI: {template.agi_boost} | INT: {template.int_boost} | '
+            f'All Stats: {template.all_stats_boost} | '
+            f'Drop Rate: {template.drop_rate_boost}'
+        )
+        return format_html(
+            '{}<br><a href="{}">Edit base stats on Item Template</a>'
+            '<br><small>Changes apply to every InventoryItem using this template.</small>',
+            summary,
+            change_url,
+        )
     
     # Nhóm các trường lại cho giao diện gọn gàng
     fieldsets = (
         ('Core Information', {
             'fields': ('template', 'owner')
         }),
+        ('Base Stats', {
+            'fields': ('template_base_stats',)
+        }),
         ('Item Details & Status', {
-            'fields': ('quantity', 'is_untrade', 'expired_at')
+            'fields': ('quantity', 'is_untrade', 'is_destroyed', 'expired_at')
         }),
         ('Enhancements', {
             'fields': ('lumen_ascend_level', 'aurora_level')

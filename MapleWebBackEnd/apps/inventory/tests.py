@@ -1,3 +1,4 @@
+from django.contrib.admin.sites import AdminSite
 from django.test import TestCase
 
 from apps.characters.models import Character, EquippedItem, EquipmentSlotConfig
@@ -6,7 +7,30 @@ from apps.market.models import Listing, Trade, TradeItem
 from apps.users.models import GameUser
 
 from .consumption_service import MaterialConsumptionError, consume_materials
+from .admin import InventoryItemAdmin
 from .models import InventoryItem
+
+
+class InventoryItemDisplayTests(TestCase):
+    def test_admin_choice_uses_item_template_name(self):
+        character = Character.objects.create(name='DisplayTester')
+        template = ItemTemplate.objects.create(name='Copper Hammer', item_type='weapon')
+        item = InventoryItem.objects.create(owner=character, template=template)
+
+        self.assertEqual(str(item), 'Copper Hammer')
+
+    def test_admin_shows_template_base_stats_and_edit_link(self):
+        character = Character.objects.create(name='StatDisplayTester')
+        template = ItemTemplate.objects.create(
+            name='Copper Hammer', item_type='weapon', att_boost=12, str_boost=4
+        )
+        item = InventoryItem.objects.create(owner=character, template=template)
+
+        rendered = str(InventoryItemAdmin(InventoryItem, AdminSite()).template_base_stats(item))
+
+        self.assertIn('ATT: 12', rendered)
+        self.assertIn('STR: 4', rendered)
+        self.assertIn(f'/admin/items/itemtemplate/{template.pk}/change/', rendered)
 
 
 class MaterialConsumptionTests(TestCase):

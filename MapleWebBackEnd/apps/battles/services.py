@@ -31,6 +31,17 @@ def _prefetch_entities(combatants):
 
 class BattleService:
     @staticmethod
+    def get_active_combat_for_character(character):
+        """Return the persisted in-progress combat that contains this character."""
+        character_type = ContentType.objects.get_for_model(character)
+        return CombatInstance.objects.filter(
+            combatants__is_player=True,
+            combatants__content_type=character_type,
+            combatants__objects_id=str(character.pk),
+            status=CombatInstance.CombatStatus.IN_PROGRESS,
+        ).select_related('normal_dungeon', 'boss_dungeon').order_by('-updated_at').first()
+
+    @staticmethod
     def _is_valid_skill_target(actor: Combatant, target: Combatant, target_type: str) -> bool:
         """Enforce target-side rules before an action consumes MP or cooldown."""
         same_side = actor.is_player == target.is_player
@@ -136,6 +147,7 @@ class BattleService:
         If Player Phase: moves to next player or switches to Monster Phase.
         If Monster Phase: switches to Player Phase (next round).
         """
+        events = []
         if combat_instance.turn_phase == CombatInstance.TURN_PHASE.PLAYER_PHASE:
             # Find next player
             next_player = combat_instance.combatants.filter(
@@ -159,7 +171,7 @@ class BattleService:
                 combat_instance.save()
                 
                 # Trigger Monster Actions (AI) — this calls end_turn internally
-                BattleService.process_monster_phase(combat_instance)
+                events.extend(BattleService.process_monster_phase(combat_instance))
 
         elif combat_instance.turn_phase == CombatInstance.TURN_PHASE.MONSTER_PHASE:
             # Switch back to Player Phase
@@ -188,6 +200,8 @@ class BattleService:
                 combat_instance.current_player_position = first_player.position
             
             combat_instance.save()
+
+        return events
 
 
     @staticmethod
@@ -261,8 +275,11 @@ class BattleService:
             monster.skill_cooldowns = cooldowns
             monster.save(update_fields=['skill_cooldowns'])
 
-        # End monster phase automatically
-        BattleService.end_turn(combat_instance)
+        # The final monster action may have ended combat. Do not reopen a
+        # defeated battle by advancing it back into the player phase.
+        combat_instance.refresh_from_db(fields=['status', 'turn_phase'])
+        if combat_instance.status == CombatInstance.CombatStatus.IN_PROGRESS:
+            BattleService.end_turn(combat_instance)
         return logs
 
     @staticmethod
@@ -414,7 +431,11 @@ class BattleService:
         so callers can skip advancing the turn.
         """
         result_log = {
+            "actor_id": combatant.id,
+            "actor_type": "character" if combatant.is_player else "enemy",
             "actor": str(combatant.entity.name) if hasattr(combatant.entity, 'name') else str(combatant.entity),
+            "target_id": target.id,
+            "target_type": "character" if target.is_player else "enemy",
             "target": str(target.entity.name) if hasattr(target.entity, 'name') else str(target.entity),
             "action": action_type,
             "damage": 0,
@@ -651,7 +672,12 @@ class BattleService:
 
             
         # Check combat status after action
-        BattleService.check_combat_status(combatant.combat_instance)
+        battle_result = BattleService.check_combat_status(combatant.combat_instance)
+        if battle_result["status"] != CombatInstance.CombatStatus.IN_PROGRESS:
+            result_log["battle_result"] = {
+                "status": battle_result["status"],
+                "rewards": battle_result["logs"],
+            }
         
         return result_log
 

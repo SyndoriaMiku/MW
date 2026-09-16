@@ -32,6 +32,9 @@ class EnemyTemplate(models.Model):
     lumis_reward_min = models.IntegerField() #Lumis rewarded for defeating this enemy
     lumis_reward_max = models.IntegerField() #Lumis rewarded for defeating this enemy
 
+    def __str__(self):
+        return self.name
+
 class EnemySkill(models.Model):
     """
     Skill mapping for an enemy, defining initial cooldown and priority.

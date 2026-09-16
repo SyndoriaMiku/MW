@@ -10,6 +10,7 @@ from .models import NormalDungeonTemplate, BossDungeonTemplate, DungeonClearLog
 from .serializers import NormalDungeonSerializer, BossDungeonSerializer
 from apps.battles.models import CombatInstance, Combatant
 from apps.battles.services import BattleService
+from apps.battles.serializers import CombatInstanceSerializer
 from apps.party.models import Party, PartyMember
 from apps.characters.models import Character
 
@@ -51,13 +52,13 @@ class NormalDungeonViewSet(viewsets.ReadOnlyModelViewSet):
             if character.current_stamina < dungeon.stamina_cost:
                 return Response({"detail": "Not enough stamina."}, status=status.HTTP_400_BAD_REQUEST)
 
-            char_ct = ContentType.objects.get_for_model(character)
-            if Combatant.objects.filter(
-                content_type=char_ct,
-                objects_id=str(character.id),
-                combat_instance__status='in_progress'
-            ).exists():
-                return Response({"detail": "You are already in an active battle."}, status=status.HTTP_400_BAD_REQUEST)
+            active_combat = BattleService.get_active_combat_for_character(character)
+            if active_combat:
+                return Response({
+                    "detail": "You are already in an active battle. Resume it instead.",
+                    "combat_instance_id": active_combat.id,
+                    "combat": CombatInstanceSerializer(active_combat).data,
+                }, status=status.HTTP_409_CONFLICT)
 
             party_member = PartyMember.objects.filter(
                 character=character
@@ -75,17 +76,16 @@ class NormalDungeonViewSet(viewsets.ReadOnlyModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            character.current_stamina -= dungeon.stamina_cost
-            character.save(update_fields=['current_stamina'])
-
             combat = BattleService.create_combat_instance(party, enemies)
             combat.normal_dungeon = dungeon
+            combat.stamina_cost_on_victory = dungeon.stamina_cost
             BattleService.start_combat(combat)
-            combat.save(update_fields=['normal_dungeon'])
+            combat.save(update_fields=['normal_dungeon', 'stamina_cost_on_victory'])
 
         return Response({
             "detail": "Entered normal dungeon.",
-            "combat_instance_id": combat.id
+            "combat_instance_id": combat.id,
+            "combat": CombatInstanceSerializer(combat).data,
         })
 
 
