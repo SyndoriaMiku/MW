@@ -56,3 +56,7 @@ class SpecialShopItemSerializer(serializers.ModelSerializer):
     def get_recipes(self, obj):
         qs = SpecialShopItemRecipe.objects.filter(recipe=obj)
         return SpecialShopItemRecipeSerializer(qs, many=True).data
+
+
+class SpecialShopExchangeSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=1, default=1)

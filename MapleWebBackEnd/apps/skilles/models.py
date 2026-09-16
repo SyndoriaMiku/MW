@@ -1,4 +1,8 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+
+from .validators import validate_material_requirements
 
 class SpecialEffectTag(models.Model):
     """
@@ -141,9 +145,11 @@ class SkillLevelConfig(models.Model):
         related_name='level_configs'
     )
     skill_level = models.IntegerField(
+        validators=[MinValueValidator(1)],
         help_text="Which level of the skill this config applies to. 1 = first unlock."
     )
     required_char_level = models.IntegerField(
+        validators=[MinValueValidator(1)],
         help_text="Character must be at or above this level to unlock/upgrade this skill level."
     )
     damage_multiplier = models.FloatField(
@@ -159,6 +165,7 @@ class SkillLevelConfig(models.Model):
     required_materials = models.JSONField(
         default=list,
         blank=True,
+        validators=[validate_material_requirements],
         help_text=(
             'List of materials required for manual upgrade. '
             'Empty means auto-upgrade on level-up. '
@@ -177,6 +184,24 @@ class SkillLevelConfig(models.Model):
             f"{self.skill.name} Lv{self.skill_level} "
             f"({int(self.damage_multiplier * 100)}% dmg, req char lv {self.required_char_level})"
         )
+
+    def clean(self):
+        super().clean()
+        validate_material_requirements(self.required_materials)
+        if not self.required_materials:
+            return
+
+        from apps.items.models import ItemTemplate
+
+        template_ids = {material['item_template_id'] for material in self.required_materials}
+        existing_ids = set(
+            ItemTemplate.objects.filter(pk__in=template_ids).values_list('pk', flat=True)
+        )
+        missing_ids = sorted(template_ids - existing_ids)
+        if missing_ids:
+            raise ValidationError({
+                'required_materials': f'Unknown item_template_id values: {missing_ids}.'
+            })
 
     @property
     def requires_materials(self):

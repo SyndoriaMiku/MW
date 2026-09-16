@@ -7,7 +7,12 @@ from django.db.models import F
 from django.utils import timezone
 
 from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
-from .serializers import ShopCategorySerializer, ShopItemSerializer, SpecialShopItemSerializer
+from .serializers import (
+    ShopCategorySerializer,
+    ShopItemSerializer,
+    SpecialShopItemSerializer,
+    SpecialShopExchangeSerializer,
+)
 from apps.inventory.models import InventoryItem
 
 class ShopCategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -140,63 +145,54 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
         if not character:
             return Response({"detail": "No character found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        quantity = int(request.data.get('quantity', 1))
-        if quantity <= 0:
-            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+        input_serializer = SpecialShopExchangeSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        quantity = input_serializer.validated_data['quantity']
 
         recipes = SpecialShopItemRecipe.objects.filter(recipe=special_item)
         if not recipes.exists():
             return Response({"detail": "This item cannot be exchanged."}, status=status.HTTP_400_BAD_REQUEST)
 
-        with transaction.atomic():
-            # Verify and deduct required items
-            for req in recipes:
-                req_qty = req.quantity * quantity
-                # We need to find if the user has enough of this template in inventory
-                # We will only consume stackable items that are not destroyed and not untradeable (or maybe untradeable is fine for crafting)
-                # (C-6 fix) Lock inventory rows to prevent concurrent exchange consuming same materials
-                inv_items = InventoryItem.objects.select_for_update().filter(
-                    owner=character, 
-                    template=req.item, 
-                    is_destroyed=False
-                ).order_by('quantity')  # consume smaller stacks first
+        requirements = [
+            {
+                'item_template_id': recipe.item_id,
+                'quantity': recipe.quantity * quantity,
+            }
+            for recipe in recipes
+        ]
 
-                total_has = sum(i.quantity for i in inv_items)
-                if total_has < req_qty:
-                    return Response({"detail": f"Not enough {req.item.name}. Need {req_qty}."}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.inventory.consumption_service import (
+            MaterialConsumptionError,
+            consume_materials,
+        )
 
-                # Deduct from inventory
-                remaining_to_deduct = req_qty
-                for inv_item in inv_items:
-                    if remaining_to_deduct <= 0: break
-                    
-                    if inv_item.quantity <= remaining_to_deduct:
-                        remaining_to_deduct -= inv_item.quantity
-                        inv_item.delete()
-                    else:
-                        inv_item.quantity -= remaining_to_deduct
-                        inv_item.save(update_fields=['quantity'])
-                        remaining_to_deduct = 0
+        try:
+            with transaction.atomic():
+                consume_materials(character, requirements)
 
-            # Give the target item
-            if not special_item.item.is_stackable:
-                for _ in range(quantity):
-                    InventoryItem.objects.create(
+                # Give the target item only after every material is secured.
+                if not special_item.item.is_stackable:
+                    for _ in range(quantity):
+                        InventoryItem.objects.create(
+                            template=special_item.item,
+                            owner=character,
+                            quantity=1
+                        )
+                else:
+                    new_item, created = InventoryItem.objects.get_or_create(
                         template=special_item.item,
                         owner=character,
-                        quantity=1
+                        is_destroyed=False,
+                        defaults={'quantity': quantity}
                     )
-            else:
-                # (B-4 fix) Atomic F() increment
-                new_item, created = InventoryItem.objects.get_or_create(
-                    template=special_item.item,
-                    owner=character,
-                    is_destroyed=False,
-                    defaults={'quantity': quantity}
-                )
-                if not created:
-                    InventoryItem.objects.filter(pk=new_item.pk).update(
-                        quantity=F('quantity') + quantity
-                    )
+                    if not created:
+                        InventoryItem.objects.filter(pk=new_item.pk).update(
+                            quantity=F('quantity') + quantity
+                        )
+        except MaterialConsumptionError as exc:
+            return Response(
+                {"detail": exc.message, "code": exc.code},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response({"detail": f"Successfully exchanged for {quantity}x {special_item.item.name}."})
