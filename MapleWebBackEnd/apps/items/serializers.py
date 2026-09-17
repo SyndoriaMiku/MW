@@ -33,6 +33,10 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class LumenAscendRequestSerializer(serializers.Serializer):
+    inventory_item_id = serializers.IntegerField(min_value=1)
+
+
 class AuroraRevealRequestSerializer(serializers.Serializer):
     inventory_item_id = serializers.IntegerField(min_value=1)
 

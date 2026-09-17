@@ -8,6 +8,7 @@ from .serializers import (
     AuroraModifyRequestSerializer,
     AuroraRevealRequestSerializer,
     ItemTemplateSerializer,
+    LumenAscendRequestSerializer,
 )
 from apps.inventory.models import InventoryItem
 from apps.inventory.serializers import InventoryItemSerializer
@@ -26,26 +27,57 @@ class ItemTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 class LumenAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _response(result):
+        response_status = (
+            status.HTTP_200_OK
+            if result.get('success')
+            else status.HTTP_400_BAD_REQUEST
+        )
+        return Response(result, status=response_status)
+
+    def get(self, request, action):
+        if action != 'preview':
+            return Response(
+                {"success": False, "message": "Invalid action."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = LumenAscendRequestSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        result = LumenService.get_ascend_preview(
+            request.user,
+            serializer.validated_data['inventory_item_id'],
+        )
+        return self._response(result)
+
     def post(self, request, action):
         if action == 'ascend':
-            inventory_item_id = request.data.get('inventory_item_id')
-            if not inventory_item_id:
-                return Response({"success": False, "message": "inventory_item_id is required."})
-            
-            result = LumenService.attempt_lumen_ascend(request.user, inventory_item_id)
-            return Response(result)
+            serializer = LumenAscendRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            result = LumenService.attempt_lumen_ascend(
+                request.user,
+                serializer.validated_data['inventory_item_id'],
+            )
+            return self._response(result)
             
         elif action == 'restore':
             fragment_item_id = request.data.get('fragment_item_id')
             sacrifice_item_id = request.data.get('sacrifice_item_id')
             
             if not fragment_item_id:
-                return Response({"success": False, "message": "fragment_item_id is required."})
+                return Response(
+                    {"success": False, "message": "fragment_item_id is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
                 
             result = LumenService.restore_fragment(request.user, fragment_item_id, sacrifice_item_id)
-            return Response(result)
+            return self._response(result)
             
-        return Response({"success": False, "message": "Invalid action."}, status=400)
+        return Response(
+            {"success": False, "message": "Invalid action."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 class AuroraAPIView(APIView):
     permission_classes = [IsAuthenticated]

@@ -20,6 +20,9 @@ from .models import (
     AuroraModifierRule,
     AuroraProperty,
     ItemTemplate,
+    LumenCostRule,
+    LumenEvent,
+    LumenTierProperty,
 )
 from .serializers import ItemTemplateSerializer
 
@@ -38,6 +41,134 @@ class ItemTemplateAssetKeyTests(TestCase):
 
         self.assertEqual(data['icon_key'], 'equipment.weapon.copper_bow.icon')
         self.assertEqual(data['visual_key'], 'equipment.weapon.copper_bow')
+
+
+class LumenPreviewAPITests(APITestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='Lumen Preview Tester')
+        self.user = GameUser.objects.create_user(
+            username='lumen-preview-user',
+            email='lumen-preview@example.com',
+            password='test-pass-123',
+        )
+        self.user.character = self.character
+        self.user.lumis = 750
+        self.user.save(update_fields=['character', 'lumis'])
+        self.client.force_authenticate(self.user)
+
+        self.tier = LumenTierProperty.objects.create(
+            name='Preview Tier', tier=91, max_lumen_level=5
+        )
+        self.rule = LumenCostRule.objects.create(
+            lumen_tier=self.tier,
+            current_level=0,
+            lumis_cost=500,
+            success_rate=0.7,
+            failure_rate=0.2,
+            heavy_failure_rate=0.1,
+        )
+        template = ItemTemplate.objects.create(
+            name='Preview Sword',
+            item_type='weapon',
+            lumen_tier=self.tier,
+        )
+        self.item = InventoryItem.objects.create(
+            owner=self.character,
+            template=template,
+        )
+        self.url = reverse('lumen-api', args=['preview'])
+
+    def preview(self, inventory_item_id=None):
+        return self.client.get(
+            self.url,
+            {'inventory_item_id': inventory_item_id or self.item.id},
+        )
+
+    def test_preview_returns_cost_rates_outcomes_and_does_not_mutate(self):
+        response = self.preview()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['cost'], {
+            'currency': 'lumis',
+            'amount': 500,
+            'balance': 750,
+            'can_afford': True,
+        })
+        self.assertEqual(response.data['base_rates'], {
+            'success': 0.7,
+            'failure': 0.2,
+            'heavy_failure': 0.1,
+        })
+        self.assertEqual(response.data['final_rates'], {
+            'success': 0.7,
+            'failure': 0.2,
+            'heavy_failure': 0.1,
+        })
+        self.assertEqual(response.data['final_rate_percent'], {
+            'success': 70.0,
+            'failure': 20.0,
+            'heavy_failure': 10.0,
+        })
+        self.assertEqual(response.data['level']['on_success'], 1)
+        self.assertEqual(
+            response.data['outcomes']['heavy_failure'], 'item_destroyed'
+        )
+
+        self.user.refresh_from_db()
+        self.item.refresh_from_db()
+        self.assertEqual(self.user.lumis, 750)
+        self.assertEqual(self.item.lumen_ascend_level, 0)
+        self.assertFalse(self.item.is_destroyed)
+
+    def test_preview_applies_current_event_modifiers(self):
+        LumenEvent.objects.create(
+            name='Preview Event',
+            is_active=True,
+            success_flat_bonus=0.1,
+            heavy_failure_multiplier=0.5,
+            bonus_levels=1,
+        )
+
+        response = self.preview()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['final_rates']['success'], 0.8)
+        self.assertAlmostEqual(response.data['final_rates']['failure'], 0.15)
+        self.assertEqual(response.data['final_rates']['heavy_failure'], 0.05)
+        self.assertEqual(response.data['level']['on_success'], 2)
+        self.assertEqual(
+            response.data['event_modifiers']['active_events'][0]['name'],
+            'Preview Event',
+        )
+
+    def test_preview_reports_when_balance_is_insufficient(self):
+        self.user.lumis = 100
+        self.user.save(update_fields=['lumis'])
+
+        response = self.preview()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['cost']['can_afford'])
+        self.assertEqual(response.data['cost']['balance'], 100)
+
+    def test_preview_rejects_item_owned_by_another_player(self):
+        other_character = Character.objects.create(name='Other Lumen Owner')
+        other_item = InventoryItem.objects.create(
+            owner=other_character,
+            template=self.item.template,
+        )
+
+        response = self.preview(other_item.id)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['success'])
+
+    def test_preview_requires_a_valid_inventory_item_id(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('inventory_item_id', response.data)
 
 
 class EssenceAPITests(APITestCase):
