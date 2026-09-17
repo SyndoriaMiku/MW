@@ -28,10 +28,13 @@ class SkillTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         job = self.request.query_params.get('job')
+        availability = self.request.query_params.get('availability')
         if job == 'null':
             qs = qs.filter(job__isnull=True)
         elif job:
             qs = qs.filter(job_id=job)
+        if availability:
+            qs = qs.filter(availability=availability.upper())
         return qs
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
@@ -50,8 +53,12 @@ class SkillTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
         # All skills relevant to this character's job or global
         eligible_templates = SkillTemplate.objects.filter(
-            job=character.job
-        ) | SkillTemplate.objects.filter(job__isnull=True)
+            job=character.job,
+            availability__in=[SkillTemplate.Availability.PLAYER, SkillTemplate.Availability.BOTH],
+        ) | SkillTemplate.objects.filter(
+            job__isnull=True,
+            availability__in=[SkillTemplate.Availability.PLAYER, SkillTemplate.Availability.BOTH],
+        )
 
         # Skills already owned
         owned_ids = set(

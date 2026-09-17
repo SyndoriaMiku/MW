@@ -23,7 +23,14 @@ class ListingViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'delete', 'head', 'options']
 
     def get_queryset(self):
-        queryset = Listing.objects.filter(is_active=True).select_related('item', 'seller')
+        queryset = Listing.objects.filter(is_active=True).select_related(
+            'seller', 'item__template__lumen_tier', 'item__template__aurora_tier'
+        ).prefetch_related(
+            'item__aurora_lines',
+            'item__template__lumen_tier__ascend_rules',
+            'item__template__item_sets__effects',
+            'item__template__item_sets__items',
+        )
 
         # Filter by name
         name = self.request.query_params.get('name')
@@ -71,8 +78,13 @@ class ListingViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    @transaction.atomic
     def perform_create(self, serializer):
-        item = serializer.validated_data['item']
+        # Share the InventoryItem row lock with equip/trade/Aurora mutations so
+        # an item cannot enter two states concurrently.
+        item = InventoryItem.objects.select_for_update().select_related(
+            'template', 'owner__user'
+        ).get(pk=serializer.validated_data['item'].pk)
         # Prevent listing untradeable items
         if not item.template.is_tradeable or item.is_untrade or item.is_destroyed:
             raise serializers.ValidationError("This item cannot be traded.")
@@ -96,6 +108,10 @@ class ListingViewSet(viewsets.ModelViewSet):
         # (RC-6 fix) Prevent listing items that are currently equipped
         if hasattr(item, 'equipped_in') and item.equipped_in is not None:
             raise serializers.ValidationError("Cannot list an item that is currently equipped. Please unequip it first.")
+        if hasattr(item, 'pending_aurora_roll'):
+            raise serializers.ValidationError(
+                "Confirm or discard the pending Aurora roll before listing this item."
+            )
 
         # (C-5 fix) Prevent listing the same item multiple times
         if Listing.objects.filter(item=item, is_active=True).exists():
@@ -103,7 +119,7 @@ class ListingViewSet(viewsets.ModelViewSet):
         if TradeItem.objects.filter(item=item, trade__status='pending').exists():
             raise serializers.ValidationError("An item in a pending trade cannot be listed.")
 
-        serializer.save(seller=self.request.user)
+        serializer.save(seller=self.request.user, item=item)
 
     def destroy(self, request, *args, **kwargs):
         """Only the seller may cancel a listing; keep the row for audit/history."""
@@ -216,7 +232,14 @@ class TradeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return Trade.objects.filter(Q(sender=user) | Q(receiver=user))
+        return Trade.objects.filter(
+            Q(sender=user) | Q(receiver=user)
+        ).select_related('sender', 'receiver').prefetch_related(
+            'items__item__aurora_lines',
+            'items__item__template__lumen_tier__ascend_rules',
+            'items__item__template__item_sets__effects',
+            'items__item__template__item_sets__items',
+        )
 
     def perform_create(self, serializer):
         receiver_id = serializer.validated_data.pop('receiver_id', None)
@@ -244,8 +267,10 @@ class TradeViewSet(viewsets.ModelViewSet):
         return None
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def add_item(self, request, pk=None):
         trade = self.get_object()
+        trade = Trade.objects.select_for_update().get(pk=trade.pk)
         user = request.user
         role = self._get_role(trade, user)
 
@@ -260,7 +285,7 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         item_id = request.data.get('item_id')
         try:
-            item = InventoryItem.objects.get(pk=item_id)
+            item = InventoryItem.objects.select_for_update().get(pk=item_id)
         except InventoryItem.DoesNotExist:
             return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
         
@@ -271,6 +296,11 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         if hasattr(item, 'equipped_in'):
             return Response({"detail": "Equipped items cannot be traded."}, status=status.HTTP_400_BAD_REQUEST)
+        if hasattr(item, 'pending_aurora_roll'):
+            return Response(
+                {"detail": "Confirm or discard the pending Aurora roll first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if Listing.objects.filter(item=item, is_active=True).exists():
             return Response({"detail": "Listed items cannot be added to a trade."}, status=status.HTTP_400_BAD_REQUEST)
 

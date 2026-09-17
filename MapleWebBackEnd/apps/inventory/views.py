@@ -29,97 +29,133 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if not hasattr(self.request.user, 'character') or not self.request.user.character:
             return InventoryItem.objects.none()
-        return self.request.user.character.inventory_items.all()
+        return self.request.user.character.inventory_items.select_related(
+            'template__lumen_tier', 'template__aurora_tier'
+        ).prefetch_related(
+            'aurora_lines',
+            'template__lumen_tier__ascend_rules',
+            'template__item_sets__effects',
+            'template__item_sets__items',
+        )
 
     @action(detail=True, methods=['post'])
     def equip(self, request, pk=None):
-        item = self.get_object()
-
-        if item.is_destroyed:
-            return Response({'error': 'Item is destroyed and cannot be equipped.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        character = request.user.character
-
-        if item.expired_at and item.expired_at <= timezone.now():
-            return Response({'error': 'Expired items cannot be equipped.'}, status=status.HTTP_400_BAD_REQUEST)
-        if character.level < item.template.minimum_level:
-            return Response(
-                {'error': f'Item requires level {item.template.minimum_level}.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if (
-            item.template.class_restriction.exists()
-            and not item.template.class_restriction.filter(pk=character.character_class_id).exists()
-        ):
-            return Response({'error': 'Your class cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
-        if (
-            item.template.job_restriction.exists()
-            and not item.template.job_restriction.filter(pk=character.job_id).exists()
-        ):
-            return Response({'error': 'Your job cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # (H-6 fix) Block equip during active combat
-        if _character_in_active_battle(character):
-            return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # (H-5 fix) Block equip if item is currently listed on market
+        if not request.user.character_id:
+            return Response({'error': 'Create a character first.'}, status=status.HTTP_400_BAD_REQUEST)
         from apps.market.models import Listing
-        if Listing.objects.filter(item=item, is_active=True).exists():
-            return Response({'error': 'Cannot equip an item that is currently listed on the market. Please delist it first.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # (H-5 fix) Block equip if item is in a pending trade
         from apps.market.models import TradeItem
-        if TradeItem.objects.filter(item=item, trade__status='pending').exists():
-            return Response({'error': 'Cannot equip an item that is currently in a pending trade.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        item_type = item.template.item_type
-        
-        # Find config that allows this item_type
-        config = None
-        for c in EquipmentSlotConfig.objects.all():
-            if item_type in c.allowed_item_types:
-                config = c
-                break
-        
-        if not config:
-            return Response({'error': f'No equipment slot found for item type {item_type}.'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
             slot_index = int(request.data.get('slot_index', 0))
-        except ValueError:
+        except (TypeError, ValueError):
             return Response({'error': 'Invalid slot index.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if slot_index >= config.max_count or slot_index < 0:
-            return Response({'error': f'Invalid slot index. Max count for {config.slot_type} is {config.max_count}.'}, status=status.HTTP_400_BAD_REQUEST)
-
         with transaction.atomic():
-            # Lock the item so two equip requests cannot move it concurrently.
-            item = InventoryItem.objects.select_for_update().get(pk=item.pk)
+            character = Character.objects.select_for_update().get(pk=request.user.character_id)
+            try:
+                item = InventoryItem.objects.select_for_update().select_related(
+                    'template'
+                ).get(pk=pk, owner=character)
+            except InventoryItem.DoesNotExist:
+                return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            if item.is_destroyed:
+                return Response({'error': 'Item is destroyed and cannot be equipped.'}, status=status.HTTP_400_BAD_REQUEST)
+            if item.expired_at and item.expired_at <= timezone.now():
+                return Response({'error': 'Expired items cannot be equipped.'}, status=status.HTTP_400_BAD_REQUEST)
+            if character.level < item.template.minimum_level:
+                return Response(
+                    {'error': f'Item requires level {item.template.minimum_level}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (
+                item.template.class_restriction.exists()
+                and not item.template.class_restriction.filter(
+                    pk=character.character_class_id
+                ).exists()
+            ):
+                return Response({'error': 'Your class cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
+            if (
+                item.template.job_restriction.exists()
+                and not item.template.job_restriction.filter(pk=character.job_id).exists()
+            ):
+                return Response({'error': 'Your job cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
+            if _character_in_active_battle(character):
+                return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
+            if Listing.objects.filter(item=item, is_active=True).exists():
+                return Response(
+                    {'error': 'Cannot equip an item that is currently listed on the market. Please delist it first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if TradeItem.objects.filter(item=item, trade__status='pending').exists():
+                return Response(
+                    {'error': 'Cannot equip an item that is currently in a pending trade.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            config = next(
+                (
+                    candidate for candidate in EquipmentSlotConfig.objects.all()
+                    if item.template.item_type in candidate.allowed_item_types
+                ),
+                None,
+            )
+            if not config:
+                return Response(
+                    {'error': f'No equipment slot found for item type {item.template.item_type}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if slot_index >= config.max_count or slot_index < 0:
+                return Response(
+                    {'error': f'Invalid slot index. Max count for {config.slot_type} is {config.max_count}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            occupied = EquippedItem.objects.select_for_update().filter(
+                character=character, slot=config, slot_index=slot_index
+            ).first()
+            replaced_item_id = (
+                occupied.item_id if occupied and occupied.item_id != item.id else None
+            )
             EquippedItem.objects.filter(item=item).delete()
             EquippedItem.objects.filter(
                 character=character, slot=config, slot_index=slot_index
             ).delete()
-            EquippedItem.objects.create(
+            equipped = EquippedItem.objects.create(
                 character=character, slot=config, slot_index=slot_index, item=item
             )
 
-        return Response({'status': 'Item equipped successfully.'}, status=status.HTTP_200_OK)
+        return Response({
+            'status': 'Item equipped successfully.',
+            'equipped': EquippedItemSerializer(equipped).data,
+            'replaced_item_id': replaced_item_id,
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def unequip(self, request, pk=None):
-        item = self.get_object()
+        if not request.user.character_id:
+            return Response({'error': 'Create a character first.'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            character = Character.objects.select_for_update().get(pk=request.user.character_id)
+            try:
+                item = InventoryItem.objects.select_for_update().get(pk=pk, owner=character)
+            except InventoryItem.DoesNotExist:
+                return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        character = request.user.character
+            if _character_in_active_battle(character):
+                return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # (H-6 fix) Block unequip during active combat
-        if _character_in_active_battle(character):
-            return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
+            equipped = EquippedItem.objects.select_for_update().filter(
+                character=character, item=item
+            ).first()
+            if not equipped:
+                return Response({'error': 'Item is not equipped.'}, status=status.HTTP_400_BAD_REQUEST)
+            equipped.delete()
 
-        deleted, _ = EquippedItem.objects.filter(item=item).delete()
-        if deleted:
-            return Response({'status': 'Item unequipped successfully.'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': 'Item is not equipped.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'status': 'Item unequipped successfully.',
+            'item': InventoryItemSerializer(item).data,
+        }, status=status.HTTP_200_OK)
 
 
 
@@ -131,4 +167,11 @@ class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):
         if not hasattr(self.request.user, 'character') or not self.request.user.character:
             from apps.characters.models import EquippedItem
             return EquippedItem.objects.none()
-        return self.request.user.character.equipped_items.all()
+        return self.request.user.character.equipped_items.select_related(
+            'item__template__lumen_tier', 'item__template__aurora_tier'
+        ).prefetch_related(
+            'item__aurora_lines',
+            'item__template__lumen_tier__ascend_rules',
+            'item__template__item_sets__effects',
+            'item__template__item_sets__items',
+        )

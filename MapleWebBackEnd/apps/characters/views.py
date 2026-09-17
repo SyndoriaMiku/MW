@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 
 from .models import Character, CharacterSkill
 from .serializers import CharacterSerializer, CharacterSkillSerializer
@@ -25,28 +25,41 @@ class MyCharacterView(viewsets.ViewSet):
             )
 
         serializer = CharacterSerializer(data=request.data)
-        if serializer.is_valid():
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
             character = serializer.save()
             request.user.character = character
-            request.user.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            request.user.save(update_fields=['character'])
+            from .skill_service import SkillService
+            SkillService.sync_eligible_skills(character)
+            character = Character.objects.select_related(
+                'character_class', 'job'
+            ).prefetch_related(
+                'skills__skill_template__level_configs'
+            ).get(pk=character.pk)
+        return Response(
+            CharacterSerializer(character).data,
+            status=status.HTTP_201_CREATED,
+        )
 
-    @action(detail=False, methods=['get'])
     def my(self, request):
         """
         GET /my/
         Retrieve the current user's character (includes skills).
         """
         if getattr(request.user, 'character', None) is not None:
-            serializer = CharacterSerializer(request.user.character)
+            character = Character.objects.select_related(
+                'character_class', 'job'
+            ).prefetch_related(
+                'skills__skill_template__level_configs'
+            ).get(pk=request.user.character.pk)
+            serializer = CharacterSerializer(character)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(
             {"detail": "User has no character."},
             status=status.HTTP_404_NOT_FOUND
         )
 
-    @action(detail=False, methods=['get'], url_path='my/skills')
     def my_skills(self, request):
         """
         GET /my/skills/
@@ -58,11 +71,10 @@ class MyCharacterView(viewsets.ViewSet):
 
         skills = CharacterSkill.objects.filter(character=character).select_related(
             'skill_template', 'skill_template__job', 'skill_template__applies_effect'
-        )
+        ).prefetch_related('skill_template__level_configs')
         serializer = CharacterSkillSerializer(skills, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'], url_path='my/skills/(?P<char_skill_id>[0-9]+)/upgrade')
     def upgrade_skill(self, request, char_skill_id=None):
         """
         POST /my/skills/{char_skill_id}/upgrade/

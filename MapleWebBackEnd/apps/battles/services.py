@@ -44,6 +44,8 @@ class BattleService:
     @staticmethod
     def _is_valid_skill_target(actor: Combatant, target: Combatant, target_type: str) -> bool:
         """Enforce target-side rules before an action consumes MP or cooldown."""
+        if target is None:
+            return target_type in ('SELF', 'E_AREA', 'A_AREA', 'GLOBAL')
         same_side = actor.is_player == target.is_player
         if target_type == 'SELF':
             return actor.pk == target.pk
@@ -54,6 +56,154 @@ class BattleService:
         if target_type == 'GLOBAL':
             return True
         return False
+
+    @staticmethod
+    def _resolve_skill_targets(actor: Combatant, target, target_type: str) -> list[Combatant]:
+        """Resolve a skill target declaration into living combatants in field order."""
+        combatants = actor.combat_instance.combatants.filter(current_hp__gt=0).order_by('position')
+
+        if target_type == 'SELF':
+            if target is not None and target.pk != actor.pk:
+                return []
+            return [actor]
+        if target_type == 'ENEMY':
+            if target is None or target.current_hp <= 0 or actor.is_player == target.is_player:
+                return []
+            return [target]
+        if target_type == 'ALLY':
+            if target is None or target.current_hp <= 0 or actor.is_player != target.is_player:
+                return []
+            return [target]
+        if target_type == 'E_AREA':
+            return list(combatants.filter(is_player=not actor.is_player))
+        if target_type == 'A_AREA':
+            return list(combatants.filter(is_player=actor.is_player))
+        if target_type == 'GLOBAL':
+            return list(combatants)
+        return []
+
+    @staticmethod
+    def _apply_skill_effect(combatant: Combatant, target: Combatant, effect_tmpl) -> str:
+        """Apply one effect template to one target and return a log suffix."""
+        existing = ActiveEffect.objects.filter(
+            combat_instance=combatant.combat_instance,
+            target=target,
+            effect_template=effect_tmpl,
+        ).first()
+
+        if not existing:
+            ActiveEffect.objects.create(
+                combat_instance=combatant.combat_instance,
+                target=target,
+                effect_template=effect_tmpl,
+                remaining_turns=effect_tmpl.duration_turns,
+                remaining_shield_points=effect_tmpl.shields_points,
+                caster=combatant,
+            )
+            return f"Applied {effect_tmpl.name}."
+
+        stacking = effect_tmpl.stacking_rule
+        if stacking == 'REFRESH':
+            existing.remaining_turns = effect_tmpl.duration_turns
+            existing.remaining_shield_points = effect_tmpl.shields_points
+            existing.save(update_fields=['remaining_turns', 'remaining_shield_points'])
+            return f"Refreshed {effect_tmpl.name}."
+        if stacking == 'INDEPENDENT':
+            ActiveEffect.objects.create(
+                combat_instance=combatant.combat_instance,
+                target=target,
+                effect_template=effect_tmpl,
+                remaining_turns=effect_tmpl.duration_turns,
+                remaining_shield_points=effect_tmpl.shields_points,
+                caster=combatant,
+            )
+            return f"Applied additional stack of {effect_tmpl.name}."
+        if stacking == 'UPGRADE':
+            existing.current_stacks += 1
+            existing.remaining_turns = effect_tmpl.duration_turns
+            existing.remaining_shield_points = effect_tmpl.shields_points
+            existing.save(update_fields=[
+                'current_stacks', 'remaining_turns', 'remaining_shield_points',
+            ])
+            return f"Upgraded {effect_tmpl.name} to {existing.current_stacks} stacks."
+        return f"{effect_tmpl.name} is already active."
+
+    @staticmethod
+    def _apply_skill_to_target(
+        combatant: Combatant,
+        target: Combatant,
+        template,
+        total_damage,
+        attacker_mods,
+        bonus_final_damage,
+        level_damage_multiplier,
+    ) -> dict:
+        """Apply one cast to one resolved target without charging cast resources."""
+        target_name = (
+            str(target.entity.name)
+            if hasattr(target.entity, 'name')
+            else str(target.entity)
+        )
+        target_result = {
+            'target_id': target.id,
+            'target_type': 'character' if target.is_player else 'enemy',
+            'target': target_name,
+            'damage': 0,
+            'heal': 0,
+            'is_dead': False,
+            'effect': None,
+            'effect_message': '',
+        }
+        target_mods = BattleService.get_combat_modifiers(target)
+
+        if template.effect_type == 'DAMAGE':
+            buffed_damage = total_damage + attacker_mods['flat_att']
+            buffed_damage = int(buffed_damage * (1 + attacker_mods['percent_att']))
+            skill_damage = (buffed_damage * template.power_ratio) + template.base_power
+            skill_damage *= level_damage_multiplier
+            skill_damage *= 1 + bonus_final_damage + attacker_mods['final_damage_modifier']
+            skill_damage *= 1 + attacker_mods['damage_dealt_modifier']
+            skill_damage *= 1 + target_mods['damage_taken_modifier']
+            target_result['damage'] = BattleService.apply_damage_with_shield(
+                target, max(0, int(skill_damage))
+            )
+        elif template.effect_type == 'HEAL':
+            heal = (total_damage * template.power_ratio) + template.base_power
+            heal *= 1 + attacker_mods['health_dealt_modifier']
+            heal *= 1 + target_mods['health_received_modifier']
+            hp_before = target.current_hp
+            max_hp = getattr(
+                target.entity,
+                'total_hp',
+                getattr(target.entity, 'base_hp', target.current_hp),
+            )
+            target.current_hp = min(max_hp, target.current_hp + max(0, int(heal)))
+            target.save(update_fields=['current_hp'])
+            target_result['heal'] = target.current_hp - hp_before
+
+        if template.applies_effect and target.current_hp > 0:
+            target_result['effect'] = template.applies_effect.name
+            target_result['effect_message'] = BattleService._apply_skill_effect(
+                combatant, target, template.applies_effect
+            )
+
+        if target.current_hp <= 0:
+            target.current_hp = 0
+            target.save(update_fields=['current_hp'])
+            target_result['is_dead'] = True
+
+        if template.effect_type == 'DAMAGE':
+            message = f"dealt {target_result['damage']} damage to {target_name}"
+        elif template.effect_type == 'HEAL':
+            message = f"healed {target_name} for {target_result['heal']} HP"
+        else:
+            message = f"affected {target_name}"
+        if target_result['effect_message']:
+            message += f" ({target_result['effect_message']})"
+        if target_result['is_dead']:
+            message += f"; {target_name} was defeated"
+        target_result['message'] = message
+        return target_result
 
     @staticmethod
     @transaction.atomic
@@ -249,7 +399,7 @@ class BattleService:
                 
                 if target_type == 'SELF':
                     target = monster
-                elif target_type in ('ALLY', 'A_AREA'):
+                elif target_type == 'ALLY':
                     # Ally = other monsters. Pick lowest HP monster for heals/buffs
                     # (C4 fix) Guard against empty alive_monsters list
                     if not alive_monsters:
@@ -258,13 +408,18 @@ class BattleService:
                         target = min(alive_monsters, key=lambda m: m.current_hp)
                     else:
                         target = random.choice(alive_monsters)
-                elif target_type in ('ENEMY', 'E_AREA'):
+                elif target_type == 'ENEMY':
                     target = random.choice(alive_players)
+                elif target_type in ('E_AREA', 'A_AREA', 'GLOBAL'):
+                    # Area scopes are resolved centrally by execute_action.
+                    target = None
                 else:
-                    # GLOBAL or fallback
+                    # Unknown target types fall back to a single opponent.
                     target = random.choice(alive_players)
                 
-                log = BattleService.execute_action(monster, 'SKILL', target, skill_id=chosen_skill.id)
+                log = BattleService.execute_action(
+                    monster, 'SKILL', target, skill_template_id=chosen_skill.id
+                )
                 logs.append(log)
                 cooldowns[str(chosen_skill.id)] = chosen_skill.cooldown
             else:
@@ -354,6 +509,32 @@ class BattleService:
                 
                 target.save(update_fields=['current_hp'])
                 log["hp_change"] = hp_change
+
+            # Percentage DOT scales from the caster's damage and uses the
+            # normal shield/damage modifier pipeline.
+            if (
+                template.damage_power_ratio_per_turn > 0
+                and effect.caster
+                and target.current_hp > 0
+            ):
+                caster = effect.caster
+                caster_entity = caster.entity
+                caster_damage = (
+                    caster_entity.total_damage
+                    if caster.is_player
+                    else getattr(caster_entity, 'base_att', 0)
+                )
+                caster_mods = BattleService.get_combat_modifiers(caster)
+                target_mods = BattleService.get_combat_modifiers(target)
+                dot_damage = caster_damage * template.damage_power_ratio_per_turn
+                dot_damage *= 1 + caster_mods['final_damage_modifier']
+                dot_damage *= 1 + caster_mods['damage_dealt_modifier']
+                dot_damage *= 1 + target_mods['damage_taken_modifier']
+                actual_damage = BattleService.apply_damage_with_shield(
+                    target, max(0, int(dot_damage))
+                )
+                log["hp_change"] -= actual_damage
+                log["damage"] = actual_damage
             
             # Apply per-turn MP change
             if template.mp_change_per_turn != 0:
@@ -423,7 +604,7 @@ class BattleService:
         return mods
 
     @staticmethod
-    def execute_action(combatant: Combatant, action_type: str, target: Combatant, **kwargs):
+    def execute_action(combatant: Combatant, action_type: str, target: Combatant = None, **kwargs):
         """
         Executes an action (Attack, Skill).
         Returns a dict describing the result of the action (combat log).
@@ -434,12 +615,17 @@ class BattleService:
             "actor_id": combatant.id,
             "actor_type": "character" if combatant.is_player else "enemy",
             "actor": str(combatant.entity.name) if hasattr(combatant.entity, 'name') else str(combatant.entity),
-            "target_id": target.id,
-            "target_type": "character" if target.is_player else "enemy",
-            "target": str(target.entity.name) if hasattr(target.entity, 'name') else str(target.entity),
+            "target_id": target.id if target else None,
+            "target_type": ('character' if target.is_player else 'enemy') if target else None,
+            "target": (
+                str(target.entity.name) if hasattr(target.entity, 'name') else str(target.entity)
+            ) if target else None,
             "action": action_type,
             "damage": 0,
             "heal": 0,
+            "total_damage": 0,
+            "total_heal": 0,
+            "targets": [],
             "is_dead": False,
             "message": "",
             "success": True,   # default True; set False when action is blocked
@@ -451,8 +637,13 @@ class BattleService:
             result_log["success"] = False
             return result_log
             
-        # (H-2 fix) Dead target → block action, client should pick a live target
-        if target.current_hp <= 0:
+        if action_type == 'ATTACK' and target is None:
+            result_log["message"] = "Basic attacks require a target."
+            result_log["success"] = False
+            return result_log
+
+        # Skill target validation happens after its target scope is known.
+        if action_type == 'ATTACK' and target.current_hp <= 0:
             result_log["message"] = f"{result_log['target']} is already dead."
             result_log["success"] = False
             return result_log
@@ -462,14 +653,16 @@ class BattleService:
 
         # Reroute Player ATTACK to their Basic Attack SKILL if they have one
         if action_type == 'ATTACK' and combatant.is_player:
-            basic_skill = attacker_entity.skills.filter(skill_template__is_basic_attack=True).first()
+            basic_skill = attacker_entity.skills.filter(
+                skill_template__is_basic_attack=True,
+                skill_template__availability__in=['PLAYER', 'BOTH'],
+            ).first()
             if basic_skill:
                 action_type = 'SKILL'
-                kwargs['skill_id'] = basic_skill.id
+                kwargs['character_skill_id'] = basic_skill.id
 
-        # (S2 fix) Gather active effect modifiers for attacker and target
+        # Target modifiers are resolved per target for area skills.
         attacker_mods = BattleService.get_combat_modifiers(combatant)
-        target_mods = BattleService.get_combat_modifiers(target)
 
         if action_type == 'ATTACK':
             if combatant.is_player == target.is_player:
@@ -484,6 +677,7 @@ class BattleService:
                 skill_name = "Đánh thường"
             
             # Apply active effect modifiers to basic attack
+            target_mods = BattleService.get_combat_modifiers(target)
             damage = int(damage * (1 + attacker_mods['damage_dealt_modifier'])
                                * (1 + target_mods['damage_taken_modifier']))
             if damage < 0:
@@ -492,23 +686,42 @@ class BattleService:
             actual_damage = BattleService.apply_damage_with_shield(target, damage)
             
             result_log["damage"] = actual_damage
+            result_log["total_damage"] = actual_damage
+            result_log["targets"] = [{
+                'target_id': target.id,
+                'target_type': 'character' if target.is_player else 'enemy',
+                'target': result_log['target'],
+                'damage': actual_damage,
+                'heal': 0,
+                'is_dead': target.current_hp <= 0,
+                'effect': None,
+                'effect_message': '',
+                'message': f"dealt {actual_damage} damage to {result_log['target']}",
+            }]
             result_log["message"] = f"{result_log['actor']} used {skill_name} and dealt {actual_damage} damage to {result_log['target']}."
 
         elif action_type == 'SKILL':
-            skill_id = kwargs.get('skill_id')
-            if not skill_id:
-                result_log["message"] = "No skill provided."
-                return result_log
-
             if combatant.is_player:
+                character_skill_id = kwargs.get('character_skill_id') or kwargs.get('skill_id')
+                if not character_skill_id:
+                    result_log["message"] = "No character skill provided."
+                    result_log["success"] = False
+                    return result_log
                 from apps.characters.models import CharacterSkill
                 try:
-                    char_skill = CharacterSkill.objects.get(id=skill_id, character=attacker_entity)
+                    char_skill = CharacterSkill.objects.select_related('skill_template').get(
+                        id=character_skill_id,
+                        character=attacker_entity,
+                    )
                 except CharacterSkill.DoesNotExist:
                     result_log["message"] = "Skill not found for this character."
                     result_log["success"] = False
                     return result_log
                 template = char_skill.skill_template
+                if template.availability not in ('PLAYER', 'BOTH'):
+                    result_log["message"] = "This skill cannot be used by players."
+                    result_log["success"] = False
+                    return result_log
                 bonus_final_damage = char_skill.bonus_final_damage
                 total_damage = attacker_entity.total_damage
                 
@@ -519,11 +732,20 @@ class BattleService:
                     result_log["success"] = False
                     return result_log
             else:
+                skill_template_id = kwargs.get('skill_template_id') or kwargs.get('skill_id')
+                if not skill_template_id:
+                    result_log["message"] = "No enemy skill provided."
+                    result_log["success"] = False
+                    return result_log
                 from apps.skilles.models import SkillTemplate
                 try:
-                    template = SkillTemplate.objects.get(id=skill_id)
+                    template = SkillTemplate.objects.get(id=skill_template_id)
                 except SkillTemplate.DoesNotExist:
                     result_log["message"] = "Skill not found."
+                    result_log["success"] = False
+                    return result_log
+                if template.availability not in ('ENEMY', 'BOTH'):
+                    result_log["message"] = "This skill cannot be used by enemies."
                     result_log["success"] = False
                     return result_log
                 bonus_final_damage = 0.0
@@ -533,6 +755,26 @@ class BattleService:
                 result_log["message"] = f"{template.name} cannot target {result_log['target']}."
                 result_log["success"] = False
                 return result_log
+
+            resolved_targets = BattleService._resolve_skill_targets(
+                combatant, target, template.target_type
+            )
+            if not resolved_targets:
+                result_log["message"] = f"{template.name} has no valid living targets."
+                result_log["success"] = False
+                return result_log
+            _prefetch_entities(resolved_targets)
+
+            # Area skills may omit a primary target. Keep the legacy top-level
+            # target fields populated with the first resolved target.
+            primary_target = target if target in resolved_targets else resolved_targets[0]
+            result_log["target_id"] = primary_target.id
+            result_log["target_type"] = 'character' if primary_target.is_player else 'enemy'
+            result_log["target"] = (
+                str(primary_target.entity.name)
+                if hasattr(primary_target.entity, 'name')
+                else str(primary_target.entity)
+            )
 
             # Check MP
             if combatant.current_mp < template.mp_cost:
@@ -551,123 +793,53 @@ class BattleService:
                 combatant.save(update_fields=['skill_cooldowns'])
             
             result_log["skill_name"] = template.name
+            result_log["character_skill_id"] = char_skill.id if combatant.is_player else None
+            result_log["skill_template_id"] = template.id
+            result_log["skill_visual_key"] = template.visual_key
+            result_log["skill_target_type"] = template.target_type
 
-            # Calculate Effect — apply active effect modifiers (S2 fix)
-            if template.effect_type == 'DAMAGE':
-                # Add flat ATT buff from active effects to total_damage
-                buffed_damage = total_damage + attacker_mods['flat_att']
-                buffed_damage = int(buffed_damage * (1 + attacker_mods['percent_att']))
-
-                base_dmg = (buffed_damage * template.power_ratio) + template.base_power
-
-                # (Skill System) Read damage_multiplier for this skill level from DB
-                # e.g. Lv1=1.00 (100%), Lv2=1.50 (150%), Lv3=1.75 (175%)
-                if combatant.is_player:
-                    from apps.skilles.models import SkillLevelConfig
-                    level_config = SkillLevelConfig.objects.filter(
-                        skill=template, skill_level=char_skill.level
-                    ).first()
-                    level_dmg_multiplier = level_config.damage_multiplier if level_config else 1.0
-                else:
-                    # Monsters don't have SkillLevelConfig — always 1.0
-                    level_dmg_multiplier = 1.0
-
-                base_dmg *= level_dmg_multiplier
-                final_skill_dmg = base_dmg * (1 + bonus_final_damage + attacker_mods['final_damage_modifier'])
-
-                # Apply damage_dealt (attacker buff) and damage_taken (target debuff)
-                final_skill_dmg *= (1 + attacker_mods['damage_dealt_modifier'])
-                final_skill_dmg *= (1 + target_mods['damage_taken_modifier'])
-
-                damage = max(0, int(final_skill_dmg))
-
-                actual_damage = BattleService.apply_damage_with_shield(target, damage)
-
-                result_log["damage"] = actual_damage
-                result_log["message"] = f"{result_log['actor']} used {template.name} and dealt {actual_damage} damage to {result_log['target']}."
-
-
-            elif template.effect_type == 'HEAL':
-                base_heal = (total_damage * template.power_ratio) + template.base_power
-                # Apply health_dealt (caster buff) and health_received (target buff)
-                base_heal *= (1 + attacker_mods['health_dealt_modifier'])
-                base_heal *= (1 + target_mods['health_received_modifier'])
-                heal = max(0, int(base_heal))
-                
-                target.current_hp += heal
-                max_hp = getattr(target.entity, 'total_hp', getattr(target.entity, 'base_hp', target.current_hp))
-                if target.current_hp > max_hp:
-                    target.current_hp = max_hp
-                target.save(update_fields=['current_hp'])
-                
-                result_log["heal"] = heal
-                result_log["message"] = f"{result_log['actor']} used {template.name} and healed {result_log['target']} for {heal} HP."
-
-            elif template.effect_type == 'EFFECT':
-                result_log["message"] = f"{result_log['actor']} used {template.name} on {result_log['target']}."
-
-            # Apply additional effects if any (with stacking rules)
-            if template.applies_effect:
-                effect_tmpl = template.applies_effect
-                existing = ActiveEffect.objects.filter(
-                    combat_instance=combatant.combat_instance,
-                    target=target,
-                    effect_template=effect_tmpl
+            level_damage_multiplier = 1.0
+            if combatant.is_player:
+                from apps.skilles.models import SkillLevelConfig
+                level_config = SkillLevelConfig.objects.filter(
+                    skill=template, skill_level=char_skill.level
                 ).first()
-                
-                if existing:
-                    stacking = effect_tmpl.stacking_rule
-                    
-                    if stacking == 'REFRESH':
-                        # Reset duration to full, keep stacks
-                        existing.remaining_turns = effect_tmpl.duration_turns
-                        existing.remaining_shield_points = effect_tmpl.shields_points
-                        existing.save(update_fields=['remaining_turns', 'remaining_shield_points'])
-                        result_log["message"] += f" Refreshed {effect_tmpl.name}."
-                    
-                    elif stacking == 'INDEPENDENT':
-                        # Create a new independent stack
-                        ActiveEffect.objects.create(
-                            combat_instance=combatant.combat_instance,
-                            target=target,
-                            effect_template=effect_tmpl,
-                            remaining_turns=effect_tmpl.duration_turns,
-                            remaining_shield_points=effect_tmpl.shields_points,
-                            caster=combatant
-                        )
-                        result_log["message"] += f" Applied additional stack of {effect_tmpl.name}."
-                    
-                    elif stacking == 'UPGRADE':
-                        # Increase stacks, refresh duration
-                        existing.current_stacks += 1
-                        existing.remaining_turns = effect_tmpl.duration_turns
-                        existing.remaining_shield_points = effect_tmpl.shields_points
-                        existing.save(update_fields=['current_stacks', 'remaining_turns', 'remaining_shield_points'])
-                        result_log["message"] += f" Upgraded {effect_tmpl.name} to {existing.current_stacks} stacks."
-                    
-                    elif stacking == 'NO_STACK':
-                        # Do nothing, effect already active
-                        result_log["message"] += f" {effect_tmpl.name} is already active."
-                else:
-                    # No existing effect, always create new
-                    ActiveEffect.objects.create(
-                        combat_instance=combatant.combat_instance,
-                        target=target,
-                        effect_template=effect_tmpl,
-                        remaining_turns=effect_tmpl.duration_turns,
-                        remaining_shield_points=effect_tmpl.shields_points,
-                        caster=combatant
-                    )
-                    result_log["message"] += f" Applied {effect_tmpl.name}."
+                if level_config:
+                    level_damage_multiplier = level_config.damage_multiplier
 
-        # Check for death
-        if target.current_hp <= 0:
+            target_results = [
+                BattleService._apply_skill_to_target(
+                    combatant=combatant,
+                    target=resolved_target,
+                    template=template,
+                    total_damage=total_damage,
+                    attacker_mods=attacker_mods,
+                    bonus_final_damage=bonus_final_damage,
+                    level_damage_multiplier=level_damage_multiplier,
+                )
+                for resolved_target in resolved_targets
+            ]
+            result_log["targets"] = target_results
+            result_log["damage"] = sum(item['damage'] for item in target_results)
+            result_log["heal"] = sum(item['heal'] for item in target_results)
+            result_log["total_damage"] = result_log["damage"]
+            result_log["total_heal"] = result_log["heal"]
+            result_log["is_dead"] = any(item['is_dead'] for item in target_results)
+            result_log["message"] = (
+                f"{result_log['actor']} used {template.name}: "
+                + '; '.join(item['message'] for item in target_results)
+                + '.'
+            )
+
+        # Single basic attacks are handled outside the skill target loop.
+        if action_type == 'ATTACK' and target.current_hp <= 0:
             target.current_hp = 0
             # (H-3 fix) Use update_fields to avoid overwriting concurrent state changes
             # (e.g. skill cooldowns updated in the same round) with stale in-memory values.
             # apply_damage_with_shield already saved current_hp=0; this ensures it stays 0.
             target.save(update_fields=['current_hp'])
             result_log["is_dead"] = True
+            result_log["targets"][0]["is_dead"] = True
             result_log["message"] += f" {result_log['target']} has been defeated!"
 
             

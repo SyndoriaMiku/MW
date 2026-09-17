@@ -54,6 +54,14 @@ class EffectTemplate(models.Model):
     # Per turn effects
     hp_change_per_turn = models.IntegerField(default=0) #Flat HP change per turn, positive for buff, negative for debuff
     mp_change_per_turn = models.IntegerField(default=0) #Flat MP change per turn
+    damage_power_ratio_per_turn = models.FloatField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text=(
+            "Damage dealt each turn as a ratio of the caster's current damage. "
+            "For example, 0.25 deals 25% damage per turn."
+        ),
+    )
 
     #Special effect tag
     damage_taken_modifier = models.FloatField(default=0, help_text="Modifier to damage taken, positive to increase damage taken, negative to reduce damage taken")
@@ -87,9 +95,28 @@ class SkillTemplate(models.Model):
         HEAL = 'HEAL', 'Healing'
         EFFECT = 'EFFECT', 'Apply Effect'
 
+    class Availability(models.TextChoices):
+        PLAYER = 'PLAYER', 'Player'
+        ENEMY = 'ENEMY', 'Enemy'
+        BOTH = 'BOTH', 'Player and Enemy'
+
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=50) #Skill name
     description = models.TextField(blank=True) #Description of the skill
+    icon_key = models.CharField(
+        max_length=255, unique=True, null=True, blank=True,
+        help_text='Stable frontend key for the skill icon.',
+    )
+    visual_key = models.CharField(
+        max_length=255, unique=True, null=True, blank=True,
+        help_text='Stable frontend key for the skill animation or VFX.',
+    )
+    availability = models.CharField(
+        max_length=10,
+        choices=Availability.choices,
+        default=Availability.PLAYER,
+        help_text='Which combatant types may own and use this skill.',
+    )
 
     # Requirement
     # Job having skill, null for skill all job or monster skill
@@ -129,6 +156,21 @@ class SkillTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        if self.availability == self.Availability.ENEMY and self.job_id:
+            raise ValidationError({'job': 'Enemy-only skills cannot be assigned to a player job.'})
+        if self.is_basic_attack:
+            duplicate = SkillTemplate.objects.filter(
+                job=self.job,
+                is_basic_attack=True,
+                availability__in=[self.Availability.PLAYER, self.Availability.BOTH],
+            ).exclude(pk=self.pk)
+            if duplicate.exists():
+                raise ValidationError({
+                    'is_basic_attack': 'This job already has a player basic attack.'
+                })
 
 
 class SkillLevelConfig(models.Model):
@@ -188,6 +230,10 @@ class SkillLevelConfig(models.Model):
     def clean(self):
         super().clean()
         validate_material_requirements(self.required_materials)
+        if self.skill_level == 1 and self.required_materials:
+            raise ValidationError({
+                'required_materials': 'Skill level 1 must be unlocked automatically.'
+            })
         if not self.required_materials:
             return
 

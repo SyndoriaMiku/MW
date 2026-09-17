@@ -4,6 +4,9 @@ from .models import Character, CharacterSkill
 
 class CharacterSkillSerializer(serializers.ModelSerializer):
     """Serializes a character's owned skill with its current level and next upgrade info."""
+    character_skill_id = serializers.IntegerField(source='id', read_only=True)
+    skill_template_id = serializers.IntegerField(source='skill_template.id', read_only=True)
+    # Compatibility alias. New clients should use skill_template_id.
     skill_id = serializers.IntegerField(source='skill_template.id', read_only=True)
     skill_name = serializers.CharField(source='skill_template.name', read_only=True)
     description = serializers.CharField(source='skill_template.formatted_description', read_only=True)
@@ -12,32 +15,42 @@ class CharacterSkillSerializer(serializers.ModelSerializer):
     target_type = serializers.CharField(source='skill_template.target_type', read_only=True)
     effect_type = serializers.CharField(source='skill_template.effect_type', read_only=True)
     is_basic_attack = serializers.BooleanField(source='skill_template.is_basic_attack', read_only=True)
+    icon_key = serializers.CharField(source='skill_template.icon_key', read_only=True)
+    visual_key = serializers.CharField(source='skill_template.visual_key', read_only=True)
     damage_multiplier = serializers.SerializerMethodField()
     next_upgrade = serializers.SerializerMethodField()
 
     class Meta:
         model = CharacterSkill
         fields = [
-            'id', 'skill_id', 'skill_name', 'description',
+            'id', 'character_skill_id', 'skill_template_id', 'skill_id',
+            'skill_name', 'description',
             'level', 'damage_multiplier', 'bonus_final_damage',
             'mp_cost', 'cooldown', 'target_type', 'effect_type', 'is_basic_attack',
+            'icon_key', 'visual_key',
             'next_upgrade',
         ]
 
     def get_damage_multiplier(self, obj):
         """Return the damage_multiplier for the current skill level from DB."""
-        from apps.skilles.models import SkillLevelConfig
-        config = SkillLevelConfig.objects.filter(
-            skill=obj.skill_template, skill_level=obj.level
-        ).first()
+        config = next(
+            (
+                config for config in obj.skill_template.level_configs.all()
+                if config.skill_level == obj.level
+            ),
+            None,
+        )
         return config.damage_multiplier if config else 1.0
 
     def get_next_upgrade(self, obj):
         """Return info about the next upgrade, or None if already maxed."""
-        from apps.skilles.models import SkillLevelConfig
-        next_config = SkillLevelConfig.objects.filter(
-            skill=obj.skill_template, skill_level=obj.level + 1
-        ).first()
+        next_config = next(
+            (
+                config for config in obj.skill_template.level_configs.all()
+                if config.skill_level == obj.level + 1
+            ),
+            None,
+        )
         if not next_config:
             return None
         return {
@@ -74,9 +87,20 @@ class CharacterSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'current_location', 'base_hp', 'base_mp', 'base_att',
-            'base_str', 'base_agi', 'base_int', 'drop_rate', 'job',
+            'base_str', 'base_agi', 'base_int', 'drop_rate',
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
         ]
+
+    def validate(self, attrs):
+        job = attrs.get('job')
+        character_class = attrs.get('character_class')
+        if job:
+            if character_class and job.character_class_id != character_class.id:
+                raise serializers.ValidationError({
+                    'job': 'The selected job does not belong to the selected class.'
+                })
+            attrs['character_class'] = job.character_class
+        return attrs
 
     def get_required_exp(self, obj):
         """EXP required to advance from the character's current level."""

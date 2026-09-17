@@ -316,7 +316,6 @@ MODIFIER_TYPE_CHOICES = [
     ('REROLL_TRIPLE_CHOICE', 'Reroll 3x Lines & Pick N'),
     ('REROLL_SINGLE', 'Reroll a Single Selected Line'),
     ('REPLACE_FIXED', 'Replace Single Line with Fixed Stat'),
-    ('REPLACE_SELECT', 'Replace Single Line with Selected Stat'),
     ('FORCE_SET', 'Force Set Aurora Level and Fixed Lines'),
 ]
 

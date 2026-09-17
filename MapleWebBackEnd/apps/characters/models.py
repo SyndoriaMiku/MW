@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db import models
+from django.db import models, transaction
 from django.utils.functional import cached_property
 from collections import defaultdict
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -325,6 +325,7 @@ class Character(models.Model):
     # SECTION: LEVELING METHODS
     # ===================================================================
 
+    @transaction.atomic
     def gain_exp(self, amount):
         """
         Add EXP and automatically level up if threshold is met.
@@ -358,6 +359,10 @@ class Character(models.Model):
                       '_all_stat_modifiers']:
             if prop in self.__dict__:
                 del self.__dict__[prop]
+
+        if leveled_up:
+            from apps.characters.skill_service import SkillService
+            SkillService.sync_eligible_skills(self)
                 
         return leveled_up
 
@@ -371,11 +376,6 @@ class Character(models.Model):
             self.base_str += int(cc.str_growth)
             self.base_agi += int(cc.agi_growth)
             self.base_int += int(cc.int_growth)
-
-        # Auto-unlock / upgrade skills that have a milestone at this level
-        from apps.characters.skill_service import SkillService
-        SkillService.auto_sync_skills(self)
-
 
 # ===================================================================
 # SECTION: DYNAMIC EQUIPMENT SYSTEM

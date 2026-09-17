@@ -5,12 +5,13 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.characters.models import Character
+from apps.characters.models import Character, CharacterSkill
 from apps.party.models import Party, PartyMember
 from apps.users.models import GameUser
 from apps.world.models import EnemyTemplate, NormalDungeonTemplate, NormalStageEnemy
+from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate
 
-from .models import CombatInstance
+from .models import ActiveEffect, CombatInstance
 from .serializers import PlayerActionSerializer
 from .services import BattleService
 from .urls import urlpatterns
@@ -45,6 +46,41 @@ class PlayerActionContractTests(SimpleTestCase):
         serializer = PlayerActionSerializer(data={'action_type': 'ATTACK'})
         self.assertFalse(serializer.is_valid())
         self.assertIn('target_id', serializer.errors)
+
+    def test_skill_action_accepts_character_skill_id(self):
+        serializer = PlayerActionSerializer(data={
+            'action_type': 'SKILL',
+            'target_id': 42,
+            'character_skill_id': 7,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['character_skill_id'], 7)
+
+    def test_skill_action_keeps_legacy_skill_id_alias(self):
+        serializer = PlayerActionSerializer(data={
+            'action_type': 'SKILL',
+            'target_id': 42,
+            'skill_id': 7,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['character_skill_id'], 7)
+
+    def test_skill_action_allows_server_resolved_target_scope(self):
+        serializer = PlayerActionSerializer(data={
+            'action_type': 'SKILL',
+            'character_skill_id': 7,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_skill_action_rejects_conflicting_ids(self):
+        serializer = PlayerActionSerializer(data={
+            'action_type': 'SKILL',
+            'target_id': 42,
+            'character_skill_id': 7,
+            'skill_id': 8,
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('character_skill_id', serializer.errors)
 
 
 class BattleTargetValidationTests(SimpleTestCase):
@@ -99,6 +135,35 @@ class NormalAttackSceneContractTests(APITestCase):
         BattleService.start_combat(combat)
         return combat
 
+    def create_multi_enemy_battle(self, count=3, *, enemy_hp=100, enemy_attack=0):
+        enemy = EnemyTemplate.objects.create(
+            name='Slime Group',
+            level=1,
+            base_hp=enemy_hp,
+            base_mp=20,
+            base_att=enemy_attack,
+            exp_reward=0,
+            lumis_reward_min=0,
+            lumis_reward_max=0,
+        )
+        combat = BattleService.create_combat_instance(self.party, [enemy] * count)
+        BattleService.start_combat(combat)
+        return combat
+
+    def create_owned_skill(self, *, name, target_type, effect_type='DAMAGE', **kwargs):
+        skill = SkillTemplate.objects.create(
+            name=name,
+            target_type=target_type,
+            effect_type=effect_type,
+            **kwargs,
+        )
+        owned = CharacterSkill.objects.create(
+            character=self.character,
+            skill_template=skill,
+            level=1,
+        )
+        return skill, owned
+
     def test_normal_attack_returns_player_and_monster_events_with_snapshot(self):
         combat = self.create_battle()
         target = combat.combatants.get(is_player=False)
@@ -140,6 +205,298 @@ class NormalAttackSceneContractTests(APITestCase):
         self.assertEqual(response.data['combat']['status'], 'victory')
         self.assertEqual(response.data['events'][0]['battle_result']['status'], 'victory')
         self.assertIsNotNone(response.data['events'][0]['battle_result']['rewards'])
+
+    def test_owned_skill_is_discoverable_and_cast_by_character_skill_id(self):
+        skill = SkillTemplate.objects.create(
+            name='Power Shot',
+            mp_cost=1,
+            cooldown=2,
+            target_type='ENEMY',
+            effect_type='DAMAGE',
+            base_power=4,
+            power_ratio=1.0,
+            icon_key='skill.bowman.power_shot.icon',
+            visual_key='skill.bowman.power_shot',
+        )
+        SkillLevelConfig.objects.create(
+            skill=skill,
+            skill_level=1,
+            required_char_level=1,
+            damage_multiplier=1.5,
+        )
+        owned = CharacterSkill.objects.create(
+            character=self.character,
+            skill_template=skill,
+            level=1,
+        )
+        combat = self.create_battle(enemy_hp=100)
+        target = combat.combatants.get(is_player=False)
+
+        snapshot = self.client.get(reverse('battles:active-battle'))
+        player = next(c for c in snapshot.data['combatants'] if c['is_player'])
+        self.assertIn('SKILL', player['valid_actions'])
+        self.assertEqual(player['skills'][0]['character_skill_id'], owned.id)
+        self.assertTrue(player['skills'][0]['can_use'])
+
+        response = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {
+                'action_type': 'SKILL',
+                'target_id': target.id,
+                'character_skill_id': owned.id,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['action_log']['character_skill_id'], owned.id)
+        self.assertEqual(response.data['action_log']['skill_template_id'], skill.id)
+        self.assertEqual(
+            response.data['action_log']['skill_visual_key'],
+            'skill.bowman.power_shot',
+        )
+
+    def test_enemy_area_skill_hits_every_living_enemy_and_charges_once(self):
+        skill, owned = self.create_owned_skill(
+            name='Arrow Rain',
+            target_type='E_AREA',
+            base_power=10,
+            power_ratio=0,
+            mp_cost=4,
+            cooldown=2,
+        )
+        combat = self.create_multi_enemy_battle(count=3)
+        player = combat.combatants.get(is_player=True)
+        mp_before = player.current_mp
+
+        response = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {
+                'action_type': 'SKILL',
+                'character_skill_id': owned.id,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        log = response.data['action_log']
+        self.assertTrue(log['success'])
+        self.assertEqual(log['skill_target_type'], 'E_AREA')
+        self.assertEqual(len(log['targets']), 3)
+        self.assertEqual(log['total_damage'], 30)
+        self.assertEqual({item['damage'] for item in log['targets']}, {10})
+        self.assertEqual(
+            list(combat.combatants.filter(is_player=False).values_list('current_hp', flat=True)),
+            [90, 90, 90],
+        )
+        player.refresh_from_db()
+        self.assertEqual(player.current_mp, mp_before - skill.mp_cost)
+        # The endpoint completes the monster phase and starts the next round,
+        # which decrements the newly assigned cooldown exactly once.
+        self.assertEqual(player.skill_cooldowns[str(skill.id)], skill.cooldown - 1)
+
+    def test_two_turn_cooldown_can_be_reused_on_the_third_player_turn(self):
+        _, owned = self.create_owned_skill(
+            name='Cooldown Test Skill',
+            target_type='E_AREA',
+            base_power=1,
+            power_ratio=0,
+            cooldown=2,
+        )
+        combat = self.create_multi_enemy_battle(count=1)
+
+        first_cast = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'SKILL', 'character_skill_id': owned.id},
+            format='json',
+        )
+        self.assertTrue(first_cast.data['action_log']['success'])
+        self.assertEqual(first_cast.data['combat']['turn_count'], 2)
+
+        blocked_cast = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'SKILL', 'character_skill_id': owned.id},
+            format='json',
+        )
+        self.assertFalse(blocked_cast.data['action_log']['success'])
+        self.assertEqual(blocked_cast.data['combat']['turn_count'], 2)
+
+        enemy_id = combat.combatants.get(is_player=False).id
+        normal_attack = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'ATTACK', 'target_id': enemy_id},
+            format='json',
+        )
+        self.assertEqual(normal_attack.data['combat']['turn_count'], 3)
+
+        third_turn_cast = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'SKILL', 'character_skill_id': owned.id},
+            format='json',
+        )
+        self.assertTrue(third_turn_cast.data['action_log']['success'])
+
+    def test_ally_area_heal_applies_to_every_living_ally(self):
+        self.party.max_size = 2
+        self.party.save(update_fields=['max_size'])
+        ally = Character.objects.create(name='Battle Ally')
+        PartyMember.objects.create(party=self.party, character=ally, position=2)
+        _, owned = self.create_owned_skill(
+            name='Recovery Field',
+            target_type='A_AREA',
+            effect_type='HEAL',
+            base_power=5,
+            power_ratio=0,
+        )
+        combat = self.create_multi_enemy_battle(count=1)
+        players = list(combat.combatants.filter(is_player=True).order_by('position'))
+        for player in players:
+            player.current_hp = 1
+            player.save(update_fields=['current_hp'])
+
+        log = BattleService.execute_action(
+            players[0], 'SKILL', character_skill_id=owned.id
+        )
+
+        self.assertTrue(log['success'])
+        self.assertEqual(len(log['targets']), 2)
+        self.assertEqual(log['total_heal'], 10)
+        self.assertTrue(all(item['target_type'] == 'character' for item in log['targets']))
+        for player in players:
+            player.refresh_from_db()
+            self.assertEqual(player.current_hp, 6)
+
+    def test_global_skill_hits_all_living_combatants_on_both_sides(self):
+        skill, owned = self.create_owned_skill(
+            name='Cataclysm',
+            target_type='GLOBAL',
+            base_power=7,
+            power_ratio=0,
+            mp_cost=3,
+        )
+        combat = self.create_multi_enemy_battle(count=2)
+        player = combat.combatants.get(is_player=True)
+        hp_before = {
+            combatant.id: combatant.current_hp
+            for combatant in combat.combatants.all()
+        }
+        mp_before = player.current_mp
+
+        log = BattleService.execute_action(
+            player, 'SKILL', character_skill_id=owned.id
+        )
+
+        self.assertTrue(log['success'])
+        self.assertEqual(log['skill_target_type'], 'GLOBAL')
+        self.assertEqual(len(log['targets']), 3)
+        self.assertEqual(log['total_damage'], 21)
+        self.assertEqual(
+            {item['target_type'] for item in log['targets']},
+            {'character', 'enemy'},
+        )
+        for combatant in combat.combatants.all():
+            self.assertEqual(combatant.current_hp, hp_before[combatant.id] - 7)
+        player.refresh_from_db()
+        self.assertEqual(player.current_mp, mp_before - skill.mp_cost)
+
+    def test_enemy_area_skill_hits_all_living_players(self):
+        self.party.max_size = 2
+        self.party.save(update_fields=['max_size'])
+        ally = Character.objects.create(name='Enemy AOE Target')
+        PartyMember.objects.create(party=self.party, character=ally, position=2)
+        skill = SkillTemplate.objects.create(
+            name='Monster Roar',
+            availability='ENEMY',
+            target_type='E_AREA',
+            effect_type='DAMAGE',
+            base_power=4,
+            power_ratio=0,
+        )
+        combat = self.create_multi_enemy_battle(count=1)
+        enemy = combat.combatants.get(is_player=False)
+        players = list(combat.combatants.filter(is_player=True))
+        hp_before = {player.id: player.current_hp for player in players}
+
+        log = BattleService.execute_action(
+            enemy, 'SKILL', skill_template_id=skill.id
+        )
+
+        self.assertTrue(log['success'])
+        self.assertEqual(len(log['targets']), 2)
+        self.assertTrue(all(item['target_type'] == 'character' for item in log['targets']))
+        for player in players:
+            player.refresh_from_db()
+            self.assertEqual(player.current_hp, hp_before[player.id] - 4)
+
+    def test_area_effect_is_applied_independently_to_every_target(self):
+        burn = EffectTemplate.objects.create(
+            name='Burning',
+            duration_turns=3,
+            hp_change_per_turn=-2,
+        )
+        _, owned = self.create_owned_skill(
+            name='Ignite Field',
+            target_type='E_AREA',
+            effect_type='EFFECT',
+            applies_effect=burn,
+        )
+        combat = self.create_multi_enemy_battle(count=3)
+        player = combat.combatants.get(is_player=True)
+
+        log = BattleService.execute_action(
+            player, 'SKILL', character_skill_id=owned.id
+        )
+
+        enemy_ids = set(
+            combat.combatants.filter(is_player=False).values_list('id', flat=True)
+        )
+        self.assertTrue(log['success'])
+        self.assertEqual(len(log['targets']), 3)
+        self.assertEqual(
+            set(ActiveEffect.objects.values_list('target_id', flat=True)),
+            enemy_ids,
+        )
+        self.assertEqual(
+            set(item['effect'] for item in log['targets']),
+            {'Burning'},
+        )
+
+    def test_percentage_dot_ticks_from_caster_damage_for_configured_duration(self):
+        self.character.base_att = 40
+        self.character.save(update_fields=['base_att'])
+        ignite = EffectTemplate.objects.create(
+            name='Ignite',
+            duration_turns=3,
+            damage_power_ratio_per_turn=0.25,
+        )
+        _, owned = self.create_owned_skill(
+            name='Fire Ball',
+            target_type='E_AREA',
+            effect_type='DAMAGE',
+            base_power=0,
+            power_ratio=0,
+            applies_effect=ignite,
+        )
+        combat = self.create_multi_enemy_battle(count=1, enemy_hp=100)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        BattleService.execute_action(
+            player, 'SKILL', character_skill_id=owned.id
+        )
+
+        for expected_hp, expected_remaining in [(90, 2), (80, 1), (70, 0)]:
+            logs = BattleService.process_active_effects(combat)
+            enemy.refresh_from_db()
+            self.assertEqual(enemy.current_hp, expected_hp)
+            self.assertEqual(logs[0]['damage'], 10)
+            active = ActiveEffect.objects.filter(
+                combat_instance=combat, target=enemy, effect_template=ignite
+            ).first()
+            if expected_remaining:
+                self.assertIsNotNone(active)
+                self.assertEqual(active.remaining_turns, expected_remaining)
+            else:
+                self.assertIsNone(active)
 
     def test_active_battle_can_restore_scene(self):
         combat = self.create_battle()

@@ -81,10 +81,7 @@ def player_action(request, combat_id):
     target_position = serializer.validated_data.get('target_position')
     kwargs = {}
     if action_type == 'SKILL':
-        skill_id = serializer.validated_data.get('skill_id')
-        if not skill_id:
-            return Response({"detail": "skill_id is required for SKILL action."}, status=status.HTTP_400_BAD_REQUEST)
-        kwargs['skill_id'] = skill_id
+        kwargs['character_skill_id'] = serializer.validated_data['character_skill_id']
 
     log = None
     with transaction.atomic():
@@ -120,11 +117,13 @@ def player_action(request, combat_id):
                 "combat": CombatInstanceSerializer(combat).data
             })
 
-        try:
-            target_lookup = {'id': target_id} if target_id is not None else {'position': target_position}
-            target = combat.combatants.get(**target_lookup)
-        except Combatant.DoesNotExist:
-            return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
+        target = None
+        if target_id is not None or target_position is not None:
+            try:
+                target_lookup = {'id': target_id} if target_id is not None else {'position': target_position}
+                target = combat.combatants.get(**target_lookup)
+            except Combatant.DoesNotExist:
+                return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
 
         log = BattleService.execute_action(player_combatant, action_type, target, **kwargs)
         events = [log]

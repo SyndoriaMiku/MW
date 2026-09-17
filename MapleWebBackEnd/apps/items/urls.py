@@ -9,4 +9,12 @@ urlpatterns = [
     path('', include(router.urls)),
     path('lumen/<str:action>/', LumenAPIView.as_view(), name='lumen-api'),
     path('aurora/<str:action>/', AuroraAPIView.as_view(), name='aurora-api'),
+    path(
+        'essence/apply/', AuroraAPIView.as_view(), {'action': 'modify'},
+        name='essence-apply',
+    ),
+    path(
+        'essence/confirm/', AuroraAPIView.as_view(), {'action': 'confirm'},
+        name='essence-confirm',
+    ),
 ]

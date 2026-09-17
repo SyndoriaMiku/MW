@@ -32,7 +32,12 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = ShopItem.objects.select_related('item_template', 'category').all()
+        queryset = ShopItem.objects.select_related(
+            'item_template__lumen_tier', 'item_template__aurora_tier', 'category'
+        ).prefetch_related(
+            'item_template__item_sets__effects',
+            'item_template__item_sets__items',
+        )
         category_id = self.request.query_params.get('category')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
@@ -134,7 +139,11 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for Special/Exchange Shop.
     """
-    queryset = SpecialShopItem.objects.filter(is_active=True).select_related('item')
+    queryset = SpecialShopItem.objects.filter(is_active=True).select_related(
+        'item__lumen_tier', 'item__aurora_tier'
+    ).prefetch_related(
+        'item__item_sets__effects', 'item__item_sets__items'
+    )
     serializer_class = SpecialShopItemSerializer
     permission_classes = [IsAuthenticated]
 

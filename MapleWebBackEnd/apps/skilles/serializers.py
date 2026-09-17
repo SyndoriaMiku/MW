@@ -14,7 +14,7 @@ class EffectTemplateBriefSerializer(serializers.ModelSerializer):
             'flat_str_change', 'percent_str_change',
             'flat_agi_change', 'percent_agi_change',
             'flat_int_change', 'percent_int_change',
-            'hp_change_per_turn', 'mp_change_per_turn',
+            'hp_change_per_turn', 'mp_change_per_turn', 'damage_power_ratio_per_turn',
             'shields_points', 'final_damage_modifier',
             'damage_taken_modifier', 'damage_dealt_modifier',
             'exp_rate_change', 'drop_rate_change', 'lumis_rate_change',
@@ -45,6 +45,7 @@ class SkillTemplateSerializer(serializers.ModelSerializer):
         model = SkillTemplate
         fields = [
             'id', 'name', 'description', 'formatted_description',
+            'icon_key', 'visual_key', 'availability',
             'job', 'job_name', 'required_level',
             'mp_cost', 'cooldown',
             'target_type', 'effect_type', 'is_basic_attack',
@@ -64,6 +65,7 @@ class SkillTemplateListSerializer(serializers.ModelSerializer):
         model = SkillTemplate
         fields = [
             'id', 'name', 'description',
+            'icon_key', 'visual_key', 'availability',
             'job', 'job_name', 'required_level',
             'mp_cost', 'cooldown',
             'target_type', 'effect_type', 'is_basic_attack',

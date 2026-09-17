@@ -92,6 +92,11 @@ class CharacterAdmin(admin.ModelAdmin):
     def get_owner_username(self, obj):
         return obj.user.username if hasattr(obj, 'user') and obj.user else '—'
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from .skill_service import SkillService
+        SkillService.sync_eligible_skills(obj)
+
     # Các phương thức để hiển thị các @cached_property trong admin
     def display_total_hp(self, obj):
         return obj.total_hp

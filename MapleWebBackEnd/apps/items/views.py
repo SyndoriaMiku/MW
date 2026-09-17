@@ -1,14 +1,25 @@
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import ItemTemplate
-from .serializers import ItemTemplateSerializer
+from .serializers import (
+    AuroraConfirmRequestSerializer,
+    AuroraModifyRequestSerializer,
+    AuroraRevealRequestSerializer,
+    ItemTemplateSerializer,
+)
+from apps.inventory.models import InventoryItem
+from apps.inventory.serializers import InventoryItemSerializer
 from .services import LumenService
 from .aurora_service import AuroraService
 
 class ItemTemplateViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ItemTemplate.objects.all()
+    queryset = ItemTemplate.objects.select_related(
+        'lumen_tier', 'aurora_tier'
+    ).prefetch_related(
+        'item_sets__effects', 'item_sets__items'
+    )
     serializer_class = ItemTemplateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -39,47 +50,55 @@ class LumenAPIView(APIView):
 class AuroraAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _response(result, inventory_item_id=None):
+        if result.get('success') and inventory_item_id:
+            item = InventoryItem.objects.filter(
+                pk=inventory_item_id
+            ).select_related(
+                'template__lumen_tier', 'template__aurora_tier'
+            ).prefetch_related(
+                'aurora_lines',
+                'template__lumen_tier__ascend_rules',
+                'template__item_sets__effects',
+                'template__item_sets__items',
+            ).first()
+            if item:
+                result = {**result, 'item': InventoryItemSerializer(item).data}
+        response_status = status.HTTP_200_OK if result.get('success') else status.HTTP_400_BAD_REQUEST
+        return Response(result, status=response_status)
+
     def post(self, request, action):
         if action == 'reveal':
-            inventory_item_id = request.data.get('inventory_item_id')
-            if not inventory_item_id:
-                return Response({"success": False, "message": "inventory_item_id is required."})
-                
+            serializer = AuroraRevealRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            inventory_item_id = serializer.validated_data['inventory_item_id']
             result = AuroraService.reveal_aurora(request.user, inventory_item_id)
-            return Response(result)
+            return self._response(result, inventory_item_id)
             
         elif action == 'modify':
-            target_item_id = request.data.get('target_item_id')
-            modifier_item_id = request.data.get('modifier_item_id')
-            use_lumis = request.data.get('use_lumis', False)
-            target_line_index = request.data.get('target_line_index')
-            
-            if not target_item_id:
-                return Response({"success": False, "message": "target_item_id is required."})
-                
+            serializer = AuroraModifyRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data
             result = AuroraService.apply_modifier(
                 user=request.user,
-                target_item_id=target_item_id,
-                modifier_item_id=modifier_item_id,
-                use_lumis=use_lumis,
-                target_line_index=target_line_index
+                target_item_id=data['target_item_id'],
+                modifier_item_id=data.get('modifier_item_id'),
+                use_lumis=data.get('use_lumis', False),
+                target_line_index=data.get('target_line_index'),
             )
-            return Response(result)
+            return self._response(result, data['target_item_id'])
             
         elif action == 'confirm':
-            inventory_item_id = request.data.get('inventory_item_id')
-            action_type = request.data.get('action')
-            selected_temp_ids = request.data.get('selected_temp_ids')
-            
-            if not inventory_item_id or not action_type:
-                return Response({"success": False, "message": "inventory_item_id and action are required."})
-                
+            serializer = AuroraConfirmRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data
             result = AuroraService.confirm_pending_roll(
                 user=request.user,
-                inventory_item_id=inventory_item_id,
-                action=action_type,
-                selected_temp_ids=selected_temp_ids
+                inventory_item_id=data['inventory_item_id'],
+                action=data['action'],
+                selected_temp_ids=data.get('selected_temp_ids'),
             )
-            return Response(result)
+            return self._response(result, data['inventory_item_id'])
             
         return Response({"success": False, "message": "Invalid action."}, status=400)

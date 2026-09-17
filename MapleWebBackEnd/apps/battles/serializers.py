@@ -20,13 +20,15 @@ class CombatantSerializer(serializers.ModelSerializer):
     active_effects = ActiveEffectSerializer(many=True, read_only=True)
     max_hp = serializers.SerializerMethodField()
     max_mp = serializers.SerializerMethodField()
+    skills = serializers.SerializerMethodField()
     
     class Meta:
         model = Combatant
         fields = [
             'id', 'entity_id', 'entity_type', 'name', 'visual_key', 'is_player',
             'is_current_actor', 'valid_actions', 'current_hp', 'current_mp',
-            'max_hp', 'max_mp', 'position', 'skill_cooldowns', 'active_effects'
+            'max_hp', 'max_mp', 'position', 'skill_cooldowns', 'active_effects',
+            'skills',
         ]
     
     def get_name(self, obj):
@@ -54,7 +56,56 @@ class CombatantSerializer(serializers.ModelSerializer):
         )
 
     def get_valid_actions(self, obj):
-        return ['ATTACK'] if self.get_is_current_actor(obj) else []
+        if not self.get_is_current_actor(obj):
+            return []
+        actions = ['ATTACK']
+        if any(skill['can_use'] and not skill['is_basic_attack'] for skill in self.get_skills(obj)):
+            actions.append('SKILL')
+        return actions
+
+    def get_skills(self, obj):
+        if not obj.is_player:
+            return []
+        if hasattr(obj, '_serialized_player_skills'):
+            return obj._serialized_player_skills
+
+        owned_skills = obj.entity.skills.filter(
+            skill_template__availability__in=['PLAYER', 'BOTH']
+        ).select_related('skill_template').prefetch_related('skill_template__level_configs')
+        is_current_actor = self.get_is_current_actor(obj)
+        result = []
+        for owned in owned_skills:
+            template = owned.skill_template
+            cooldown_remaining = obj.skill_cooldowns.get(str(template.id), 0)
+            level_config = next(
+                (
+                    config for config in template.level_configs.all()
+                    if config.skill_level == owned.level
+                ),
+                None,
+            )
+            result.append({
+                'character_skill_id': owned.id,
+                'skill_template_id': template.id,
+                'name': template.name,
+                'level': owned.level,
+                'icon_key': template.icon_key,
+                'visual_key': template.visual_key,
+                'target_type': template.target_type,
+                'effect_type': template.effect_type,
+                'is_basic_attack': template.is_basic_attack,
+                'mp_cost': template.mp_cost,
+                'cooldown': template.cooldown,
+                'cooldown_remaining': cooldown_remaining,
+                'damage_multiplier': level_config.damage_multiplier if level_config else 1.0,
+                'can_use': (
+                    is_current_actor
+                    and obj.current_mp >= template.mp_cost
+                    and cooldown_remaining <= 0
+                ),
+            })
+        obj._serialized_player_skills = result
+        return result
     
     def get_max_hp(self, obj):
         entity = obj.entity
@@ -113,13 +164,50 @@ class StartBattleSerializer(serializers.Serializer):
 class PlayerActionSerializer(serializers.Serializer):
     """Serializer for player combat actions."""
     action_type = serializers.ChoiceField(choices=['ATTACK', 'SKILL'], help_text="Type of action")
-    target_id = serializers.IntegerField(required=False, help_text="Stable Combatant ID of the target")
-    target_position = serializers.IntegerField(required=False, help_text="Legacy target position")
-    skill_id = serializers.IntegerField(required=False, help_text="ID of the skill to use (required for SKILL action)")
+    target_id = serializers.IntegerField(
+        required=False,
+        help_text=(
+            "Stable Combatant ID. Required for ATTACK and single-target skills; "
+            "optional for SELF, E_AREA, A_AREA and GLOBAL skills."
+        ),
+    )
+    target_position = serializers.IntegerField(
+        required=False,
+        help_text="Legacy target position; follows the same rules as target_id.",
+    )
+    character_skill_id = serializers.IntegerField(
+        required=False,
+        help_text='Owned CharacterSkill ID to use for a SKILL action.',
+    )
+    skill_id = serializers.IntegerField(
+        required=False,
+        help_text='Deprecated alias for character_skill_id.',
+    )
 
     def validate(self, attrs):
-        if attrs.get('target_id') is None and attrs.get('target_position') is None:
+        if (
+            attrs.get('action_type') == 'ATTACK'
+            and attrs.get('target_id') is None
+            and attrs.get('target_position') is None
+        ):
             raise serializers.ValidationError({
                 'target_id': 'target_id or target_position is required.'
             })
+        if attrs.get('action_type') == 'SKILL':
+            character_skill_id = attrs.get('character_skill_id')
+            legacy_skill_id = attrs.get('skill_id')
+            if (
+                character_skill_id is not None
+                and legacy_skill_id is not None
+                and character_skill_id != legacy_skill_id
+            ):
+                raise serializers.ValidationError({
+                    'character_skill_id': 'character_skill_id and skill_id must match.'
+                })
+            resolved_id = character_skill_id or legacy_skill_id
+            if resolved_id is None:
+                raise serializers.ValidationError({
+                    'character_skill_id': 'This field is required for SKILL actions.'
+                })
+            attrs['character_skill_id'] = resolved_id
         return attrs

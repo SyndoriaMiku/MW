@@ -18,13 +18,13 @@ class EffectTemplateAdmin(admin.ModelAdmin):
     """
     # Các trường hiển thị trên trang danh sách
     list_display = ('name', 'duration_turns', 'stacking_rule', 'dispellable')
-    
+
     # Bộ lọc ở cạnh phải
     list_filter = ('stacking_rule', 'dispellable')
-    
+
     # Quan trọng: search_fields để autocomplete ở các app khác hoạt động
     search_fields = ('name', 'description')
-    
+
     # Giao diện thân thiện cho việc chọn special_effects
     filter_horizontal = ('special_effects',)
 
@@ -51,7 +51,10 @@ class EffectTemplateAdmin(admin.ModelAdmin):
         }),
         ('Per-Turn Effects (Hiệu ứng mỗi lượt)', {
             'classes': ('collapse',),
-            'fields': ('hp_change_per_turn', 'mp_change_per_turn')
+            'fields': (
+                'hp_change_per_turn', 'mp_change_per_turn',
+                'damage_power_ratio_per_turn',
+            )
         }),
         ('Rate Modifiers', {
             'classes': ('collapse',),
@@ -88,8 +91,8 @@ class SkillTemplateAdmin(admin.ModelAdmin):
     """
     Giao diện quản lý chính cho các Mẫu Kỹ năng.
     """
-    list_display = ('name', 'job', 'effect_type', 'required_level', 'mp_cost', 'cooldown')
-    list_filter = ('job', 'effect_type', 'target_type')
+    list_display = ('name', 'availability', 'job', 'effect_type', 'required_level', 'mp_cost', 'cooldown')
+    list_filter = ('availability', 'job', 'effect_type', 'target_type')
     search_fields = ('name', 'description')
     autocomplete_fields = ['job', 'applies_effect']
     readonly_fields = ('id',)
@@ -97,7 +100,10 @@ class SkillTemplateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Core Information', {
-            'fields': ('id', 'name', 'description', 'is_basic_attack')
+            'fields': (
+                'id', 'name', 'description', 'availability', 'is_basic_attack',
+                ('icon_key', 'visual_key'),
+            )
         }),
         ('Requirements', {
             'fields': ('job', 'required_level')
@@ -110,4 +116,4 @@ class SkillTemplateAdmin(admin.ModelAdmin):
                 'applies_effect'
             )
         }),
-    )
+    )
