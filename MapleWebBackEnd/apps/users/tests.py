@@ -1,6 +1,12 @@
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
 
+from apps.battles.services import BattleService
 from apps.characters.models import Character
+from apps.party.models import Party, PartyMember
+from apps.world.models import EnemyTemplate
 
 from .models import GameUser
 
@@ -17,3 +23,49 @@ class CharacterDeletionTests(TestCase):
 
         user.refresh_from_db()
         self.assertIsNone(user.character)
+
+
+class SessionBootstrapTests(APITestCase):
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='bootstrap', email='bootstrap@example.com', password='test-pass-123'
+        )
+        self.url = reverse('session-bootstrap')
+
+    def test_bootstrap_endpoint_is_routed(self):
+        self.assertEqual(self.url, '/api/session/bootstrap/')
+
+    def test_requires_authentication(self):
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_user_without_character(self):
+        self.client.force_authenticate(self.user)
+
+        data = self.client.get(self.url).data
+
+        self.assertEqual(data['profile']['username'], 'bootstrap')
+        self.assertIsNone(data['character'])
+        self.assertIsNone(data['party'])
+        self.assertIsNone(data['active_battle'])
+        self.assertTrue(data['feature_flags']['action_idempotency'])
+
+    def test_character_in_party_and_active_battle(self):
+        character = Character.objects.create(name='Bootstrapper')
+        self.user.character = character
+        self.user.save(update_fields=['character'])
+        party = Party.objects.create(name='Boot Party', leader=character, max_size=1)
+        PartyMember.objects.create(party=party, character=character, position=1)
+        enemy = EnemyTemplate.objects.create(
+            name='Boot Slime', level=1, base_hp=10, base_mp=0, base_att=1,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        combat = BattleService.create_combat_instance(party, [enemy])
+        BattleService.start_combat(combat)
+        self.client.force_authenticate(self.user)
+
+        data = self.client.get(self.url).data
+
+        self.assertEqual(data['character']['id'], character.id)
+        self.assertEqual(data['party']['id'], party.id)
+        self.assertEqual(data['active_battle']['id'], combat.id)
+        self.assertEqual(data['active_battle']['version'], 0)
