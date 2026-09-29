@@ -1,10 +1,10 @@
 from rest_framework import serializers
 from .models import Listing, Trade, TradeItem, Transaction
 from apps.inventory.serializers import InventoryItemSerializer
-from apps.users.serializers import UserProfileSerializer
+from apps.users.serializers import PublicUserSerializer
 
 class ListingSerializer(serializers.ModelSerializer):
-    seller = UserProfileSerializer(read_only=True)
+    seller = PublicUserSerializer(read_only=True)
     item_details = InventoryItemSerializer(source='item', read_only=True)
 
     class Meta:
@@ -23,8 +23,8 @@ class TradeItemSerializer(serializers.ModelSerializer):
 
 
 class TradeSerializer(serializers.ModelSerializer):
-    sender = UserProfileSerializer(read_only=True)
-    receiver = UserProfileSerializer(read_only=True)
+    sender = PublicUserSerializer(read_only=True)
+    receiver = PublicUserSerializer(read_only=True)
     items = TradeItemSerializer(many=True, read_only=True)
     receiver_id = serializers.IntegerField(write_only=True, required=False)
 

@@ -187,3 +187,36 @@ class TradeLifecycleTests(APITestCase):
         self.assertEqual(other_party.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(while_ready.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(trade.items.filter(item=self.sword).exists())
+
+
+class MarketPrivacyTests(APITestCase):
+    def create_player(self, name):
+        character = Character.objects.create(name=name)
+        user = GameUser.objects.create_user(
+            username=name, email=f'{name}@example.com', password='test-pass-123'
+        )
+        user.character = character
+        user.lumis = 777
+        user.save(update_fields=['character', 'lumis'])
+        return user, character
+
+    def assert_public_only(self, data):
+        self.assertEqual(set(data), {'id', 'username', 'character_id'})
+
+    def test_listing_and_trade_do_not_expose_private_account_data(self):
+        seller, seller_character = self.create_player('private-seller')
+        viewer, _ = self.create_player('private-viewer')
+        item = InventoryItem.objects.create(
+            owner=seller_character,
+            template=ItemTemplate.objects.create(name='Private Hat', item_type='hat'),
+        )
+        Listing.objects.create(seller=seller, item=item, price=10)
+        trade = Trade.objects.create(sender=seller, receiver=viewer)
+        self.client.force_authenticate(viewer)
+
+        listing = self.client.get(reverse('listing-list')).data['results'][0]
+        trade_data = self.client.get(reverse('trade-detail', args=[trade.pk])).data
+
+        self.assert_public_only(listing['seller'])
+        self.assert_public_only(trade_data['sender'])
+        self.assert_public_only(trade_data['receiver'])

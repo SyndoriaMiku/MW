@@ -20,6 +20,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class PublicUserSerializer(serializers.ModelSerializer):
+    """What other players may see about an account: no email or balances."""
+    character_id = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+        source='character'
+    )
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'character_id')
+        read_only_fields = fields
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     character_id = serializers.PrimaryKeyRelatedField(
         read_only=True, 
