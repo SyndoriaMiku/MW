@@ -10,12 +10,14 @@ Django==5.2.6
 django-cors-headers==4.9.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
+drf-yasg==1.21.15
 filelock==3.19.1
 future==1.0.0
 gevent==25.9.1
 greenlet==3.2.4
 idna==3.10
 mysqlclient==2.2.7
+pillow==12.2.0
 pycparser==2.23
 PyJWT==2.10.1
 PySocks==1.7.1

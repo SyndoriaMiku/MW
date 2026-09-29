@@ -98,14 +98,15 @@ WSGI_APPLICATION = 'MapleWebBackEnd.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+# Connection credentials are optional so a SQLite dev setup only needs ENGINE/NAME.
 DATABASES = {
     'default': {
-        'ENGINE': config('DATABASE_ENGINE'),
-        'NAME': config('DATABASE_NAME'),
-        'USER': config('DATABASE_USER'),
-        'PASSWORD': config('DATABASE_PASSWORD'),
-        'HOST': config('DATABASE_HOST'),
-        'PORT': config('DATABASE_PORT'),
+        'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
+        'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+        'USER': config('DATABASE_USER', default=''),
+        'PASSWORD': config('DATABASE_PASSWORD', default=''),
+        'HOST': config('DATABASE_HOST', default=''),
+        'PORT': config('DATABASE_PORT', default=''),
     }
 }
 
