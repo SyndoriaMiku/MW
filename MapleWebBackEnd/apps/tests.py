@@ -3,7 +3,13 @@ import inspect
 
 from django.apps import apps as django_apps
 from django.test import SimpleTestCase
+from django.urls import reverse
 from rest_framework import serializers
+from rest_framework.test import APITestCase
+
+from apps.api_errors import build_error_envelope
+from apps.characters.models import Character
+from apps.users.models import GameUser
 
 
 class ExplicitSerializerFieldTests(SimpleTestCase):
@@ -26,3 +32,73 @@ class ExplicitSerializerFieldTests(SimpleTestCase):
                     offenders.append(f'{module.__name__}.{name}')
 
         self.assertEqual(offenders, [])
+
+
+class ErrorEnvelopeTests(APITestCase):
+    """Every 4xx/5xx body carries code/message/fields and keeps its legacy keys."""
+
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='envelope', email='envelope@example.com', password='test-pass-123'
+        )
+        self.user.character = Character.objects.create(name='Envelope')
+        self.user.save(update_fields=['character'])
+
+    def test_authentication_error(self):
+        body = self.client.get('/api/market/').json()
+
+        self.assertEqual(body['code'], 'not_authenticated')
+        self.assertEqual(body['message'], body['detail'])
+        self.assertEqual(body['fields'], {})
+
+    def test_manual_detail_response(self):
+        self.client.force_authenticate(self.user)
+
+        body = self.client.get('/api/battles/nope1234/').json()
+
+        self.assertEqual(body['code'], 'not_found')
+        self.assertEqual(body['message'], 'Battle not found.')
+        self.assertEqual(body['detail'], 'Battle not found.')
+
+    def test_field_validation_errors(self):
+        response = self.client.post(
+            reverse('register'),
+            {'username': 'envelope2', 'email': 'e2@example.com', 'password': '1'},
+            format='json',
+        )
+        body = response.json()
+
+        self.assertEqual(body['code'], 'validation_error')
+        self.assertIn('password', body['fields'])
+        self.assertEqual(body['message'], body['fields']['password'][0])
+        self.assertEqual(body['password'], body['fields']['password'])
+
+    def test_existing_code_and_message_keys_are_kept(self):
+        self.client.force_authenticate(self.user)
+
+        body = self.client.post(
+            reverse('lumen-api', args=['ascend']), {'inventory_item_id': 999999}, format='json'
+        ).json()
+
+        self.assertEqual(body['code'], 'bad_request')
+        self.assertEqual(body['message'], 'Item not found or not owned.')
+        self.assertFalse(body['success'])
+
+    def test_list_validation_error_becomes_non_field_errors(self):
+        body = build_error_envelope(['This item cannot be traded.'], 400)
+
+        self.assertEqual(body['code'], 'validation_error')
+        self.assertEqual(body['message'], 'This item cannot be traded.')
+        self.assertEqual(body['non_field_errors'], ['This item cannot be traded.'])
+
+    def test_explicit_code_wins(self):
+        body = build_error_envelope({'detail': 'Not enough.', 'code': 'insufficient_materials'}, 400)
+
+        self.assertEqual(body['code'], 'insufficient_materials')
+
+    def test_success_bodies_are_untouched(self):
+        self.client.force_authenticate(self.user)
+
+        body = self.client.get(reverse('session-bootstrap')).json()
+
+        self.assertNotIn('code', body)
