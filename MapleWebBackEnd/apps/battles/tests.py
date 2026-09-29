@@ -1,4 +1,5 @@
 import uuid
+from unittest import mock
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -289,6 +290,29 @@ class NormalAttackSceneContractTests(APITestCase):
         response = self.act(combat, target, client_action_id='not-a-uuid')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_drop_rate_bonus_only_boosts_common_loot(self):
+        combat = self.create_battle(enemy_hp=1)
+        target = combat.combatants.get(is_player=False)
+        templates = {}
+        for drop_type in ('common', 'epic', 'legendary'):
+            templates[drop_type] = ItemTemplate.objects.create(
+                name=f'{drop_type} drop', item_type='etc'
+            )
+            LootTable.objects.create(
+                enemy=target.entity, item_template=templates[drop_type],
+                base_drop_rate=0.5, drop_type=drop_type,
+            )
+
+        # A roll of 0.6 only succeeds when the 0.5 base rate is doubled.
+        with mock.patch('apps.battles.reward_service.random.random', return_value=0.6), \
+                mock.patch.object(Character, 'total_drop_rate', new_callable=mock.PropertyMock, return_value=2.0):
+            self.act(combat, target)
+
+        owned = set(
+            InventoryItem.objects.filter(owner=self.character).values_list('template__name', flat=True)
+        )
+        self.assertEqual(owned, {'common drop'})
 
     def test_victory_loot_merges_when_character_owns_several_stacks(self):
         combat = self.create_battle(enemy_hp=1)

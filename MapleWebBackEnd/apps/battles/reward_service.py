@@ -9,6 +9,19 @@ from apps.battles.services import _prefetch_entities
 class RewardService:
 
     @staticmethod
+    def effective_drop_rate(loot, drop_rate_multiplier):
+        """
+        Chance for one loot roll. Only COMMON drops scale with the player's
+        drop rate. EPIC drops may only be boosted by dedicated consumables and
+        events, none of which exist yet, and LEGENDARY drops never scale.
+        """
+        from apps.world.models import LootTable
+
+        if loot.drop_type == LootTable.DropType.COMMON:
+            return loot.base_drop_rate * drop_rate_multiplier
+        return loot.base_drop_rate
+
+    @staticmethod
     @transaction.atomic
     def process_battle_rewards(combat_instance: CombatInstance) -> dict:
         """
@@ -73,7 +86,7 @@ class RewardService:
             for loot in enemy.loot_tables.all():
                 if loot.is_party_shared:
                     # Party Shared Loot
-                    if random.random() <= (loot.base_drop_rate * highest_party_drop_rate):
+                    if random.random() <= RewardService.effective_drop_rate(loot, highest_party_drop_rate):
                         qty = random.randint(loot.min_quantity, loot.max_quantity)
                         if party:
                             # Add to Pending Party Loot
@@ -89,7 +102,7 @@ class RewardService:
                 else:
                     # Personal Loot
                     for player in alive_players:
-                        if random.random() <= (loot.base_drop_rate * player.total_drop_rate):
+                        if random.random() <= RewardService.effective_drop_rate(loot, player.total_drop_rate):
                             qty = random.randint(loot.min_quantity, loot.max_quantity)
                             if qty > 0:
                                 grant_item(player, loot.item_template, qty)
