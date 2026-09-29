@@ -7,7 +7,7 @@ from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 
-from .models import SpecialShopItem, SpecialShopItemRecipe
+from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe
 
 
 class SpecialShopAtomicityTests(APITestCase):
@@ -70,3 +70,35 @@ class SpecialShopAtomicityTests(APITestCase):
         )
         reward_stack = InventoryItem.objects.get(owner=self.character, template=self.reward)
         self.assertEqual(reward_stack.quantity, 1)
+
+
+class ShopPurchaseStackTests(APITestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='StackShopper')
+        self.user = GameUser.objects.create_user(
+            username='stack-shopper', email='stack-shopper@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.lumis = 100
+        self.user.save(update_fields=['character', 'lumis'])
+        self.client.force_authenticate(self.user)
+
+        self.potion = ItemTemplate.objects.create(name='Shop Potion', item_type='use')
+        category = ShopCategory.objects.create(name='Potions')
+        self.shop_item = ShopItem.objects.create(
+            category=category, item_template=self.potion, price=5
+        )
+
+    def test_buying_when_character_owns_several_stacks_succeeds(self):
+        oldest = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=3)
+        InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=2)
+
+        response = self.client.post(
+            reverse('shop-item-buy', args=[self.shop_item.id]), {'quantity': 4}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        oldest.refresh_from_db()
+        self.assertEqual(oldest.quantity, 7)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 80)

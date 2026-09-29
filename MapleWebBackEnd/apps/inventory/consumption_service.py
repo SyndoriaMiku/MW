@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.db import transaction
 
 from .models import InventoryItem
+from .reservations import exclude_reserved
 
 
 class MaterialConsumptionError(ValueError):
@@ -62,26 +63,14 @@ def consume_materials(character, requirements):
     """
     required_by_template = normalize_material_requirements(requirements)
 
-    # Use subqueries rather than nullable reverse joins. This keeps the locked
-    # InventoryItem query portable across databases with stricter FOR UPDATE
-    # rules and makes each reservation source explicit.
-    from apps.characters.models import EquippedItem
-    from apps.market.models import Listing, TradeItem
-
-    equipped_item_ids = EquippedItem.objects.values('item_id')
-    listed_item_ids = Listing.objects.filter(is_active=True).values('item_id')
-    traded_item_ids = TradeItem.objects.filter(trade__status='pending').values('item_id')
-
     available_items = list(
-        InventoryItem.objects.select_for_update()
-        .filter(
-            owner=character,
-            template_id__in=required_by_template,
-            is_destroyed=False,
+        exclude_reserved(
+            InventoryItem.objects.select_for_update().filter(
+                owner=character,
+                template_id__in=required_by_template,
+                is_destroyed=False,
+            )
         )
-        .exclude(pk__in=equipped_item_ids)
-        .exclude(pk__in=listed_item_ids)
-        .exclude(pk__in=traded_item_ids)
         .order_by('template_id', 'quantity', 'id')
     )
 

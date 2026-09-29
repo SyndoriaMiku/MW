@@ -2,7 +2,7 @@ import random
 from django.db import transaction
 from django.db.models import F
 from apps.battles.models import CombatInstance
-from apps.inventory.models import InventoryItem
+from apps.inventory.grant_service import grant_item
 from apps.party.models import PendingPartyLoot
 from apps.battles.services import _prefetch_entities
 
@@ -91,29 +91,9 @@ class RewardService:
                     for player in alive_players:
                         if random.random() <= (loot.base_drop_rate * player.total_drop_rate):
                             qty = random.randint(loot.min_quantity, loot.max_quantity)
-                            
-                            # Give item to player (C3 fix: use is_stackable instead of 'equipment')
-                            if not loot.item_template.is_stackable:
-                                # Create separate entries for equipments
-                                for _ in range(qty):
-                                    InventoryItem.objects.create(
-                                        template=loot.item_template,
-                                        owner=player,
-                                        quantity=1
-                                    )
-                            else:
-                                # Stackable items (RC-2 fix: atomic F() increment)
-                                inventory_item, created = InventoryItem.objects.get_or_create(
-                                    template=loot.item_template,
-                                    owner=player,
-                                    is_destroyed=False,
-                                    defaults={'quantity': qty}
-                                )
-                                if not created:
-                                    InventoryItem.objects.filter(pk=inventory_item.pk).update(
-                                        quantity=F('quantity') + qty
-                                    )
-                            
+                            if qty > 0:
+                                grant_item(player, loot.item_template, qty)
+
                             # Trigger Quest Progress for item collection
                             QuestService.update_progress(player, 'COLLECT_ITEM', item_id=loot.item_template.id, count=qty)
                             

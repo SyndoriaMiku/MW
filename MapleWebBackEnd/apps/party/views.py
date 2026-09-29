@@ -3,7 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
 
 from .models import Party, PartyMember, PartyInvitation, PendingPartyLoot
@@ -11,7 +10,7 @@ from .serializers import (
     PartySerializer, PartyInvitationSerializer, PendingPartyLootSerializer
 )
 from apps.characters.models import Character
-from apps.inventory.models import InventoryItem
+from apps.inventory.grant_service import grant_item
 
 
 # ---------------------------------------------------------------------------
@@ -515,21 +514,8 @@ class PartyViewSet(viewsets.GenericViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            template = loot.item_template
-            if not template.is_stackable:
-                for _ in range(loot.quantity):
-                    InventoryItem.objects.create(template=template, owner=target_char, quantity=1)
-            else:
-                inv_item, created = InventoryItem.objects.get_or_create(
-                    template=template,
-                    owner=target_char,
-                    is_destroyed=False,
-                    defaults={'quantity': loot.quantity}
-                )
-                if not created:
-                    InventoryItem.objects.filter(pk=inv_item.pk).update(
-                        quantity=F('quantity') + loot.quantity
-                    )
+            if loot.quantity > 0:
+                grant_item(target_char, loot.item_template, loot.quantity)
             loot.delete()
 
         return Response({"detail": f"Loot distributed to {target_char.name}."})

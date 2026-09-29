@@ -3,7 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
 
 from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
@@ -13,7 +12,7 @@ from .serializers import (
     SpecialShopItemSerializer,
     SpecialShopExchangeSerializer,
 )
-from apps.inventory.models import InventoryItem
+from apps.inventory.grant_service import grant_item
 
 class ShopCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -111,26 +110,7 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
                 user_profile.nova -= total_price
                 user_profile.save(update_fields=['nova'])
 
-            # Give Item
-            if not shop_item.item_template.is_stackable:
-                for _ in range(quantity):
-                    InventoryItem.objects.create(
-                        template=shop_item.item_template,
-                        owner=character,
-                        quantity=1
-                    )
-            else:
-                # (B-4 fix) Atomic F() increment prevents quantity race condition
-                inv_item, created = InventoryItem.objects.get_or_create(
-                    template=shop_item.item_template,
-                    owner=character,
-                    is_destroyed=False,
-                    defaults={'quantity': quantity}
-                )
-                if not created:
-                    InventoryItem.objects.filter(pk=inv_item.pk).update(
-                        quantity=F('quantity') + quantity
-                    )
+            grant_item(character, shop_item.item_template, quantity)
 
         return Response({"detail": f"Successfully purchased {quantity}x {shop_item.item_template.name}."})
 
@@ -180,24 +160,7 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
                 consume_materials(character, requirements)
 
                 # Give the target item only after every material is secured.
-                if not special_item.item.is_stackable:
-                    for _ in range(quantity):
-                        InventoryItem.objects.create(
-                            template=special_item.item,
-                            owner=character,
-                            quantity=1
-                        )
-                else:
-                    new_item, created = InventoryItem.objects.get_or_create(
-                        template=special_item.item,
-                        owner=character,
-                        is_destroyed=False,
-                        defaults={'quantity': quantity}
-                    )
-                    if not created:
-                        InventoryItem.objects.filter(pk=new_item.pk).update(
-                            quantity=F('quantity') + quantity
-                        )
+                grant_item(character, special_item.item, quantity)
         except MaterialConsumptionError as exc:
             return Response(
                 {"detail": exc.message, "code": exc.code},

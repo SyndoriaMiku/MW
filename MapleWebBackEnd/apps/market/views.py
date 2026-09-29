@@ -7,6 +7,7 @@ from django.db import transaction
 
 from .models import Listing, Trade, TradeItem, Transaction as MarketTransaction
 from .serializers import ListingSerializer, TradeSerializer
+from apps.inventory.grant_service import grant_item
 from apps.inventory.models import InventoryItem
 from apps.users.models import GameUser
 
@@ -194,12 +195,21 @@ class ListingViewSet(viewsets.ModelViewSet):
             if item.template.is_stackable and listing.quantity < item.quantity:
                 item.quantity -= listing.quantity
                 item.save(update_fields=['quantity'])
-                InventoryItem.objects.create(
-                    template=item.template,
-                    owner=buyer_character,
-                    quantity=listing.quantity,
-                    is_untrade=becomes_untradeable,
-                )
+                if item.expired_at is None:
+                    grant_item(
+                        buyer_character, item.template, listing.quantity,
+                        is_untrade=becomes_untradeable,
+                    )
+                else:
+                    # Keep the expiry: never merge an expiring split into a
+                    # permanent stack.
+                    InventoryItem.objects.create(
+                        template=item.template,
+                        owner=buyer_character,
+                        quantity=listing.quantity,
+                        is_untrade=becomes_untradeable,
+                        expired_at=item.expired_at,
+                    )
             else:
                 item.owner = buyer_character
                 if becomes_untradeable:

@@ -194,31 +194,12 @@ class QuestService:
             rewards_log["lumis"] = template.lumis_reward
 
         # Grant Item Rewards
-        from apps.inventory.models import InventoryItem
+        from apps.inventory.grant_service import grant_item
         for reward in template.rewards.select_related('item_template').all():
             item_template = reward.item_template
             qty = reward.quantity
-
-            if not item_template.is_stackable:
-                # Equipment: create individual items
-                for _ in range(qty):
-                    InventoryItem.objects.create(
-                        template=item_template,
-                        owner=character,
-                        quantity=1
-                    )
-            else:
-                # Stackable items (RC-2 fix: atomic F() increment)
-                inv_item, created = InventoryItem.objects.get_or_create(
-                    template=item_template,
-                    owner=character,
-                    is_destroyed=False,
-                    defaults={'quantity': qty}
-                )
-                if not created:
-                    InventoryItem.objects.filter(pk=inv_item.pk).update(
-                        quantity=F('quantity') + qty
-                    )
+            if qty > 0:
+                grant_item(character, item_template, qty)
 
             rewards_log["items"].append({
                 "name": item_template.name,

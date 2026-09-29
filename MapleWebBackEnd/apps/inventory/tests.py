@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.admin.sites import AdminSite
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -15,6 +18,7 @@ from apps.party.models import Party
 from apps.users.models import GameUser
 
 from .consumption_service import MaterialConsumptionError, consume_materials
+from .grant_service import grant_item
 from .admin import InventoryItemAdmin
 from .models import InventoryItem
 from .serializers import InventoryItemSerializer
@@ -264,3 +268,91 @@ class MaterialConsumptionTests(TestCase):
             ])
         traded_item.refresh_from_db()
         self.assertEqual(traded_item.quantity, 5)
+
+
+class GrantItemTests(TestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='GrantTester')
+        self.user = GameUser.objects.create_user(
+            username='grant-user', email='grant@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.potion = ItemTemplate.objects.create(name='Grant Potion', item_type='use')
+
+    def stacks(self):
+        return list(
+            InventoryItem.objects.filter(owner=self.character, template=self.potion)
+            .order_by('id').values_list('quantity', flat=True)
+        )
+
+    def test_equipment_gets_one_row_per_copy(self):
+        sword = ItemTemplate.objects.create(name='Grant Sword', item_type='weapon')
+
+        granted = grant_item(self.character, sword, 3)
+
+        self.assertEqual(len(granted), 3)
+        self.assertEqual(
+            list(InventoryItem.objects.filter(template=sword).values_list('quantity', flat=True)),
+            [1, 1, 1],
+        )
+
+    def test_stackable_creates_a_stack_then_merges_into_it(self):
+        grant_item(self.character, self.potion, 2)
+        grant_item(self.character, self.potion, 5)
+
+        self.assertEqual(self.stacks(), [7])
+
+    def test_several_existing_stacks_merge_into_the_oldest(self):
+        InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=3)
+        InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=4)
+
+        grant_item(self.character, self.potion, 2)
+
+        self.assertEqual(self.stacks(), [5, 4])
+
+    def test_reserved_or_unusable_stacks_are_never_merged_into(self):
+        receiver = GameUser.objects.create_user(
+            username='grant-receiver', email='grant-receiver@example.com', password='test-pass-123'
+        )
+        listed = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=1)
+        Listing.objects.create(seller=self.user, item=listed, price=10, quantity=1)
+        traded = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=1)
+        trade = Trade.objects.create(sender=self.user, receiver=receiver)
+        TradeItem.objects.create(trade=trade, item=traded, is_sender=True)
+        InventoryItem.objects.create(
+            owner=self.character, template=self.potion, quantity=1, is_untrade=True
+        )
+        InventoryItem.objects.create(
+            owner=self.character, template=self.potion, quantity=1,
+            expired_at=timezone.now() + timedelta(days=1),
+        )
+        InventoryItem.objects.create(
+            owner=self.character, template=self.potion, quantity=1, is_destroyed=True
+        )
+
+        granted = grant_item(self.character, self.potion, 4)
+
+        self.assertEqual(self.stacks(), [1, 1, 1, 1, 1, 4])
+        self.assertEqual(granted[0].quantity, 4)
+
+    def test_untradeable_grant_only_merges_into_untradeable_stack(self):
+        tradeable = InventoryItem.objects.create(
+            owner=self.character, template=self.potion, quantity=2
+        )
+        bound = InventoryItem.objects.create(
+            owner=self.character, template=self.potion, quantity=2, is_untrade=True
+        )
+
+        grant_item(self.character, self.potion, 3, is_untrade=True)
+
+        tradeable.refresh_from_db()
+        bound.refresh_from_db()
+        self.assertEqual((tradeable.quantity, bound.quantity), (2, 5))
+
+    def test_rejects_non_positive_quantity(self):
+        for quantity in (0, -1, True):
+            with self.subTest(quantity=quantity):
+                with self.assertRaises(ValueError):
+                    grant_item(self.character, self.potion, quantity)
+        self.assertEqual(self.stacks(), [])

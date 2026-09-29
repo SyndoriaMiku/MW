@@ -6,9 +6,11 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.characters.models import Character, CharacterSkill
+from apps.inventory.models import InventoryItem
+from apps.items.models import ItemTemplate
 from apps.party.models import Party, PartyMember
 from apps.users.models import GameUser
-from apps.world.models import EnemyTemplate, NormalDungeonTemplate, NormalStageEnemy
+from apps.world.models import EnemyTemplate, LootTable, NormalDungeonTemplate, NormalStageEnemy
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate
 
 from .models import ActiveEffect, CombatInstance
@@ -205,6 +207,31 @@ class NormalAttackSceneContractTests(APITestCase):
         self.assertEqual(response.data['combat']['status'], 'victory')
         self.assertEqual(response.data['events'][0]['battle_result']['status'], 'victory')
         self.assertIsNotNone(response.data['events'][0]['battle_result']['rewards'])
+
+    def test_victory_loot_merges_when_character_owns_several_stacks(self):
+        combat = self.create_battle(enemy_hp=1)
+        target = combat.combatants.get(is_player=False)
+        potion = ItemTemplate.objects.create(name='Loot Potion', item_type='use')
+        LootTable.objects.create(
+            enemy=target.entity, item_template=potion,
+            base_drop_rate=1, min_quantity=2, max_quantity=2,
+        )
+        oldest = InventoryItem.objects.create(owner=self.character, template=potion, quantity=3)
+        InventoryItem.objects.create(owner=self.character, template=potion, quantity=4)
+
+        response = self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'ATTACK', 'target_id': target.id},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['combat']['status'], 'victory')
+        oldest.refresh_from_db()
+        self.assertEqual(oldest.quantity, 5)
+        self.assertEqual(
+            InventoryItem.objects.filter(owner=self.character, template=potion).count(), 2
+        )
 
     def test_owned_skill_is_discoverable_and_cast_by_character_skill_id(self):
         skill = SkillTemplate.objects.create(
