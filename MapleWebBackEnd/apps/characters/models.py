@@ -241,13 +241,17 @@ class Character(models.Model):
             att_value=self.total_att,
         )
 
+    MIN_DAMAGE = 1
+
     def damage_from(self, *, str_value, agi_value, int_value, att_value):
         """
         Apply the damage formula to the given final stats. Combat passes
         buffed/debuffed stats here; total_damage passes the equipment totals.
+        A result that rounds below 1 is raised to MIN_DAMAGE, so a character
+        always deals some damage (starting stats alone give 10 x 5 / 100 = 0.5).
         """
         if not self.job or not self.character_class:
-            return round(att_value)
+            return max(self.MIN_DAMAGE, round(att_value))
 
         job = self.job
         main_stat = self.character_class.main_stat
@@ -270,7 +274,7 @@ class Character(models.Model):
         # Step 2: Character Damage (amplified by final damage)
         char_damage = base_damage * (1 + self.total_final_damage)
 
-        return round(char_damage)
+        return max(self.MIN_DAMAGE, round(char_damage))
         
 
 
