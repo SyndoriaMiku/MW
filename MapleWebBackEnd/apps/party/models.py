@@ -17,6 +17,9 @@ class Party(models.Model):
     leader = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='led_parties')
 
     max_size = models.PositiveIntegerField(default=4)
+    # Auto-created to run a normal dungeon alone. The player silently leaves it
+    # when creating or joining a real party; the row keeps the battle history.
+    is_solo = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

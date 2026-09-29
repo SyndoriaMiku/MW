@@ -65,7 +65,7 @@ class NormalDungeonViewSet(viewsets.ReadOnlyModelViewSet):
             ).select_related('party').first()
             if not party_member:
                 party = Party.objects.create(
-                    name=f"{character.name}'s Party", leader=character, max_size=1
+                    name=f"{character.name}'s Party", leader=character, max_size=1, is_solo=True
                 )
                 PartyMember.objects.create(party=party, character=character, position=1)
             else:

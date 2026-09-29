@@ -29,7 +29,7 @@ class PartySerializer(serializers.ModelSerializer):
         model = Party
         fields = [
             'id', 'name', 'leader_id', 'leader_name',
-            'max_size', 'member_count', 'members',
+            'max_size', 'is_solo', 'member_count', 'members',
             'pending_loot_count', 'created_at'
         ]
 

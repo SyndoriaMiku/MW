@@ -39,6 +39,21 @@ def _character_in_active_battle(character):
     return combatant.combat_instance if combatant else None
 
 
+def _leave_solo_party(character):
+    """
+    Drop the character's membership in an auto-created solo party so it can
+    create or join a real party. Returns False when the character is in a
+    real party or in an active battle and so may not switch parties.
+    """
+    membership = PartyMember.objects.filter(character=character).select_related('party').first()
+    if membership is None:
+        return True
+    if not membership.party.is_solo or _character_in_active_battle(character):
+        return False
+    membership.delete()
+    return True
+
+
 def _next_free_position(party):
     """Return the lowest unused position slot (1–4) in a party."""
     used = set(party.party_members.values_list('position', flat=True))
@@ -72,15 +87,15 @@ class PartyViewSet(viewsets.GenericViewSet):
         if not character:
             return Response({"detail": "User has no character."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Prevent joining two parties
-        if PartyMember.objects.filter(character=character).exists():
-            return Response({"detail": "You are already in a party. Leave first."}, status=status.HTTP_400_BAD_REQUEST)
-
         name = str(request.data.get('name') or '').strip()
         if not name:
             name = f"{character.name}'s Party"
 
         with transaction.atomic():
+            # Prevent joining two parties
+            if not _leave_solo_party(character):
+                return Response({"detail": "You are already in a party. Leave first."}, status=status.HTTP_400_BAD_REQUEST)
+
             party = Party.objects.create(
                 name=name,
                 leader=character,
@@ -300,8 +315,8 @@ class PartyViewSet(viewsets.GenericViewSet):
         except Character.DoesNotExist:
             return Response({"detail": "Character not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Target must not already be in a party
-        if PartyMember.objects.filter(character=target).exists():
+        # Target must not already be in a real party (a solo one is left on accept)
+        if PartyMember.objects.filter(character=target, party__is_solo=False).exists():
             return Response({"detail": f"{target.name} is already in a party."}, status=status.HTTP_400_BAD_REQUEST)
 
         # No active (pending + not expired) invitation from this party
@@ -380,7 +395,7 @@ class PartyViewSet(viewsets.GenericViewSet):
             party = Party.objects.select_for_update().get(pk=invitation.party_id)
 
             # Re-check: character might have joined another party between invite and accept
-            if PartyMember.objects.filter(character=character).exists():
+            if not _leave_solo_party(character):
                 return Response({"detail": "You are already in a party."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Re-check party not full
