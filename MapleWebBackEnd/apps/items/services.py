@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import F
 from apps.items.models import LumenCostRule, LumenEvent
 from apps.inventory.models import InventoryItem
+from apps.inventory.reservations import character_in_active_battle, mutation_block_reason
 
 class LumenService:
     @staticmethod
@@ -60,6 +61,9 @@ class LumenService:
 
         if item.is_destroyed:
             return {"success": False, "message": "Item is a fragment and must be restored first."}
+        blocked_reason = mutation_block_reason(item)
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
         if not item.template.lumen_tier:
             return {"success": False, "message": "Item cannot be upgraded."}
         if item.template.item_type in ['use', 'etc']:
@@ -155,6 +159,14 @@ class LumenService:
 
         if item.is_destroyed:
             return {"success": False, "message": "Item is a fragment and must be restored first."}
+
+        # A heavy failure unequips the item, and a listed or traded item must
+        # reach its buyer/partner exactly as offered.
+        if character_in_active_battle(getattr(user, 'character', None)):
+            return {"success": False, "message": "Cannot use Lumen Ascend during an active battle."}
+        blocked_reason = mutation_block_reason(item)
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
 
         if not item.template.lumen_tier:
             return {"success": False, "message": "Item cannot be upgraded."}
@@ -252,6 +264,11 @@ class LumenService:
 
             if sacrifice.is_destroyed:
                 return {"success": False, "message": "Cannot use a destroyed item as a sacrifice."}
+            if hasattr(sacrifice, 'equipped_in'):
+                return {"success": False, "message": "Equipped items cannot be used as a sacrifice."}
+            blocked_reason = mutation_block_reason(sacrifice, role='Sacrifice item')
+            if blocked_reason:
+                return {"success": False, "message": blocked_reason}
 
             if sacrifice.template != fragment.template:
                 return {"success": False, "message": "Sacrifice item must be the exact same type (same template)."}

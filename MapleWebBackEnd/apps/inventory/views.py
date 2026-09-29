@@ -2,24 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
 from .models import InventoryItem
+from .reservations import character_in_active_battle
 from apps.characters.models import EquippedItem, EquipmentSlotConfig, Character
 from .serializers import InventoryItemSerializer, EquippedItemSerializer
-
-
-def _character_in_active_battle(character):
-    """Return True if the character is currently in an in-progress combat."""
-    from apps.battles.models import Combatant
-    ct = ContentType.objects.get_for_model(character)
-    return Combatant.objects.filter(
-        content_type=ct,
-        objects_id=str(character.id),
-        combat_instance__status='in_progress'
-    ).exists()
 
 
 class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -80,7 +69,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
                 and not item.template.job_restriction.filter(pk=character.job_id).exists()
             ):
                 return Response({'error': 'Your job cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
-            if _character_in_active_battle(character):
+            if character_in_active_battle(character):
                 return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
             if Listing.objects.filter(item=item, is_active=True).exists():
                 return Response(
@@ -142,7 +131,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             except InventoryItem.DoesNotExist:
                 return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-            if _character_in_active_battle(character):
+            if character_in_active_battle(character):
                 return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
 
             equipped = EquippedItem.objects.select_for_update().filter(

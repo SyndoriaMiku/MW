@@ -1,41 +1,13 @@
 import random
 from django.db import transaction
 from django.db.models import F
-from django.utils import timezone
 from apps.items.models import (
     AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate, AuroraLineCountConfig
 )
 from apps.inventory.models import InventoryItem, AuroraLine, PendingAuroraRoll
+from apps.inventory.reservations import character_in_active_battle, mutation_block_reason
 
 class AuroraService:
-    @staticmethod
-    def _character_in_active_battle(character):
-        from django.contrib.contenttypes.models import ContentType
-        from apps.battles.models import Combatant
-
-        if character is None:
-            return False
-        content_type = ContentType.objects.get_for_model(character)
-        return Combatant.objects.filter(
-            content_type=content_type,
-            objects_id=str(character.pk),
-            combat_instance__status='in_progress',
-        ).exists()
-
-    @staticmethod
-    def _mutation_block_reason(item, *, role='Item'):
-        from apps.market.models import Listing, TradeItem
-
-        if item.is_destroyed:
-            return f"{role} is destroyed."
-        if item.expired_at and item.expired_at <= timezone.now():
-            return f"{role} is expired."
-        if Listing.objects.filter(item=item, is_active=True).exists():
-            return f"{role} is currently listed on the market."
-        if TradeItem.objects.filter(item=item, trade__status='pending').exists():
-            return f"{role} is currently in a pending trade."
-        return None
-
     @staticmethod
     def get_max_lines_for_item(item_template):
         """
@@ -131,9 +103,9 @@ class AuroraService:
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Item not found."}
 
-        if AuroraService._character_in_active_battle(getattr(user, 'character', None)):
+        if character_in_active_battle(getattr(user, 'character', None)):
             return {"success": False, "message": "Cannot modify Aurora during an active battle."}
-        blocked_reason = AuroraService._mutation_block_reason(item, role='Target item')
+        blocked_reason = mutation_block_reason(item, role='Target item')
         if blocked_reason:
             return {"success": False, "message": blocked_reason}
 
@@ -179,9 +151,9 @@ class AuroraService:
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Target item not found."}
 
-        if AuroraService._character_in_active_battle(getattr(user, 'character', None)):
+        if character_in_active_battle(getattr(user, 'character', None)):
             return {"success": False, "message": "Cannot use Essence during an active battle."}
-        blocked_reason = AuroraService._mutation_block_reason(target_item, role='Target item')
+        blocked_reason = mutation_block_reason(target_item, role='Target item')
         if blocked_reason:
             return {"success": False, "message": blocked_reason}
 
@@ -240,7 +212,7 @@ class AuroraService:
         except InventoryItem.DoesNotExist:
             return {"success": False, "message": "Modifier item not found."}
 
-        blocked_reason = AuroraService._mutation_block_reason(
+        blocked_reason = mutation_block_reason(
             modifier_item, role='Modifier item'
         )
         if blocked_reason:
@@ -414,9 +386,9 @@ class AuroraService:
         except (InventoryItem.DoesNotExist, PendingAuroraRoll.DoesNotExist):
             return {"success": False, "message": "No pending roll found."}
 
-        if AuroraService._character_in_active_battle(getattr(user, 'character', None)):
+        if character_in_active_battle(getattr(user, 'character', None)):
             return {"success": False, "message": "Cannot modify Aurora during an active battle."}
-        blocked_reason = AuroraService._mutation_block_reason(item, role='Target item')
+        blocked_reason = mutation_block_reason(item, role='Target item')
         if blocked_reason:
             return {"success": False, "message": blocked_reason}
 

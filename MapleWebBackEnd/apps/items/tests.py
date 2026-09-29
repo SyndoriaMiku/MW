@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.battles.models import CombatInstance, Combatant
-from apps.characters.models import Character
+from apps.characters.models import Character, EquipmentSlotConfig, EquippedItem
 from apps.inventory.models import AuroraLine, InventoryItem, PendingAuroraRoll
 from apps.market.models import Listing, Trade, TradeItem
 from apps.party.models import Party
@@ -169,6 +169,132 @@ class LumenPreviewAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('inventory_item_id', response.data)
+
+
+class LumenReservationAPITests(APITestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='Lumen Guard Tester')
+        self.user = GameUser.objects.create_user(
+            username='lumen-guard-user', email='lumen-guard@example.com',
+            password='test-pass-123',
+        )
+        self.user.character = self.character
+        self.user.lumis = 1000
+        self.user.save(update_fields=['character', 'lumis'])
+        self.client.force_authenticate(self.user)
+
+        tier = LumenTierProperty.objects.create(name='Guard Tier', tier=92, max_lumen_level=5)
+        LumenCostRule.objects.create(
+            lumen_tier=tier, current_level=0, lumis_cost=100, success_rate=1.0,
+        )
+        self.template = ItemTemplate.objects.create(
+            name='Guard Hat', item_type='hat', lumen_tier=tier
+        )
+        self.item = InventoryItem.objects.create(owner=self.character, template=self.template)
+
+    def ascend(self):
+        return self.client.post(
+            reverse('lumen-api', args=['ascend']),
+            {'inventory_item_id': self.item.id}, format='json',
+        )
+
+    def restore(self, fragment, sacrifice):
+        return self.client.post(
+            reverse('lumen-api', args=['restore']),
+            {'fragment_item_id': fragment.id, 'sacrifice_item_id': sacrifice.id},
+            format='json',
+        )
+
+    def assert_ascend_blocked(self):
+        response = self.ascend()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.item.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual(self.item.lumen_ascend_level, 0)
+        self.assertEqual(self.user.lumis, 1000)
+
+    def test_listed_item_cannot_be_ascended_or_previewed(self):
+        Listing.objects.create(seller=self.user, item=self.item, price=10)
+
+        self.assert_ascend_blocked()
+        preview = self.client.get(
+            reverse('lumen-api', args=['preview']), {'inventory_item_id': self.item.id}
+        )
+        self.assertEqual(preview.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_item_in_pending_trade_cannot_be_ascended(self):
+        receiver = GameUser.objects.create_user(
+            username='lumen-guard-receiver', email='lumen-guard-receiver@example.com',
+            password='test-pass-123',
+        )
+        trade = Trade.objects.create(sender=self.user, receiver=receiver)
+        TradeItem.objects.create(trade=trade, item=self.item, is_sender=True)
+
+        self.assert_ascend_blocked()
+
+    def test_items_cannot_be_ascended_during_active_battle(self):
+        party = Party.objects.create(name='Lumen Party', leader=self.character)
+        combat = CombatInstance.objects.create(party=party)
+        Combatant.objects.create(
+            combat_instance=combat,
+            content_type=ContentType.objects.get_for_model(self.character),
+            objects_id=str(self.character.pk),
+            is_player=True,
+            current_hp=self.character.total_hp,
+            current_mp=self.character.total_mp,
+            position=1,
+        )
+
+        self.assert_ascend_blocked()
+
+    def test_reserved_sacrifice_is_not_consumed_by_restore(self):
+        fragment = InventoryItem.objects.create(
+            owner=self.character, template=self.template, is_destroyed=True
+        )
+        slot = EquipmentSlotConfig.objects.create(
+            slot_type='hat', display_name='Hat', allowed_item_types=['hat']
+        )
+        receiver = GameUser.objects.create_user(
+            username='restore-receiver', email='restore-receiver@example.com',
+            password='test-pass-123',
+        )
+
+        def equip(item):
+            EquippedItem.objects.create(character=self.character, slot=slot, item=item)
+
+        def list_item(item):
+            Listing.objects.create(seller=self.user, item=item, price=10)
+
+        def offer_in_trade(item):
+            trade = Trade.objects.create(sender=self.user, receiver=receiver)
+            TradeItem.objects.create(trade=trade, item=item, is_sender=True)
+
+        for reserve in (equip, list_item, offer_in_trade):
+            with self.subTest(reservation=reserve.__name__):
+                sacrifice = InventoryItem.objects.create(
+                    owner=self.character, template=self.template
+                )
+                reserve(sacrifice)
+
+                response = self.restore(fragment, sacrifice)
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertTrue(InventoryItem.objects.filter(pk=sacrifice.pk).exists())
+                fragment.refresh_from_db()
+                self.assertTrue(fragment.is_destroyed)
+
+    def test_clean_sacrifice_still_restores_fragment(self):
+        fragment = InventoryItem.objects.create(
+            owner=self.character, template=self.template, is_destroyed=True
+        )
+        sacrifice = InventoryItem.objects.create(owner=self.character, template=self.template)
+
+        response = self.restore(fragment, sacrifice)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        fragment.refresh_from_db()
+        self.assertFalse(fragment.is_destroyed)
+        self.assertFalse(InventoryItem.objects.filter(pk=sacrifice.pk).exists())
 
 
 class EssenceAPITests(APITestCase):
