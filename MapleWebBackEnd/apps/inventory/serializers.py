@@ -12,7 +12,11 @@ LUMEN_STAT_FIELDS = (
 class AuroraLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuroraLine
-        fields = '__all__'
+        fields = [
+            'id', 'line_index', 'stat_type', 'line_type', 'value',
+            'inventory_item',
+        ]
+        read_only_fields = fields
 
 class InventoryItemSerializer(serializers.ModelSerializer):
     aurora_lines = AuroraLineSerializer(many=True, read_only=True)
@@ -53,11 +57,19 @@ class InventoryItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InventoryItem
-        fields = '__all__'
+        fields = [
+            'id', 'aurora_lines', 'template', 'lumen_breakdown',
+            'lumen_ascend_level', 'aurora_level', 'quantity', 'is_untrade',
+            'expired_at', 'is_destroyed', 'owner',
+        ]
+        read_only_fields = fields
 
 class EquippedItemSerializer(serializers.ModelSerializer):
     item = InventoryItemSerializer(read_only=True)
     
     class Meta:
         model = EquippedItem
-        fields = '__all__'
+        fields = [
+            'id', 'item', 'slot_index', 'character', 'slot',
+        ]
+        read_only_fields = fields

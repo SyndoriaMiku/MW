@@ -30,7 +30,16 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ItemTemplate
-        fields = '__all__'
+        fields = [
+            'id', 'item_sets', 'name', 'icon_key', 'visual_key',
+            'item_type', 'weapon_type', 'minimum_level', 'is_tradeable',
+            'is_trade_once', 'is_sellable', 'hp_boost', 'mp_boost',
+            'att_boost', 'str_boost', 'agi_boost', 'int_boost',
+            'all_stats_boost', 'drop_rate_boost', 'description',
+            'sell_price', 'lumen_tier', 'aurora_tier', 'class_restriction',
+            'job_restriction',
+        ]
+        read_only_fields = fields
 
 
 class LumenAscendRequestSerializer(serializers.Serializer):
