@@ -13,7 +13,7 @@ from apps.characters.models import Character, CharacterSkill
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
-from apps.party.models import Party, PartyMember
+from apps.party.models import Party, PartyMember, PendingPartyLoot
 from apps.users.models import GameUser
 from apps.world.models import (
     EnemySkill, EnemyTemplate, LootTable, NormalDungeonTemplate, NormalStageEnemy,
@@ -979,3 +979,35 @@ class NormalAttackSceneContractTests(APITestCase):
         BattleService.check_combat_status(combat)
         self.character.refresh_from_db()
         self.assertEqual(self.character.current_stamina, stamina_before - 10)
+
+
+class SoloSharedLootTests(APITestCase):
+    def test_shared_loot_goes_straight_to_a_solo_player(self):
+        character = Character.objects.create(name='Solo Looter')
+        user = GameUser.objects.create_user(
+            username='solo-looter', email='solo-looter@example.com', password='test-pass-123'
+        )
+        user.character = character
+        user.save(update_fields=['character'])
+        party = Party.objects.create(name='Solo', leader=character, max_size=1, is_solo=True)
+        PartyMember.objects.create(party=party, character=character, position=1)
+        enemy = EnemyTemplate.objects.create(
+            name='Shared Slime', level=1, base_hp=1, base_mp=0, base_att=0,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        gem = ItemTemplate.objects.create(name='Shared Gem', item_type='etc')
+        LootTable.objects.create(
+            enemy=enemy, item_template=gem, base_drop_rate=1, is_party_shared=True,
+        )
+        combat = BattleService.create_combat_instance(party, [enemy])
+        BattleService.start_combat(combat)
+        self.client.force_authenticate(user)
+
+        self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'ATTACK', 'target_id': combat.combatants.get(is_player=False).id},
+            format='json',
+        )
+
+        self.assertTrue(InventoryItem.objects.filter(owner=character, template=gem).exists())
+        self.assertFalse(PendingPartyLoot.objects.exists())

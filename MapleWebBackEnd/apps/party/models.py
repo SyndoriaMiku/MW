@@ -60,10 +60,12 @@ class PartyInvitation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField() #Invitation expires at
 
+    TTL = timedelta(hours=1)
+
     def save(self, *args, **kwargs):
-        # Set expiration time to 24 hours from creation if not set
+        # Invitations expire an hour after they are sent unless set explicitly
         if not self.expires_at:
-            self.expires_at = timezone.now() + timedelta(minutes=5) # For testing, set to 5 minutes
+            self.expires_at = timezone.now() + self.TTL
         super().save(*args, **kwargs)
 
     def __str__(self):

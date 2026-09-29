@@ -1,13 +1,16 @@
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.battles.models import CombatInstance
 from apps.characters.models import Character
+from apps.inventory.models import InventoryItem
+from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 from apps.world.models import EnemyTemplate, NormalDungeonTemplate, NormalStageEnemy
 
-from .models import Party, PartyMember
+from .models import Party, PartyInvitation, PartyMember, PendingPartyLoot
 
 
 class MalformedPartyInputTests(APITestCase):
@@ -88,3 +91,60 @@ class SoloDungeonPartyTests(APITestCase):
         self.assertEqual(
             PartyMember.objects.get(character=self.user.character).party.name, 'Crew'
         )
+
+
+class PendingLootOnDissolutionTests(APITestCase):
+    """Undistributed party loot goes to the leader instead of vanishing."""
+
+    def setUp(self):
+        self.leader = GameUser.objects.create_user(
+            username='loot-leader', email='loot-leader@example.com', password='test-pass-123'
+        )
+        self.leader.character = Character.objects.create(name='LootLeader')
+        self.leader.save(update_fields=['character'])
+        self.client.force_authenticate(self.leader)
+        self.client.post(reverse('party-create-party'), {'name': 'Loot Crew'}, format='json')
+        self.party = Party.objects.get(leader=self.leader.character)
+        self.gem = ItemTemplate.objects.create(name='Party Gem', item_type='etc')
+        PendingPartyLoot.objects.create(party=self.party, item_template=self.gem, quantity=3)
+
+    def leader_gems(self):
+        return sum(
+            InventoryItem.objects.filter(owner=self.leader.character, template=self.gem)
+            .values_list('quantity', flat=True)
+        )
+
+    def test_disbanding_hands_pending_loot_to_the_leader(self):
+        response = self.client.delete(reverse('party-disband'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.leader_gems(), 3)
+        self.assertFalse(PendingPartyLoot.objects.exists())
+
+    def test_last_member_leaving_hands_pending_loot_to_them(self):
+        self.client.post(reverse('party-leave'))
+
+        self.assertEqual(self.leader_gems(), 3)
+        self.assertFalse(Party.objects.filter(pk=self.party.pk).exists())
+
+    def test_leaving_a_solo_party_hands_over_its_pending_loot(self):
+        self.party.is_solo = True
+        self.party.max_size = 1
+        self.party.save(update_fields=['is_solo', 'max_size'])
+
+        response = self.client.post(reverse('party-create-party'), {'name': 'Next'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.leader_gems(), 3)
+
+
+class PartyInvitationExpiryTests(TestCase):
+    def test_invitations_last_one_hour(self):
+        leader = Character.objects.create(name='Inviter')
+        guest = Character.objects.create(name='Guest')
+        party = Party.objects.create(name='Timed', leader=leader)
+
+        invitation = PartyInvitation.objects.create(party=party, sender=leader, receiver=guest)
+
+        lifetime = invitation.expires_at - invitation.created_at
+        self.assertAlmostEqual(lifetime.total_seconds(), 3600, delta=5)

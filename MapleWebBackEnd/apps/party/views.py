@@ -39,6 +39,18 @@ def _character_in_active_battle(character):
     return combatant.combat_instance if combatant else None
 
 
+def _hand_pending_loot_to(party, character):
+    """
+    Give all of the party's undistributed loot to `character`. Called before
+    a party dissolves so the loot is not deleted with it.
+    """
+    loots = PendingPartyLoot.objects.select_for_update().filter(party=party).select_related('item_template')
+    for loot in loots:
+        if loot.quantity > 0:
+            grant_item(character, loot.item_template, loot.quantity)
+        loot.delete()
+
+
 def _leave_solo_party(character):
     """
     Drop the character's membership in an auto-created solo party so it can
@@ -50,6 +62,7 @@ def _leave_solo_party(character):
         return True
     if not membership.party.is_solo or _character_in_active_battle(character):
         return False
+    _hand_pending_loot_to(membership.party, character)
     membership.delete()
     return True
 
@@ -153,7 +166,10 @@ class PartyViewSet(viewsets.GenericViewSet):
         if _character_in_active_battle(character):
             return Response({"detail": "Cannot disband the party while in an active battle."}, status=status.HTTP_400_BAD_REQUEST)
 
-        party.delete()  # CASCADE removes PartyMember and PartyInvitation rows
+        with transaction.atomic():
+            # Undistributed loot defaults to the leader instead of vanishing.
+            _hand_pending_loot_to(party, character)
+            party.delete()  # CASCADE removes PartyMember and PartyInvitation rows
         return Response({"detail": "Party has been disbanded."})
 
     # ------------------------------------------------------------------
@@ -190,6 +206,8 @@ class PartyViewSet(viewsets.GenericViewSet):
                     party.leader = next_member.character
                     party.save(update_fields=['leader'])
                 else:
+                    # Last member out: they were the leader, so the loot is theirs.
+                    _hand_pending_loot_to(party, character)
                     party.delete()
 
         return Response({"detail": "You have left the party."})

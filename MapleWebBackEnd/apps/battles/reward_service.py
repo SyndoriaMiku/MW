@@ -88,7 +88,13 @@ class RewardService:
                     # Party Shared Loot
                     if random.random() <= RewardService.effective_drop_rate(loot, highest_party_drop_rate):
                         qty = random.randint(loot.min_quantity, loot.max_quantity)
-                        if party:
+                        if party and party.is_solo:
+                            # Nobody to share with: the solo player gets it directly.
+                            solo_player = alive_players[0]
+                            if qty > 0:
+                                grant_item(solo_player, loot.item_template, qty)
+                            logs[solo_player.name]["items_dropped"].append({"name": loot.item_template.name, "qty": qty})
+                        elif party:
                             # Add to Pending Party Loot
                             PendingPartyLoot.objects.create(
                                 party=party,
