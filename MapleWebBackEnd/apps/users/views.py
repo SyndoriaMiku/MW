@@ -57,6 +57,7 @@ class SessionBootstrapView(generics.GenericAPIView):
                 "action_idempotency": True,
                 "trade_cancel": True,
                 "battle_forfeit": True,
+                "battle_items": True,
                 "realtime_battle": False,
             },
         })

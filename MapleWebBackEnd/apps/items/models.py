@@ -352,6 +352,39 @@ class AuroraModifierRule(models.Model):
         return f"{self.item_template.name} - {self.get_modifier_type_display()}"
 
 
+class BattleConsumableRule(models.Model):
+    """
+    Makes a 'use' item usable in battle (potions). Using one takes the
+    player's whole turn.
+    """
+    class TargetType(models.TextChoices):
+        SELF = 'SELF', 'Self'
+        ALLY = 'ALLY', 'Self or a living ally'
+
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='battle_consumable_rule')
+    hp_restore = models.PositiveIntegerField(default=0, help_text="Flat HP restored")
+    hp_restore_percent = models.FloatField(default=0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="HP restored as a fraction of max HP (0.3 = 30%)")
+    mp_restore = models.PositiveIntegerField(default=0, help_text="Flat MP restored")
+    mp_restore_percent = models.FloatField(default=0, validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], help_text="MP restored as a fraction of max MP")
+    applies_effect = models.ForeignKey('skilles.EffectTemplate', on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied to the target, e.g. an ATT buff")
+    target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.SELF)
+    cooldown_turns = models.PositiveIntegerField(default=0, help_text="Rounds before this item can be used again (same counting as skill cooldowns)")
+
+    class Meta:
+        verbose_name = "Battle Consumable Rule"
+        verbose_name_plural = "Battle Consumable Rules"
+
+    def clean(self):
+        if self.item_template_id and self.item_template.item_type != 'use':
+            raise ValidationError({'item_template': "Only 'use' items can be battle consumables."})
+        if not (self.hp_restore or self.hp_restore_percent or self.mp_restore
+                or self.mp_restore_percent or self.applies_effect_id):
+            raise ValidationError("A battle consumable must restore HP/MP or apply an effect.")
+
+    def __str__(self):
+        return f"{self.item_template.name} (battle consumable)"
+
+
 class LumenModifierRule(models.Model):
     """
     Makes an item (typically an event reward) set a piece of gear straight to

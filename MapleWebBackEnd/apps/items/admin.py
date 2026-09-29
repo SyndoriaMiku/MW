@@ -3,7 +3,7 @@ from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule, AuroraLineCountConfig,
     AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent,
-    LumenModifierRule,
+    LumenModifierRule, BattleConsumableRule,
 )
 from .forms import LumenAscendRuleForm
 
@@ -202,6 +202,12 @@ class LumenEventAdmin(admin.ModelAdmin):
 class AuroraModifierRuleAdmin(admin.ModelAdmin):
     list_display = ('item_template', 'modifier_type', 'max_aurora_target', 'tier_up_chance')
     list_filter = ('modifier_type',)
+    search_fields = ('item_template__name',)
+
+@admin.register(BattleConsumableRule)
+class BattleConsumableRuleAdmin(admin.ModelAdmin):
+    list_display = ('item_template', 'target_type', 'hp_restore', 'hp_restore_percent', 'mp_restore', 'mp_restore_percent', 'applies_effect', 'cooldown_turns')
+    list_filter = ('target_type',)
     search_fields = ('item_template__name',)
 
 @admin.register(LumenModifierRule)

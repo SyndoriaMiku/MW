@@ -21,6 +21,7 @@ class CombatantSerializer(serializers.ModelSerializer):
     max_hp = serializers.SerializerMethodField()
     max_mp = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
+    consumables = serializers.SerializerMethodField()
     
     class Meta:
         model = Combatant
@@ -28,7 +29,7 @@ class CombatantSerializer(serializers.ModelSerializer):
             'id', 'entity_id', 'entity_type', 'name', 'visual_key', 'is_player',
             'is_current_actor', 'valid_actions', 'current_hp', 'current_mp',
             'max_hp', 'max_mp', 'position', 'skill_cooldowns', 'active_effects',
-            'skills',
+            'skills', 'consumables',
         ]
     
     def get_name(self, obj):
@@ -61,7 +62,61 @@ class CombatantSerializer(serializers.ModelSerializer):
         actions = ['ATTACK']
         if any(skill['can_use'] and not skill['is_basic_attack'] for skill in self.get_skills(obj)):
             actions.append('SKILL')
+        if any(item['can_use'] for item in self.get_consumables(obj)):
+            actions.append('ITEM')
         return actions
+
+    def get_consumables(self, obj):
+        """The player's battle consumable stacks that are not reserved elsewhere."""
+        if not obj.is_player:
+            return []
+        if hasattr(obj, '_serialized_consumables'):
+            return obj._serialized_consumables
+
+        from django.utils import timezone
+        from apps.inventory.models import InventoryItem
+        from apps.inventory.reservations import exclude_reserved
+        from .services import BattleService
+
+        now = timezone.now()
+        is_current_actor = self.get_is_current_actor(obj)
+        items = exclude_reserved(
+            InventoryItem.objects.filter(
+                owner_id=obj.objects_id,
+                is_destroyed=False,
+                quantity__gt=0,
+                template__battle_consumable_rule__isnull=False,
+            )
+        ).select_related(
+            'template__battle_consumable_rule__applies_effect'
+        ).order_by('template_id', 'id')
+
+        result = []
+        for item in items:
+            if item.expired_at and item.expired_at <= now:
+                continue
+            rule = item.template.battle_consumable_rule
+            cooldown_remaining = obj.skill_cooldowns.get(
+                BattleService.item_cooldown_key(item.template_id), 0
+            )
+            result.append({
+                'inventory_item_id': item.id,
+                'item_template_id': item.template_id,
+                'name': item.template.name,
+                'icon_key': item.template.icon_key,
+                'quantity': item.quantity,
+                'target_type': rule.target_type,
+                'hp_restore': rule.hp_restore,
+                'hp_restore_percent': rule.hp_restore_percent,
+                'mp_restore': rule.mp_restore,
+                'mp_restore_percent': rule.mp_restore_percent,
+                'effect': rule.applies_effect.name if rule.applies_effect else None,
+                'cooldown': rule.cooldown_turns,
+                'cooldown_remaining': cooldown_remaining,
+                'can_use': is_current_actor and cooldown_remaining <= 0,
+            })
+        obj._serialized_consumables = result
+        return result
 
     def get_skills(self, obj):
         if not obj.is_player:
@@ -163,7 +218,10 @@ class StartBattleSerializer(serializers.Serializer):
 
 class PlayerActionSerializer(serializers.Serializer):
     """Serializer for player combat actions."""
-    action_type = serializers.ChoiceField(choices=['ATTACK', 'SKILL'], help_text="Type of action")
+    action_type = serializers.ChoiceField(
+        choices=['ATTACK', 'SKILL', 'ITEM'],
+        help_text="Type of action. ITEM uses a battle consumable and ends the turn.",
+    )
     target_id = serializers.IntegerField(
         required=False,
         help_text=(
@@ -182,6 +240,10 @@ class PlayerActionSerializer(serializers.Serializer):
     skill_id = serializers.IntegerField(
         required=False,
         help_text='Deprecated alias for character_skill_id.',
+    )
+    inventory_item_id = serializers.IntegerField(
+        required=False,
+        help_text="Inventory item to use for an ITEM action. target_id defaults to yourself.",
     )
     client_action_id = serializers.UUIDField(
         required=False,
@@ -204,6 +266,10 @@ class PlayerActionSerializer(serializers.Serializer):
         ):
             raise serializers.ValidationError({
                 'target_id': 'target_id or target_position is required.'
+            })
+        if attrs.get('action_type') == 'ITEM' and attrs.get('inventory_item_id') is None:
+            raise serializers.ValidationError({
+                'inventory_item_id': 'This field is required for ITEM actions.'
             })
         if attrs.get('action_type') == 'SKILL':
             character_skill_id = attrs.get('character_skill_id')

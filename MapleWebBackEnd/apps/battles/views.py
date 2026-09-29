@@ -107,6 +107,8 @@ def player_action(request, combat_id):
     kwargs = {}
     if action_type == 'SKILL':
         kwargs['character_skill_id'] = serializer.validated_data['character_skill_id']
+    elif action_type == 'ITEM':
+        kwargs['inventory_item_id'] = serializer.validated_data['inventory_item_id']
 
     with transaction.atomic():
         combat, player_combatant, error = _lock_battle_for_participant(user, combat_id)

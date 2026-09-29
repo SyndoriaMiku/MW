@@ -635,6 +635,116 @@ class BattleService:
         return mods
 
     @staticmethod
+    def item_cooldown_key(item_template_id) -> str:
+        """Key of an item's cooldown in Combatant.skill_cooldowns (next to skill IDs)."""
+        return f"item:{item_template_id}"
+
+    @staticmethod
+    def _use_item(combatant: Combatant, target, result_log: dict, inventory_item_id) -> None:
+        """
+        Use one battle consumable from the player's inventory, filling in
+        `result_log`. Sets success=False, without consuming anything, when the
+        item or target is not valid.
+        """
+        from apps.inventory.models import InventoryItem
+        from apps.inventory.reservations import exclude_reserved
+        from apps.items.models import BattleConsumableRule
+
+        def blocked(message):
+            result_log["message"] = message
+            result_log["success"] = False
+
+        if not combatant.is_player:
+            return blocked("Only players can use items.")
+        item = exclude_reserved(
+            InventoryItem.objects.select_for_update().select_related('template').filter(
+                pk=inventory_item_id, owner_id=combatant.objects_id, is_destroyed=False,
+            )
+        ).first()
+        if item is None or item.quantity <= 0:
+            return blocked("Item not found or not available.")
+        if item.expired_at and item.expired_at <= timezone.now():
+            return blocked("Item is expired.")
+        try:
+            rule = item.template.battle_consumable_rule
+        except BattleConsumableRule.DoesNotExist:
+            return blocked(f"{item.template.name} cannot be used in battle.")
+
+        cooldown_key = BattleService.item_cooldown_key(item.template_id)
+        cooldown_left = combatant.skill_cooldowns.get(cooldown_key, 0)
+        if cooldown_left > 0:
+            return blocked(f"{item.template.name} is on cooldown for {cooldown_left} more turns.")
+
+        if target is None:
+            target = combatant
+        if rule.target_type == BattleConsumableRule.TargetType.SELF:
+            if target.pk != combatant.pk:
+                return blocked(f"{item.template.name} can only be used on yourself.")
+        elif not target.is_player or target.current_hp <= 0:
+            return blocked(f"{item.template.name} must target yourself or a living ally.")
+
+        entity = target.entity
+        target_name = getattr(entity, 'name', str(entity))
+        max_hp = getattr(entity, 'total_hp', target.current_hp)
+        max_mp = getattr(entity, 'total_mp', target.current_mp)
+        target_mods = BattleService.get_combat_modifiers(target)
+        heal = rule.hp_restore + int(rule.hp_restore_percent * max_hp)
+        heal = max(0, int(heal * (1 + target_mods['health_received_modifier'])))
+        mana = rule.mp_restore + int(rule.mp_restore_percent * max_mp)
+        hp_before, mp_before = target.current_hp, target.current_mp
+        target.current_hp = min(max_hp, target.current_hp + heal)
+        target.current_mp = min(max_mp, target.current_mp + mana)
+        target.save(update_fields=['current_hp', 'current_mp'])
+
+        effect_message = ''
+        if rule.applies_effect:
+            effect_message = BattleService._apply_skill_effect(combatant, target, rule.applies_effect)
+
+        item_name = item.template.name
+        item.quantity -= 1
+        if item.quantity <= 0:
+            item.delete()
+        else:
+            item.save(update_fields=['quantity'])
+        if rule.cooldown_turns > 0:
+            combatant.skill_cooldowns = {**combatant.skill_cooldowns, cooldown_key: rule.cooldown_turns}
+            combatant.save(update_fields=['skill_cooldowns'])
+
+        healed = target.current_hp - hp_before
+        restored_mp = target.current_mp - mp_before
+        message = f"restored {healed} HP"
+        if restored_mp:
+            message += f" and {restored_mp} MP"
+        message += f" to {target_name}"
+        if effect_message:
+            message += f" ({effect_message})"
+        result_log.update({
+            "item_name": item_name,
+            "inventory_item_id": inventory_item_id,
+            "item_template_id": rule.item_template_id,
+            "target_id": target.id,
+            "target_type": 'character',
+            "target": target_name,
+            "heal": healed,
+            "total_heal": healed,
+            "mp_restored": restored_mp,
+            "targets": [{
+                'target_id': target.id,
+                'target_type': 'character',
+                'target': target_name,
+                'damage': 0,
+                'shield_absorbed': 0,
+                'heal': healed,
+                'mp_restored': restored_mp,
+                'is_dead': False,
+                'effect': rule.applies_effect.name if rule.applies_effect else None,
+                'effect_message': effect_message,
+                'message': message,
+            }],
+            "message": f"{result_log['actor']} used {item_name}: {message}.",
+        })
+
+    @staticmethod
     def get_attack_power(combatant: Combatant, mods: dict = None) -> int:
         """
         Damage basis of a combatant with its active stat effects applied.
@@ -690,6 +800,11 @@ class BattleService:
         if combatant.current_hp <= 0:
             result_log["message"] = f"{result_log['actor']} tried to act but is dead."
             result_log["success"] = False
+            return result_log
+
+        if action_type == 'ITEM':
+            # Restoring HP/MP or buffing cannot end the battle.
+            BattleService._use_item(combatant, target, result_log, kwargs.get('inventory_item_id'))
             return result_log
             
         if action_type == 'ATTACK' and target is None:

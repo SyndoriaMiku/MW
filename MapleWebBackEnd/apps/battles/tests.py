@@ -12,7 +12,8 @@ from rest_framework.test import APITestCase
 from apps.characters.models import Character, CharacterSkill
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
-from apps.items.models import ItemTemplate
+from apps.items.models import BattleConsumableRule, ItemTemplate
+from apps.market.models import Listing
 from apps.party.models import Party, PartyMember, PendingPartyLoot
 from apps.users.models import GameUser
 from apps.world.models import (
@@ -116,7 +117,9 @@ class BattleTargetValidationTests(SimpleTestCase):
         self.assertFalse(BattleService._is_valid_skill_target(player, enemy, 'ALLY'))
 
 
-class NormalAttackSceneContractTests(APITestCase):
+class BattleFixtureMixin:
+    """A solo party (self.party) for self.character/self.user, plus battle helpers."""
+
     def setUp(self):
         self.character = Character.objects.create(name='BattleTester')
         self.user = GameUser.objects.create_user(
@@ -144,6 +147,21 @@ class NormalAttackSceneContractTests(APITestCase):
         BattleService.start_combat(combat)
         return combat
 
+    def add_party_member(self, name):
+        """Second player at position 2; returns (user, character)."""
+        self.party.max_size = 2
+        self.party.save(update_fields=['max_size'])
+        character = Character.objects.create(name=name)
+        user = GameUser.objects.create_user(
+            username=name, email=f'{name}@example.com', password='test-pass-123'
+        )
+        user.character = character
+        user.save(update_fields=['character'])
+        PartyMember.objects.create(party=self.party, character=character, position=2)
+        return user, character
+
+
+class NormalAttackSceneContractTests(BattleFixtureMixin, APITestCase):
     def create_multi_enemy_battle(self, count=3, *, enemy_hp=100, enemy_attack=0):
         enemy = EnemyTemplate.objects.create(
             name='Slime Group',
@@ -792,19 +810,6 @@ class NormalAttackSceneContractTests(APITestCase):
             else:
                 self.assertIsNone(active)
 
-    def add_party_member(self, name):
-        """Second player at position 2; returns (user, character)."""
-        self.party.max_size = 2
-        self.party.save(update_fields=['max_size'])
-        character = Character.objects.create(name=name)
-        user = GameUser.objects.create_user(
-            username=name, email=f'{name}@example.com', password='test-pass-123'
-        )
-        user.character = character
-        user.save(update_fields=['character'])
-        PartyMember.objects.create(party=self.party, character=character, position=2)
-        return user, character
-
     def test_forfeit_ends_a_solo_battle_as_defeat(self):
         combat = self.create_battle(enemy_hp=500)
 
@@ -1011,3 +1016,120 @@ class SoloSharedLootTests(APITestCase):
 
         self.assertTrue(InventoryItem.objects.filter(owner=character, template=gem).exists())
         self.assertFalse(PendingPartyLoot.objects.exists())
+
+
+class BattleConsumableTests(BattleFixtureMixin, APITestCase):
+    """Potions: using one takes the player's whole turn."""
+
+    def setUp(self):
+        super().setUp()
+        self.potion_template = ItemTemplate.objects.create(name='Red Potion', item_type='use')
+        self.rule = BattleConsumableRule.objects.create(
+            item_template=self.potion_template, hp_restore=20,
+        )
+        self.potion = InventoryItem.objects.create(
+            owner=self.character, template=self.potion_template, quantity=3
+        )
+
+    def use(self, combat, target=None, item=None):
+        data = {'action_type': 'ITEM', 'inventory_item_id': (item or self.potion).id}
+        if target is not None:
+            data['target_id'] = target.id
+        return self.client.post(
+            reverse('battles:player-action', args=[combat.id]), data, format='json'
+        )
+
+    def wounded_battle(self, hp=10):
+        combat = self.create_battle(enemy_hp=500, enemy_attack=0)
+        player = combat.combatants.get(is_player=True, position=1)
+        player.current_hp = hp
+        player.save(update_fields=['current_hp'])
+        return combat, player
+
+    def test_potion_heals_consumes_one_and_ends_the_turn(self):
+        combat, player = self.wounded_battle()
+
+        response = self.use(combat)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        log = response.data['action_log']
+        self.assertTrue(log['success'])
+        self.assertEqual((log['action'], log['heal']), ('ITEM', 20))
+        player.refresh_from_db()
+        self.potion.refresh_from_db()
+        self.assertEqual((player.current_hp, self.potion.quantity), (30, 2))
+        self.assertEqual(response.data['combat']['turn_count'], 2)
+
+    def test_percent_restore_is_capped_at_max_hp(self):
+        self.rule.hp_restore = 0
+        self.rule.hp_restore_percent = 1.0
+        self.rule.save()
+        combat, player = self.wounded_battle()
+
+        self.use(combat)
+
+        player.refresh_from_db()
+        self.assertEqual(player.current_hp, self.character.total_hp)
+
+    def test_ally_potion_heals_a_teammate_but_self_potion_does_not(self):
+        _, ally_character = self.add_party_member('potion-ally')
+        combat, _ = self.wounded_battle()
+        ally = combat.combatants.get(is_player=True, position=2)
+        ally.current_hp = 5
+        ally.save(update_fields=['current_hp'])
+        enemy = combat.combatants.get(is_player=False)
+
+        self_only = self.use(combat, target=ally)
+        self.rule.target_type = 'ALLY'
+        self.rule.save()
+        at_enemy = self.use(combat, target=enemy)
+        healed = self.use(combat, target=ally)
+
+        self.assertFalse(self_only.data['action_log']['success'])
+        self.assertFalse(at_enemy.data['action_log']['success'])
+        self.assertTrue(healed.data['action_log']['success'])
+        ally.refresh_from_db()
+        self.assertEqual(ally.current_hp, 25)
+
+    def test_cooldown_blocks_reuse_without_consuming(self):
+        self.rule.cooldown_turns = 2
+        self.rule.save()
+        combat, _ = self.wounded_battle()
+
+        self.use(combat)
+        second = self.use(combat)
+
+        self.assertFalse(second.data['action_log']['success'])
+        self.potion.refresh_from_db()
+        self.assertEqual(self.potion.quantity, 2)
+
+    def test_items_without_a_rule_or_reserved_cannot_be_used(self):
+        combat, _ = self.wounded_battle()
+        junk = InventoryItem.objects.create(
+            owner=self.character, template=ItemTemplate.objects.create(name='Junk', item_type='etc')
+        )
+        Listing.objects.create(seller=self.user, item=self.potion, price=1, quantity=1)
+
+        for item in (junk, self.potion):
+            with self.subTest(item=item.template.name):
+                self.assertFalse(self.use(combat, item=item).data['action_log']['success'])
+
+    def test_snapshot_lists_usable_consumables(self):
+        combat, player = self.wounded_battle()
+
+        snapshot = self.client.get(reverse('battles:battle-state', args=[combat.id])).data
+        me = next(c for c in snapshot['combatants'] if c['id'] == player.id)
+
+        self.assertIn('ITEM', me['valid_actions'])
+        self.assertEqual(len(me['consumables']), 1)
+        entry = me['consumables'][0]
+        self.assertEqual(
+            (entry['inventory_item_id'], entry['quantity'], entry['can_use']),
+            (self.potion.id, 3, True),
+        )
+
+    def test_item_action_requires_an_inventory_item(self):
+        serializer = PlayerActionSerializer(data={'action_type': 'ITEM'})
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('inventory_item_id', serializer.errors)
