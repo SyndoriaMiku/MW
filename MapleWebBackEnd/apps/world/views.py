@@ -3,11 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 
-from .models import NormalDungeonTemplate, BossDungeonTemplate, DungeonClearLog
-from .serializers import NormalDungeonSerializer, BossDungeonSerializer
+from .models import NormalDungeonTemplate, BossDungeonTemplate, DungeonClearLog, Location, Region
+from .serializers import (
+    BossDungeonSerializer, LocationSerializer, NormalDungeonSerializer, RegionSerializer,
+)
 from apps.battles.models import CombatInstance, Combatant
 from apps.battles.services import BattleService
 from apps.battles.serializers import CombatInstanceSerializer
@@ -170,3 +173,68 @@ class BossDungeonViewSet(viewsets.ReadOnlyModelViewSet):
             "detail": "Entered boss dungeon.",
             "combat_instance_id": combat.id
         })
+
+
+def _locations_queryset():
+    return Location.objects.select_related('region', 'normal_dungeon', 'boss_dungeon')
+
+
+class WorldContextMixin:
+    """Unpaginated world data, with the requesting character for access flags."""
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['character'] = getattr(self.request.user, 'character', None)
+        return context
+
+
+class RegionViewSet(WorldContextMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = Region.objects.prefetch_related(
+        Prefetch('locations', queryset=_locations_queryset().order_by('order'))
+    )
+    serializer_class = RegionSerializer
+
+
+class LocationViewSet(WorldContextMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = _locations_queryset()
+    serializer_class = LocationSerializer
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """The requesting character's current location, or null."""
+        character = getattr(request.user, 'character', None)
+        if not character:
+            return Response({"detail": "User has no character."}, status=status.HTTP_400_BAD_REQUEST)
+        location = (
+            _locations_queryset().get(pk=character.current_location_id)
+            if character.current_location_id else None
+        )
+        data = self.get_serializer(location).data if location else None
+        return Response({"location": data})
+
+    @action(detail=True, methods=['post'])
+    def travel(self, request, pk=None):
+        """Move the character here if it meets the region and location level."""
+        location = self.get_object()
+        if not getattr(request.user, 'character', None):
+            return Response({"detail": "User has no character."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            character = Character.objects.select_for_update().get(pk=request.user.character.pk)
+            required_level = max(location.required_level, location.region.required_level)
+            if character.level < required_level:
+                return Response(
+                    {"detail": f"Required level is {required_level}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if BattleService.get_active_combat_for_character(character):
+                return Response(
+                    {"detail": "Cannot travel during an active battle."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            character.current_location = location
+            character.save(update_fields=['current_location'])
+
+        return Response({"location": self.get_serializer(location).data})
