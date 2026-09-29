@@ -1,6 +1,8 @@
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
+from apps.reset_cycles import is_current_period
+
 from .models import QuestTemplate, QuestReward, CharacterQuest, CharacterQuestObjective
 
 class QuestService:
@@ -25,23 +27,8 @@ class QuestService:
             
             # 3. Check for reset if not just created
             if not created:
-                needs_reset = False
-                
-                if template.quest_type == QuestTemplate.QuestType.DAILY:
-                    # Reset if last_reset_at is before today's 00:00 local time
-                    # We will compare dates
-                    if cq.last_reset_at.date() < now.date():
-                        needs_reset = True
-                        
-                elif template.quest_type == QuestTemplate.QuestType.WEEKLY:
-                    # Reset if last_reset_at is before this week's Monday 00:00
-                    # .weekday() returns 0 for Monday.
-                    from datetime import timedelta
-                    days_since_monday = now.weekday()
-                    last_monday = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-                    
-                    if cq.last_reset_at < last_monday:
-                        needs_reset = True
+                # Reset once the quest's calendar period has rolled over.
+                needs_reset = not is_current_period(cq.last_reset_at, template.quest_type, now)
                 
                 if needs_reset:
                     # Reset the quest

@@ -14,6 +14,7 @@ from .serializers import (
     ShopPurchaseSerializer,
 )
 from apps.request_params import parse_int
+from apps.reset_cycles import is_current_period
 from apps.inventory.grant_service import grant_item
 
 class ShopCategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -88,10 +89,7 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
                 
                 # Check Cycle Reset
                 if not created and shop_item.reset_cycle != 'none':
-                    reset = False
-                    if shop_item.reset_cycle == 'daily' and last.date() < now.date(): reset = True
-                    elif shop_item.reset_cycle == 'weekly' and (last.isocalendar()[1] != now.isocalendar()[1] or last.year != now.year): reset = True
-                    elif shop_item.reset_cycle == 'monthly' and (last.month != now.month or last.year != now.year): reset = True
+                    reset = not is_current_period(last, shop_item.reset_cycle, now)
                     
                     if reset:
                         purchase.quantity_bought = 0

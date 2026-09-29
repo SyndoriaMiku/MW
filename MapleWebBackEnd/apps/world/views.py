@@ -13,6 +13,7 @@ from apps.battles.services import BattleService
 from apps.battles.serializers import CombatInstanceSerializer
 from apps.party.models import Party, PartyMember
 from apps.characters.models import Character
+from apps.reset_cycles import period_start
 
 
 class NormalDungeonViewSet(viewsets.ReadOnlyModelViewSet):
@@ -152,19 +153,12 @@ class BossDungeonViewSet(viewsets.ReadOnlyModelViewSet):
                     return Response({"detail": f"Member {c.name} is already in another active battle."}, status=status.HTTP_400_BAD_REQUEST)
 
                 # Check clear cooldown
-                last_clear = DungeonClearLog.objects.filter(character=c, dungeon=dungeon).order_by('-cleared_at').first()
-                if last_clear:
-                    cleared_at = last_clear.cleared_at
-                    is_cooldown = False
-                    if dungeon.time_type == BossDungeonTemplate.TimeType.DAILY:
-                        is_cooldown = (now - cleared_at).total_seconds() < 86400
-                    elif dungeon.time_type == BossDungeonTemplate.TimeType.WEEKLY:
-                        is_cooldown = (now - cleared_at).days < 7
-                    elif dungeon.time_type == BossDungeonTemplate.TimeType.MONTHLY:
-                        is_cooldown = (now - cleared_at).days < 30
-
-                    if is_cooldown:
-                        return Response({"detail": f"Member {c.name} has already cleared this {dungeon.time_type} dungeon."}, status=status.HTTP_400_BAD_REQUEST)
+                cleared_this_period = DungeonClearLog.objects.filter(
+                    character=c, dungeon=dungeon,
+                    cleared_at__gte=period_start(dungeon.time_type, now),
+                ).exists()
+                if cleared_this_period:
+                    return Response({"detail": f"Member {c.name} has already cleared this {dungeon.time_type} dungeon."}, status=status.HTTP_400_BAD_REQUEST)
 
             # (B-2 fix) Use BattleService to properly create and initialize combat
             combat = BattleService.create_combat_instance(party, enemies)
