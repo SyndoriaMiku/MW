@@ -23,6 +23,7 @@ from .models import (
     ItemTemplate,
     LumenCostRule,
     LumenEvent,
+    LumenModifierRule,
     LumenTierProperty,
 )
 from .serializers import ItemTemplateSerializer
@@ -561,3 +562,87 @@ class AuroraTierUpTests(EssenceFixture):
                 self.rule.tier_up_chance = 0.5
                 with self.assertRaises(ValidationError):
                     self.rule.clean()
+
+
+class LumenLevelModifierTests(APITestCase):
+    """Event items that set gear straight to a Lumen level: always succeed."""
+
+    def setUp(self):
+        self.character = Character.objects.create(name='Lumen Setter')
+        self.user = GameUser.objects.create_user(
+            username='lumen-setter', email='lumen-setter@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+
+        self.tier = LumenTierProperty.objects.create(name='Set Tier', tier=93, max_lumen_level=10)
+        self.hat_template = ItemTemplate.objects.create(
+            name='Set Hat', item_type='hat', lumen_tier=self.tier
+        )
+        self.hat = InventoryItem.objects.create(
+            owner=self.character, template=self.hat_template, lumen_ascend_level=2
+        )
+        scroll_template = ItemTemplate.objects.create(name='Lumen 7 Scroll', item_type='use')
+        self.rule = LumenModifierRule.objects.create(item_template=scroll_template, target_level=7)
+        self.scroll = InventoryItem.objects.create(
+            owner=self.character, template=scroll_template, quantity=2
+        )
+
+    def apply(self, target=None):
+        return self.client.post(
+            reverse('lumen-api', args=['apply']),
+            {'target_item_id': (target or self.hat).id, 'modifier_item_id': self.scroll.id},
+            format='json',
+        )
+
+    def assert_rejected(self, response, level=2):
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.hat.refresh_from_db()
+        self.scroll.refresh_from_db()
+        self.assertEqual((self.hat.lumen_ascend_level, self.scroll.quantity), (level, 2))
+
+    def test_sets_the_level_and_consumes_one_item(self):
+        response = self.apply()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['item']['lumen_ascend_level'], 7)
+        self.scroll.refresh_from_db()
+        self.assertEqual(self.scroll.quantity, 1)
+
+    def test_never_lowers_the_level(self):
+        self.hat.lumen_ascend_level = 7
+        self.hat.save(update_fields=['lumen_ascend_level'])
+
+        self.assert_rejected(self.apply(), level=7)
+
+    def test_only_on_wearable_gear(self):
+        self.hat.is_destroyed = True
+        self.hat.save(update_fields=['is_destroyed'])
+        self.assert_rejected(self.apply())
+
+        self.hat.is_destroyed = False
+        self.hat.expired_at = timezone.now() - timedelta(seconds=1)
+        self.hat.save(update_fields=['is_destroyed', 'expired_at'])
+        self.assert_rejected(self.apply())
+
+    def test_respects_rule_tier_and_item_type_limits(self):
+        other_tier = LumenTierProperty.objects.create(name='Other Tier', tier=94, max_lumen_level=10)
+        self.rule.lumen_tiers.add(other_tier)
+        self.assert_rejected(self.apply())
+
+        self.rule.lumen_tiers.clear()
+        self.rule.item_types = ['weapon']
+        self.rule.save(update_fields=['item_types'])
+        self.assert_rejected(self.apply())
+
+    def test_cannot_exceed_the_tier_maximum(self):
+        self.rule.target_level = 11
+        self.rule.save(update_fields=['target_level'])
+
+        self.assert_rejected(self.apply())
+
+    def test_listed_gear_is_refused(self):
+        Listing.objects.create(seller=self.user, item=self.hat, price=10)
+
+        self.assert_rejected(self.apply())

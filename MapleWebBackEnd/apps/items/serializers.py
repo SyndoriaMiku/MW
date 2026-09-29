@@ -46,6 +46,11 @@ class LumenAscendRequestSerializer(serializers.Serializer):
     inventory_item_id = serializers.IntegerField(min_value=1)
 
 
+class LumenModifierRequestSerializer(serializers.Serializer):
+    target_item_id = serializers.IntegerField(min_value=1)
+    modifier_item_id = serializers.IntegerField(min_value=1)
+
+
 class AuroraRevealRequestSerializer(serializers.Serializer):
     inventory_item_id = serializers.IntegerField(min_value=1)
 

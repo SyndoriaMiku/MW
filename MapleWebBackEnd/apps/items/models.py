@@ -352,6 +352,30 @@ class AuroraModifierRule(models.Model):
         return f"{self.item_template.name} - {self.get_modifier_type_display()}"
 
 
+class LumenModifierRule(models.Model):
+    """
+    Makes an item (typically an event reward) set a piece of gear straight to
+    a Lumen Ascend level. Always succeeds; never lowers the level.
+    """
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='lumen_modifier_rule')
+    target_level = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Lumen Ascend level the gear is set to")
+    lumen_tiers = models.ManyToManyField('items.LumenTierProperty', blank=True, help_text="Lumen tiers it works on (empty means any)")
+    item_types = models.JSONField(default=list, blank=True, help_text="Gear item types it works on (empty means any)")
+
+    class Meta:
+        verbose_name = "Lumen Modifier Rule"
+        verbose_name_plural = "Lumen Modifier Rules"
+
+    def clean(self):
+        gear_types = {value for value, _ in TYPE_CHOICES if value not in ('use', 'etc')}
+        unknown = set(self.item_types) - gear_types
+        if unknown:
+            raise ValidationError({'item_types': f"Not gear item types: {', '.join(sorted(unknown))}."})
+
+    def __str__(self):
+        return f"{self.item_template.name} -> Lumen {self.target_level}"
+
+
 class AuroraEvent(models.Model):
     """
     Active events that modify Aurora tier-up rates

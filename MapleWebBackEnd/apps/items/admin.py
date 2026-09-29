@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule, AuroraLineCountConfig,
-    AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent
+    AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent,
+    LumenModifierRule,
 )
 from .forms import LumenAscendRuleForm
 
@@ -202,6 +203,12 @@ class AuroraModifierRuleAdmin(admin.ModelAdmin):
     list_display = ('item_template', 'modifier_type', 'max_aurora_target', 'tier_up_chance')
     list_filter = ('modifier_type',)
     search_fields = ('item_template__name',)
+
+@admin.register(LumenModifierRule)
+class LumenModifierRuleAdmin(admin.ModelAdmin):
+    list_display = ('item_template', 'target_level')
+    search_fields = ('item_template__name',)
+    filter_horizontal = ('lumen_tiers',)
 
 @admin.register(AuroraLineCountConfig)
 class AuroraLineCountConfigAdmin(admin.ModelAdmin):

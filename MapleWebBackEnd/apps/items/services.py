@@ -235,6 +235,70 @@ class LumenService:
 
     @staticmethod
     @transaction.atomic
+    def apply_level_modifier(user, target_item_id, modifier_item_id):
+        """
+        Use an item with a LumenModifierRule to set gear straight to the rule's
+        Lumen level. Always succeeds; it never lowers a level.
+        """
+        from apps.items.models import LumenModifierRule
+
+        try:
+            target = InventoryItem.objects.select_for_update().select_related(
+                'template__lumen_tier'
+            ).get(id=target_item_id, owner__user=user)
+            modifier = InventoryItem.objects.select_for_update().select_related(
+                'template'
+            ).get(id=modifier_item_id, owner__user=user)
+        except InventoryItem.DoesNotExist:
+            return {"success": False, "message": "Item not found or not owned."}
+        if target.pk == modifier.pk:
+            return {"success": False, "message": "The target item cannot also be the modifier item."}
+
+        if character_in_active_battle(getattr(user, 'character', None)):
+            return {"success": False, "message": "Cannot use Lumen items during an active battle."}
+        # Only wearable gear: equipment that is neither destroyed nor expired.
+        if target.template.is_stackable:
+            return {"success": False, "message": "Only gear can be upgraded."}
+        blocked_reason = mutation_block_reason(target, role='Target item')
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
+        blocked_reason = mutation_block_reason(modifier, role='Modifier item')
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
+
+        try:
+            rule = modifier.template.lumen_modifier_rule
+        except LumenModifierRule.DoesNotExist:
+            return {"success": False, "message": "This item is not a Lumen modifier."}
+
+        tier = target.template.lumen_tier
+        if tier is None:
+            return {"success": False, "message": "Item cannot be upgraded."}
+        allowed_tiers = list(rule.lumen_tiers.all())
+        if allowed_tiers and tier not in allowed_tiers:
+            return {"success": False, "message": "This modifier does not work on this item's Lumen tier."}
+        if rule.item_types and target.template.item_type not in rule.item_types:
+            return {"success": False, "message": "This modifier does not work on this item type."}
+        if rule.target_level > tier.max_lumen_level:
+            return {"success": False, "message": "The modifier's level exceeds this item's maximum."}
+        if target.lumen_ascend_level >= rule.target_level:
+            return {"success": False, "message": f"Item is already at Lumen level {target.lumen_ascend_level}."}
+
+        modifier.quantity -= 1
+        if modifier.quantity <= 0:
+            modifier.delete()
+        else:
+            modifier.save(update_fields=['quantity'])
+        target.lumen_ascend_level = rule.target_level
+        target.save(update_fields=['lumen_ascend_level'])
+        return {
+            "success": True,
+            "message": f"Lumen level set to {rule.target_level}.",
+            "lumen_ascend_level": rule.target_level,
+        }
+
+    @staticmethod
+    @transaction.atomic
     def restore_fragment(user, fragment_item_id, sacrifice_item_id=None):
         """
         Restore a destroyed item (fragment) using a sacrifice item (phôi trắng).

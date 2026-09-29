@@ -9,6 +9,7 @@ from .serializers import (
     AuroraRevealRequestSerializer,
     ItemTemplateSerializer,
     LumenAscendRequestSerializer,
+    LumenModifierRequestSerializer,
 )
 from apps.inventory.models import InventoryItem
 from apps.inventory.serializers import InventoryItemSerializer
@@ -62,6 +63,18 @@ class LumenAPIView(APIView):
             )
             return self._response(result)
             
+        elif action == 'apply':
+            serializer = LumenModifierRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            target_item_id = serializer.validated_data['target_item_id']
+            result = LumenService.apply_level_modifier(
+                request.user, target_item_id, serializer.validated_data['modifier_item_id'],
+            )
+            if result.get('success'):
+                item = InventoryItem.objects.filter(pk=target_item_id).first()
+                result = {**result, 'item': InventoryItemSerializer(item).data}
+            return self._response(result)
+
         elif action == 'restore':
             fragment_item_id = parse_int(request.data.get('fragment_item_id'), 'fragment_item_id')
             sacrifice_item_id = parse_int(request.data.get('sacrifice_item_id'), 'sacrifice_item_id')
