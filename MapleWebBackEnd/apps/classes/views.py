@@ -4,11 +4,11 @@ from .models import CharacterClass, Job
 from .serializers import CharacterClassSerializer, JobSerializer
 
 class CharacterClassViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CharacterClass.objects.all()
+    queryset = CharacterClass.objects.order_by('id')
     serializer_class = CharacterClassSerializer
     permission_classes = [AllowAny]
 
 class JobViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Job.objects.all()
+    queryset = Job.objects.order_by('id')
     serializer_class = JobSerializer
     permission_classes = [AllowAny]

@@ -28,7 +28,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             'template__lumen_tier__ascend_rules',
             'template__item_sets__effects',
             'template__item_sets__items',
-        )
+        ).order_by('id')
 
     @action(detail=True, methods=['post'])
     def equip(self, request, pk=None):

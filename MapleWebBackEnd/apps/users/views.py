@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from .serializers import UserRegistrationSerializer, UserProfileSerializer
 
 User = get_user_model()
@@ -21,7 +22,7 @@ class ProfileView(generics.RetrieveAPIView):
         return self.request.user
 
 
-class SessionBootstrapView(generics.GenericAPIView):
+class SessionBootstrapView(APIView):
     """Return the minimum authenticated state needed to initialize a game client."""
     permission_classes = (IsAuthenticated,)
 

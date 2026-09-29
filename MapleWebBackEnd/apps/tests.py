@@ -1,5 +1,6 @@
 import importlib
 import inspect
+import warnings
 
 from django.apps import apps as django_apps
 from django.test import SimpleTestCase
@@ -102,3 +103,29 @@ class ErrorEnvelopeTests(APITestCase):
         body = self.client.get(reverse('session-bootstrap')).json()
 
         self.assertNotIn('code', body)
+
+
+class ApiDocumentationTests(APITestCase):
+    def test_openapi_schema_generates_without_view_errors(self):
+        with self.assertNoLogs('drf_yasg', level='WARNING'):
+            response = self.client.get('/swagger/?format=openapi')
+
+        self.assertEqual(response.status_code, 200)
+
+
+class PaginationOrderTests(APITestCase):
+    def test_paginated_lists_have_a_stable_order(self):
+        user = GameUser.objects.create_user(
+            username='pager', email='pager@example.com', password='test-pass-123'
+        )
+        user.character = Character.objects.create(name='Pager')
+        user.save(update_fields=['character'])
+        self.client.force_authenticate(user)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            for url in ('/api/classes/', '/api/classes/jobs/', '/api/inventory/'):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        unordered = [str(w.message) for w in caught if 'UnorderedObjectListWarning' in type(w.message).__name__]
+        self.assertEqual(unordered, [])

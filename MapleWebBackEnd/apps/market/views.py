@@ -245,6 +245,9 @@ class TradeViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            # Schema generation runs without a logged-in user.
+            return Trade.objects.none()
         user = self.request.user
         return Trade.objects.filter(
             Q(sender=user) | Q(receiver=user)

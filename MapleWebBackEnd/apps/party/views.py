@@ -82,6 +82,9 @@ def _next_free_position(party):
 
 class PartyViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
+    # Actions query parties themselves; these only describe the API schema.
+    queryset = Party.objects.none()
+    serializer_class = PartySerializer
 
     # ------------------------------------------------------------------
     # 1. CREATE
