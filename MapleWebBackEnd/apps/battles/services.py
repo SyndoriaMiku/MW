@@ -149,6 +149,7 @@ class BattleService:
             'target_type': 'character' if target.is_player else 'enemy',
             'target': target_name,
             'damage': 0,
+            'shield_absorbed': 0,
             'heal': 0,
             'is_dead': False,
             'effect': None,
@@ -163,9 +164,9 @@ class BattleService:
             skill_damage *= 1 + bonus_final_damage + attacker_mods['final_damage_modifier']
             skill_damage *= 1 + attacker_mods['damage_dealt_modifier']
             skill_damage *= 1 + target_mods['damage_taken_modifier']
-            target_result['damage'] = BattleService.apply_damage_with_shield(
-                target, max(0, int(skill_damage))
-            )
+            raw_damage = max(0, int(skill_damage))
+            target_result['damage'] = BattleService.apply_damage_with_shield(target, raw_damage)
+            target_result['shield_absorbed'] = raw_damage - target_result['damage']
         elif template.effect_type == 'HEAL':
             heal = (total_damage * template.power_ratio) + template.base_power
             heal *= 1 + attacker_mods['health_dealt_modifier']
@@ -341,7 +342,7 @@ class BattleService:
             
             # (H-1 fix) Process DOT/HOT effects BEFORE picking first_player.
             # If DOT kills the first player, we then correctly skip them below.
-            BattleService.process_active_effects(combat_instance)
+            events.extend(BattleService.process_active_effects(combat_instance))
             
             # (H-1 fix) Re-query alive players AFTER effects have been applied
             first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
@@ -442,7 +443,7 @@ class BattleService:
         # defeated battle by advancing it back into the player phase.
         combat_instance.refresh_from_db(fields=['status', 'turn_phase'])
         if combat_instance.status == CombatInstance.CombatStatus.IN_PROGRESS:
-            BattleService.end_turn(combat_instance)
+            logs.extend(BattleService.end_turn(combat_instance))
         return logs
 
     @staticmethod
@@ -505,10 +506,17 @@ class BattleService:
                 continue
             
             log = {
+                "event_type": "effect_tick",
+                "effect_id": effect.id,
                 "effect": template.name,
+                "target_id": target.id,
+                "target_type": 'character' if target.is_player else 'enemy',
                 "target": str(target.entity.name) if hasattr(target.entity, 'name') else str(target.entity),
                 "hp_change": 0,
                 "mp_change": 0,
+                "shield_absorbed": 0,
+                "is_dead": False,
+                "expired": False,
             }
             
             # Apply per-turn HP change (negative = DOT, positive = HOT)
@@ -541,11 +549,11 @@ class BattleService:
                 dot_damage *= 1 + caster_mods['final_damage_modifier']
                 dot_damage *= 1 + caster_mods['damage_dealt_modifier']
                 dot_damage *= 1 + target_mods['damage_taken_modifier']
-                actual_damage = BattleService.apply_damage_with_shield(
-                    target, max(0, int(dot_damage))
-                )
+                raw_damage = max(0, int(dot_damage))
+                actual_damage = BattleService.apply_damage_with_shield(target, raw_damage)
                 log["hp_change"] -= actual_damage
                 log["damage"] = actual_damage
+                log["shield_absorbed"] = raw_damage - actual_damage
             
             # Apply per-turn MP change
             if template.mp_change_per_turn != 0:
@@ -562,18 +570,26 @@ class BattleService:
                 log["mp_change"] = mp_change
             
             effect_logs.append(log)
-            
+
             # Decrement remaining turns
             effect.remaining_turns -= 1
             if effect.remaining_turns <= 0:
                 effect.delete()
+                log["expired"] = True
             else:
                 effect.save(update_fields=['remaining_turns'])
-            
-            # Check if target died from DOT
+
+            # Check if target died from DOT; a tick can end the battle.
             if target.current_hp <= 0:
-                BattleService.check_combat_status(combat_instance)
-        
+                log["is_dead"] = True
+                battle_result = BattleService.check_combat_status(combat_instance)
+                if battle_result["status"] != CombatInstance.CombatStatus.IN_PROGRESS:
+                    log["battle_result"] = {
+                        "status": battle_result["status"],
+                        "rewards": battle_result["logs"],
+                    }
+                    break
+
         return effect_logs
 
     @staticmethod
@@ -646,6 +662,7 @@ class BattleService:
         so callers can skip advancing the turn.
         """
         result_log = {
+            "event_type": "action",
             "actor_id": combatant.id,
             "actor_type": "character" if combatant.is_player else "enemy",
             "actor": str(combatant.entity.name) if hasattr(combatant.entity, 'name') else str(combatant.entity),
@@ -722,6 +739,7 @@ class BattleService:
                 'target_type': 'character' if target.is_player else 'enemy',
                 'target': result_log['target'],
                 'damage': actual_damage,
+                'shield_absorbed': damage - actual_damage,
                 'heal': 0,
                 'is_dead': target.current_hp <= 0,
                 'effect': None,

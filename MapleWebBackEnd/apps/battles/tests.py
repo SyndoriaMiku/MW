@@ -650,6 +650,52 @@ class NormalAttackSceneContractTests(APITestCase):
 
         self.assertEqual(log['damage'], 15)
 
+    def apply_effect(self, target, *, turns=3, **changes):
+        effect = EffectTemplate.objects.create(name='Tick', duration_turns=turns, **changes)
+        return ActiveEffect.objects.create(
+            combat_instance=target.combat_instance, target=target,
+            effect_template=effect, remaining_turns=turns,
+            remaining_shield_points=changes.get('shields_points', 0),
+        )
+
+    def test_periodic_effect_ticks_are_returned_as_events(self):
+        combat = self.create_battle(enemy_hp=500, enemy_attack=0)
+        enemy = combat.combatants.get(is_player=False)
+        self.apply_effect(enemy, turns=1, hp_change_per_turn=-5)
+
+        response = self.act(combat, enemy)
+
+        ticks = [e for e in response.data['events'] if e.get('event_type') == 'effect_tick']
+        self.assertEqual(len(ticks), 1)
+        self.assertEqual(ticks[0]['target_id'], enemy.id)
+        self.assertEqual(ticks[0]['hp_change'], -5)
+        self.assertTrue(ticks[0]['expired'])
+        self.assertEqual(response.data['events'][0]['event_type'], 'action')
+
+    def test_victory_by_periodic_damage_reports_the_battle_result(self):
+        combat = self.create_battle(enemy_hp=8, enemy_attack=0)
+        enemy = combat.combatants.get(is_player=False)
+        self.apply_effect(enemy, hp_change_per_turn=-5)
+
+        response = self.act(combat, enemy)
+
+        self.assertEqual(response.data['combat']['status'], 'victory')
+        final = response.data['events'][-1]
+        self.assertEqual(final['event_type'], 'effect_tick')
+        self.assertTrue(final['is_dead'])
+        self.assertEqual(final['battle_result']['status'], 'victory')
+
+    def test_shield_absorption_is_reported_per_target(self):
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        self.apply_effect(enemy, shields_points=3)
+
+        log = BattleService.execute_action(player, 'ATTACK', enemy)
+
+        self.assertEqual(log['targets'][0]['shield_absorbed'], 3)
+        self.assertEqual(log['damage'], self.character.total_damage - 3)
+
     def test_area_effect_is_applied_independently_to_every_target(self):
         burn = EffectTemplate.objects.create(
             name='Burning',
