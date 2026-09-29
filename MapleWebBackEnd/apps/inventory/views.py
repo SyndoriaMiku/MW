@@ -9,7 +9,9 @@ from .models import InventoryItem
 from .reservations import character_in_active_battle, exclude_reserved
 from apps.request_params import parse_int
 from apps.characters.models import EquippedItem, EquipmentSlotConfig, Character
-from .serializers import InventoryItemSerializer, EquippedItemSerializer
+from .serializers import (
+    EquipmentSlotConfigSerializer, EquippedItemSerializer, InventoryItemSerializer,
+)
 
 
 class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -214,3 +216,11 @@ class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):
             'item__template__item_sets__effects',
             'item__template__item_sets__items',
         )
+
+
+class EquipmentSlotConfigViewSet(viewsets.ReadOnlyModelViewSet):
+    """Equipment slots the client lays out: type, capacity and accepted item types."""
+    queryset = EquipmentSlotConfig.objects.all()
+    serializer_class = EquipmentSlotConfigSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None

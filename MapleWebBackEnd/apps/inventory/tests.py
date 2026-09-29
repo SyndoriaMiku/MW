@@ -423,3 +423,30 @@ class SellToNpcTests(APITestCase):
         EquippedItem.objects.create(character=self.character, slot=slot, item=sword)
 
         self.assertEqual(self.sell(sword).status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class EquipmentSlotAPITests(APITestCase):
+    def test_lists_slot_configs_in_display_order(self):
+        user = GameUser.objects.create_user(
+            username='slot-viewer', email='slot-viewer@example.com', password='test-pass-123'
+        )
+        self.client.force_authenticate(user)
+        EquipmentSlotConfig.objects.create(
+            slot_type='ring', display_name='Ring', max_count=4, allowed_item_types=['ring'], order=2
+        )
+        EquipmentSlotConfig.objects.create(
+            slot_type='hat', display_name='Hat', allowed_item_types=['hat'], order=1
+        )
+
+        response = self.client.get(reverse('equipment-slot-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            [
+                {'id': response.data[0]['id'], 'slot_type': 'hat', 'display_name': 'Hat',
+                 'max_count': 1, 'allowed_item_types': ['hat'], 'order': 1},
+                {'id': response.data[1]['id'], 'slot_type': 'ring', 'display_name': 'Ring',
+                 'max_count': 4, 'allowed_item_types': ['ring'], 'order': 2},
+            ],
+        )

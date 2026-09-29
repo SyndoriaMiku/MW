@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import InventoryItem, AuroraLine
-from apps.characters.models import EquippedItem
+from apps.characters.models import EquipmentSlotConfig, EquippedItem
 from apps.items.serializers import ItemTemplateSerializer
 
 
@@ -72,4 +72,11 @@ class EquippedItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item', 'slot_index', 'character', 'slot',
         ]
+        read_only_fields = fields
+
+
+class EquipmentSlotConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EquipmentSlotConfig
+        fields = ['id', 'slot_type', 'display_name', 'max_count', 'allowed_item_types', 'order']
         read_only_fields = fields
