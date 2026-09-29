@@ -9,43 +9,58 @@ class QuestService:
     @staticmethod
     def get_active_quests(character):
         """
-        Retrieves active quests for a character.
-        Automatically provisions new daily/weekly quests and performs lazy resets.
+        Retrieves the character's quests.
+        Provisions every quest the character is eligible for (level reached and
+        every prerequisite quest claimed) and lazily resets daily/weekly quests.
         """
         now = timezone.now()
-        
-        # 1. Fetch all Daily and Weekly quests available in the game
-        periodic_quests = QuestTemplate.objects.filter(quest_type__in=[QuestTemplate.QuestType.DAILY, QuestTemplate.QuestType.WEEKLY])
-        
-        for template in periodic_quests:
-            # 2. Get or create CharacterQuest
-            cq, created = CharacterQuest.objects.get_or_create(
-                character=character,
-                quest=template,
-                defaults={'last_reset_at': now, 'status': CharacterQuest.Status.IN_PROGRESS}
-            )
-            
-            # 3. Check for reset if not just created
-            if not created:
-                # Reset once the quest's calendar period has rolled over.
-                needs_reset = not is_current_period(cq.last_reset_at, template.quest_type, now)
-                
-                if needs_reset:
-                    # Reset the quest
-                    cq.status = CharacterQuest.Status.IN_PROGRESS
-                    cq.last_reset_at = now
-                    cq.completed_at = None
-                    cq.save()
-                    
-                    # Reset objectives
-                    for obj_progress in cq.objective_progress.all():
-                        obj_progress.current_count = 0
-                        obj_progress.is_completed = False
-                        obj_progress.save()
+        owned = {cq.quest_id: cq for cq in CharacterQuest.objects.filter(character=character)}
+        claimed_ids = {
+            quest_id for quest_id, cq in owned.items()
+            if cq.status == CharacterQuest.Status.CLAIMED
+        }
 
-            # Ensure objectives exist
-            if not cq.objective_progress.exists() and template.objectives.exists():
-                QuestService.initialize_objectives(cq)
+        templates = QuestTemplate.objects.prefetch_related('prerequisite_quests', 'objectives')
+        for template in templates:
+            cq = owned.get(template.id)
+            if cq is None:
+                eligible = template.required_level <= character.level and all(
+                    prerequisite.id in claimed_ids
+                    for prerequisite in template.prerequisite_quests.all()
+                )
+                if not eligible:
+                    continue
+                cq, _ = CharacterQuest.objects.get_or_create(
+                    character=character,
+                    quest=template,
+                    defaults={'last_reset_at': now, 'status': CharacterQuest.Status.IN_PROGRESS}
+                )
+            elif (
+                template.quest_type != QuestTemplate.QuestType.ONCE
+                and not is_current_period(cq.last_reset_at, template.quest_type, now)
+            ):
+                # Reset once the quest's calendar period has rolled over.
+                cq.status = CharacterQuest.Status.IN_PROGRESS
+                cq.last_reset_at = now
+                cq.completed_at = None
+                cq.save()
+
+                # Reset objectives
+                for obj_progress in cq.objective_progress.all():
+                    obj_progress.current_count = 0
+                    obj_progress.is_completed = False
+                    obj_progress.save()
+
+            objectives = template.objectives.all()
+            if objectives:
+                # Ensure objectives exist
+                if not cq.objective_progress.exists():
+                    QuestService.initialize_objectives(cq)
+            elif cq.status == CharacterQuest.Status.IN_PROGRESS:
+                # Nothing to do (e.g. a story hand-off): ready to claim.
+                cq.status = CharacterQuest.Status.COMPLETED
+                cq.completed_at = now
+                cq.save(update_fields=['status', 'completed_at'])
 
         return CharacterQuest.objects.filter(character=character).order_by('-started_at')
 
