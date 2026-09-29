@@ -276,6 +276,16 @@ class TradeViewSet(viewsets.ModelViewSet):
         if trade.receiver == user: return 'receiver'
         return None
 
+    @staticmethod
+    def _unready_other_party(trade, role):
+        """An offer changed, so the other side must review and ready again."""
+        if role == 'sender':
+            trade.receiver_ready = False
+            trade.receiver_accepted = False
+        else:
+            trade.sender_ready = False
+            trade.sender_accepted = False
+
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def add_item(self, request, pk=None):
@@ -314,26 +324,59 @@ class TradeViewSet(viewsets.ModelViewSet):
         if Listing.objects.filter(item=item, is_active=True).exists():
             return Response({"detail": "Listed items cannot be added to a trade."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Ensure item not already in trade
-        if TradeItem.objects.filter(item=item).exists():
+        # Only pending trades reserve an item; finished trades are history.
+        if TradeItem.objects.filter(item=item, trade__status='pending').exists():
             return Response({"detail": "Item is already in a trade."}, status=status.HTTP_400_BAD_REQUEST)
 
         TradeItem.objects.create(trade=trade, item=item, is_sender=(role == 'sender'))
-        
-        # Un-ready the other party
-        if role == 'sender':
-            trade.receiver_ready = False
-            trade.receiver_accepted = False
-        else:
-            trade.sender_ready = False
-            trade.sender_accepted = False
+        self._unready_other_party(trade, role)
         trade.save()
 
         return Response({"detail": "Item added."})
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def remove_item(self, request, pk=None):
+        trade = Trade.objects.select_for_update().get(pk=self.get_object().pk)
+        role = self._get_role(trade, request.user)
+
+        if trade.status != 'pending':
+            return Response({"detail": "Trade is not pending."}, status=status.HTTP_400_BAD_REQUEST)
+        if (role == 'sender' and trade.sender_ready) or (role == 'receiver' and trade.receiver_ready):
+            return Response({"detail": "Cannot modify items while ready."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            item_id = int(request.data.get('item_id'))
+        except (TypeError, ValueError):
+            return Response({"detail": "item_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        trade_item = TradeItem.objects.filter(
+            trade=trade, item_id=item_id, is_sender=(role == 'sender')
+        ).first()
+        if trade_item is None:
+            return Response({"detail": "You have not offered this item."}, status=status.HTTP_400_BAD_REQUEST)
+
+        trade_item.delete()
+        self._unready_other_party(trade, role)
+        trade.save()
+        return Response({"detail": "Item removed."})
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def cancel(self, request, pk=None):
+        """Either participant may cancel a pending trade, releasing its items."""
+        trade = Trade.objects.select_for_update().get(pk=self.get_object().pk)
+        if trade.status != 'pending':
+            return Response({"detail": "Trade is not pending."}, status=status.HTTP_400_BAD_REQUEST)
+
+        trade.status = 'cancelled'
+        trade.save(update_fields=['status'])
+        return Response({"detail": "Trade cancelled."})
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
     def update_lumis(self, request, pk=None):
-        trade = self.get_object()
+        trade = Trade.objects.select_for_update().get(pk=self.get_object().pk)
         user = request.user
         role = self._get_role(trade, user)
         try:
@@ -352,18 +395,16 @@ class TradeViewSet(viewsets.ModelViewSet):
 
         if role == 'sender':
             trade.sender_lumis = lumis
-            trade.receiver_ready = False
-            trade.receiver_accepted = False
         else:
             trade.receiver_lumis = lumis
-            trade.sender_ready = False
-            trade.sender_accepted = False
+        self._unready_other_party(trade, role)
         trade.save()
         return Response({"detail": "Lumis updated."})
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def ready(self, request, pk=None):
-        trade = self.get_object()
+        trade = Trade.objects.select_for_update().get(pk=self.get_object().pk)
         role = self._get_role(trade, request.user)
         
         if not role or trade.status != 'pending':
