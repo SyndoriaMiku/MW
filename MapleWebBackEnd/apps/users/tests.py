@@ -87,3 +87,27 @@ class DefaultPermissionTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
+class RegistrationPasswordTests(APITestCase):
+    def register(self, password, username='new-player'):
+        return self.client.post(
+            reverse('register'),
+            {'username': username, 'email': f'{username}@example.com', 'password': password},
+            format='json',
+        )
+
+    def test_weak_passwords_are_rejected(self):
+        for password in ('1', 'password', '12345678', 'new-player1'):
+            with self.subTest(password=password):
+                response = self.register(password)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('password', response.data)
+        self.assertFalse(GameUser.objects.filter(username='new-player').exists())
+
+    def test_password_is_hashed_and_never_returned(self):
+        response = self.register('Sturdy-pass-4821')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertNotIn('password', response.data)
+        self.assertTrue(GameUser.objects.get(username='new-player').check_password('Sturdy-pass-4821'))

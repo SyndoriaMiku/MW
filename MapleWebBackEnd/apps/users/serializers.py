@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 User = get_user_model()
 
@@ -10,6 +12,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True}
         }
+
+    def validate(self, attrs):
+        # Run AUTH_PASSWORD_VALIDATORS, including similarity to the username/email.
+        candidate = User(username=attrs.get('username'), email=attrs.get('email'))
+        try:
+            validate_password(attrs.get('password'), user=candidate)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+        return attrs
 
     def create(self, validated_data):
         user = User(
