@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.battles.services import BattleService
-from apps.characters.models import Character
+from apps.characters.models import Character, RateEvent
 from apps.party.models import Party, PartyMember
 from apps.world.models import EnemyTemplate
 
@@ -71,6 +71,16 @@ class SessionBootstrapTests(APITestCase):
         self.assertEqual(data['party']['id'], party.id)
         self.assertEqual(data['active_battle']['id'], combat.id)
         self.assertEqual(data['active_battle']['version'], 0)
+
+    def test_lists_running_rate_events(self):
+        RateEvent.objects.create(name='Double EXP', is_active=True, exp_rate_bonus=100)
+        RateEvent.objects.create(name='Switched off', is_active=False, exp_rate_bonus=100)
+        self.client.force_authenticate(self.user)
+
+        data = self.client.get(self.url).data
+
+        self.assertEqual([event['name'] for event in data['rate_events']], ['Double EXP'])
+        self.assertEqual(data['rate_events'][0]['exp_rate_bonus'], 100)
 
 
 class DefaultPermissionTests(APITestCase):

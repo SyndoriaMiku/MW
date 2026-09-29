@@ -198,6 +198,27 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             'lumis': user.lumis,
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'])
+    def use(self, request, pk=None):
+        """Use one timed buff item (e.g. an x2 EXP charm) outside battle."""
+        if not request.user.character_id:
+            return Response({'error': 'Create a character first.'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.characters.buff_service import BuffError, use_buff_item
+        from apps.characters.serializers import CharacterBuffSerializer
+
+        try:
+            buff, remaining_quantity = use_buff_item(request.user.character_id, pk)
+        except InventoryItem.DoesNotExist:
+            return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except BuffError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'status': 'Buff applied.',
+            'buff': CharacterBuffSerializer(buff).data,
+            'remaining_quantity': remaining_quantity,
+        }, status=status.HTTP_200_OK)
+
 
 
 class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):

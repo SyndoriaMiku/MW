@@ -26,6 +26,7 @@ from .models import (
     LumenEvent,
     LumenModifierRule,
     LumenTierProperty,
+    TimedBuffRule,
 )
 from .serializers import ItemTemplateSerializer
 
@@ -654,13 +655,74 @@ class ItemUseKindTests(TestCase):
         def template(name):
             return ItemTemplate.objects.create(name=name, item_type='use')
 
-        potion, essence, scroll, snack = (template(n) for n in ('Potion', 'Essence', 'Scroll', 'Snack'))
+        potion, essence, scroll, charm, snack = (
+            template(n) for n in ('Potion', 'Essence', 'Scroll', 'Charm', 'Snack')
+        )
         BattleConsumableRule.objects.create(item_template=potion, hp_restore=10)
         AuroraModifierRule.objects.create(item_template=essence, modifier_type='REROLL_ALL')
         LumenModifierRule.objects.create(item_template=scroll, target_level=5)
+        TimedBuffRule.objects.create(item_template=charm, exp_rate_bonus=100, duration_minutes=30)
 
-        kinds = {t.name: ItemTemplateSerializer(t).data['use_kind'] for t in (potion, essence, scroll, snack)}
+        kinds = {
+            t.name: ItemTemplateSerializer(t).data['use_kind']
+            for t in (potion, essence, scroll, charm, snack)
+        }
 
         self.assertEqual(kinds, {
-            'Potion': 'battle', 'Essence': 'aurora_modifier', 'Scroll': 'lumen_modifier', 'Snack': None,
+            'Potion': 'battle', 'Essence': 'aurora_modifier', 'Scroll': 'lumen_modifier',
+            'Charm': 'timed_buff', 'Snack': None,
         })
+
+
+class DropRateUnitTests(TestCase):
+    """Drop rate is always in percentage points, so Aurora drop lines may not be flat."""
+
+    def setUp(self):
+        self.aurora = AuroraProperty.objects.create(name='Drop Aurora', tier=1, max_aurora_level=3)
+
+    def pool(self, line_type):
+        return AuroraLinePool(
+            aurora_property=self.aurora, item_types=['ring'], aurora_level=1,
+            stat_type='drop', line_type=line_type, value=5,
+        )
+
+    def test_flat_drop_pool_line_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.pool('flat').full_clean()
+
+        self.pool('percent').full_clean()
+
+    def test_fixed_flat_drop_line_is_rejected(self):
+        rule = AuroraModifierRule(
+            item_template=ItemTemplate.objects.create(name='Drop Scroll', item_type='use'),
+            modifier_type='REPLACE_FIXED',
+            fixed_stat_type='drop', fixed_line_type='flat', fixed_value=5,
+        )
+        with self.assertRaises(ValidationError):
+            rule.clean()
+
+        rule.fixed_line_type = 'percent'
+        rule.clean()
+
+
+class TimedBuffRuleValidationTests(TestCase):
+    def rule(self, item_type='use', **fields):
+        fields.setdefault('duration_minutes', 30)
+        return TimedBuffRule(
+            item_template=ItemTemplate.objects.create(name='Charm', item_type=item_type), **fields,
+        )
+
+    def test_valid_rule_passes(self):
+        self.rule(exp_rate_bonus=100, max_duration_minutes=60).full_clean()
+
+    def test_only_use_items(self):
+        with self.assertRaises(ValidationError):
+            self.rule(item_type='ring', exp_rate_bonus=100).full_clean()
+
+    def test_needs_a_bonus(self):
+        with self.assertRaises(ValidationError):
+            self.rule().full_clean()
+
+    def test_maximum_cannot_be_shorter_than_one_use(self):
+        with self.assertRaises(ValidationError):
+            self.rule(exp_rate_bonus=100, max_duration_minutes=10).full_clean()

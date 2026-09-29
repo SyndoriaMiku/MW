@@ -3,7 +3,7 @@ from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule, AuroraLineCountConfig,
     AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent,
-    LumenModifierRule, BattleConsumableRule,
+    LumenModifierRule, BattleConsumableRule, TimedBuffRule,
 )
 from .forms import LumenAscendRuleForm
 
@@ -215,6 +215,11 @@ class LumenModifierRuleAdmin(admin.ModelAdmin):
     list_display = ('item_template', 'target_level')
     search_fields = ('item_template__name',)
     filter_horizontal = ('lumen_tiers',)
+
+@admin.register(TimedBuffRule)
+class TimedBuffRuleAdmin(admin.ModelAdmin):
+    list_display = ('item_template', 'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'duration_minutes', 'max_duration_minutes')
+    search_fields = ('item_template__name',)
 
 @admin.register(AuroraLineCountConfig)
 class AuroraLineCountConfigAdmin(admin.ModelAdmin):

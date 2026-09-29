@@ -29,7 +29,8 @@ class SessionBootstrapView(APIView):
     def get(self, request):
         from apps.battles.serializers import CombatInstanceSerializer
         from apps.battles.services import BattleService
-        from apps.characters.serializers import CharacterSerializer
+        from apps.characters.models import RateEvent
+        from apps.characters.serializers import CharacterSerializer, RateEventSerializer
         from apps.party.models import PartyMember
         from apps.party.serializers import PartySerializer
 
@@ -51,6 +52,7 @@ class SessionBootstrapView(APIView):
             "character": CharacterSerializer(character).data if character else None,
             "party": PartySerializer(party).data if party else None,
             "active_battle": CombatInstanceSerializer(active_battle).data if active_battle else None,
+            "rate_events": RateEventSerializer(RateEvent.objects.running(), many=True).data,
             "feature_flags": {
                 "battle_events": True,
                 "stable_combatant_targets": True,

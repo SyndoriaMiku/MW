@@ -34,6 +34,7 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
         ('battle', 'battle_consumable_rule'),
         ('aurora_modifier', 'aurora_modifier_rule'),
         ('lumen_modifier', 'lumen_modifier_rule'),
+        ('timed_buff', 'timed_buff_rule'),
     )
 
     def get_use_kind(self, obj):

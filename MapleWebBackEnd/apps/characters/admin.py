@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Character, EquipmentSlotConfig, EquippedItem, CharacterSkill
+from .models import Character, CharacterBuff, CharacterSkill, EquipmentSlotConfig, EquippedItem, RateEvent
 
 
 # ===================================================================
@@ -25,6 +25,19 @@ class EquippedItemInline(admin.TabularInline):
     fields = ('slot', 'slot_index', 'item')
 
 
+class CharacterBuffInline(admin.TabularInline):
+    """
+    Buff theo thời gian (x2 EXP/drop...) của nhân vật. Bonus tính bằng % (100 = x2).
+    """
+    model = CharacterBuff
+    extra = 0
+    autocomplete_fields = ['source_template']
+    fields = (
+        'source_template', 'exp_rate_bonus', 'lumis_rate_bonus',
+        'drop_rate_bonus', 'epic_drop_rate_bonus', 'started_at', 'expires_at',
+    )
+
+
 # ===================================================================
 # SECTION: MAIN MODEL ADMINS
 # ===================================================================
@@ -35,7 +48,7 @@ class CharacterAdmin(admin.ModelAdmin):
     Tùy chỉnh giao diện quản lý chi tiết cho Character.
     """
     # Gắn các inline đã tạo vào trang admin của Character
-    inlines = [EquippedItemInline, CharacterSkillInline]
+    inlines = [EquippedItemInline, CharacterSkillInline, CharacterBuffInline]
 
     # Các cột hiển thị trên trang danh sách
     list_display = (
@@ -141,3 +154,18 @@ class EquipmentSlotConfigAdmin(admin.ModelAdmin):
     search_fields = ('slot_type', 'display_name')
     ordering = ('order',)
     list_editable = ('display_name', 'max_count', 'order')
+
+
+# ===================================================================
+# SECTION: RATE EVENTS
+# ===================================================================
+
+@admin.register(RateEvent)
+class RateEventAdmin(admin.ModelAdmin):
+    """
+    Event toàn server (vd: x2 EXP cuối tuần). Bonus tính bằng % (100 = x2),
+    cộng thêm cho mọi nhân vật khi đang bật và trong khung giờ.
+    """
+    list_display = ('name', 'is_active', 'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'start_time', 'end_time')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'description')

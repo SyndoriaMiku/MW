@@ -9,16 +9,18 @@ from apps.battles.services import _prefetch_entities
 class RewardService:
 
     @staticmethod
-    def effective_drop_rate(loot, drop_rate_multiplier):
+    def effective_drop_rate(loot, drop_rate_multiplier, epic_drop_rate_multiplier=1.0):
         """
-        Chance for one loot roll. Only COMMON drops scale with the player's
-        drop rate. EPIC drops may only be boosted by dedicated consumables and
-        events, none of which exist yet, and LEGENDARY drops never scale.
+        Chance for one loot roll. COMMON drops scale with the player's drop
+        rate. EPIC drops scale only with the epic rate, which just timed buffs
+        and rate events raise. LEGENDARY drops never scale.
         """
         from apps.world.models import LootTable
 
         if loot.drop_type == LootTable.DropType.COMMON:
             return loot.base_drop_rate * drop_rate_multiplier
+        if loot.drop_type == LootTable.DropType.EPIC:
+            return loot.base_drop_rate * epic_drop_rate_multiplier
         return loot.base_drop_rate
 
     @staticmethod
@@ -60,8 +62,9 @@ class RewardService:
         base_exp_per_player = total_exp // num_players
         base_lumis_per_player = total_lumis // num_players
 
-        # 2. Get highest drop rate for Party Shared Loot
-        highest_party_drop_rate = max([p.total_drop_rate for p in alive_players]) if alive_players else 1.0
+        # 2. Get highest drop rates for Party Shared Loot
+        highest_party_drop_rate = max(p.total_drop_rate for p in alive_players)
+        highest_party_epic_drop_rate = max(p.total_epic_drop_rate for p in alive_players)
 
         # Initialize log dictionary for each player
         for p in alive_players:
@@ -86,7 +89,9 @@ class RewardService:
             for loot in enemy.loot_tables.all():
                 if loot.is_party_shared:
                     # Party Shared Loot
-                    if random.random() <= RewardService.effective_drop_rate(loot, highest_party_drop_rate):
+                    if random.random() <= RewardService.effective_drop_rate(
+                        loot, highest_party_drop_rate, highest_party_epic_drop_rate
+                    ):
                         qty = random.randint(loot.min_quantity, loot.max_quantity)
                         if party and party.is_solo:
                             # Nobody to share with: the solo player gets it directly.
@@ -108,7 +113,9 @@ class RewardService:
                 else:
                     # Personal Loot
                     for player in alive_players:
-                        if random.random() <= RewardService.effective_drop_rate(loot, player.total_drop_rate):
+                        if random.random() <= RewardService.effective_drop_rate(
+                            loot, player.total_drop_rate, player.total_epic_drop_rate
+                        ):
                             qty = random.randint(loot.min_quantity, loot.max_quantity)
                             if qty > 0:
                                 grant_item(player, loot.item_template, qty)

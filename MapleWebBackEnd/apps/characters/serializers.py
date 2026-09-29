@@ -1,5 +1,32 @@
+from django.utils import timezone
 from rest_framework import serializers
-from .models import Character, CharacterSkill
+from .models import Character, CharacterBuff, CharacterSkill, RateEvent
+
+
+class CharacterBuffSerializer(serializers.ModelSerializer):
+    """A running timed buff. Bonuses are percentage points (100 = x2)."""
+    item_template_id = serializers.IntegerField(source='source_template_id', read_only=True)
+    name = serializers.CharField(source='source_template.name', read_only=True)
+    icon_key = serializers.CharField(source='source_template.icon_key', read_only=True)
+
+    class Meta:
+        model = CharacterBuff
+        fields = [
+            'id', 'item_template_id', 'name', 'icon_key',
+            'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus',
+            'started_at', 'expires_at',
+        ]
+
+
+class RateEventSerializer(serializers.ModelSerializer):
+    """A running server-wide rate event. Bonuses are percentage points (100 = x2)."""
+
+    class Meta:
+        model = RateEvent
+        fields = [
+            'id', 'name', 'description', 'start_time', 'end_time',
+            'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus',
+        ]
 
 
 class CharacterSkillSerializer(serializers.ModelSerializer):
@@ -72,6 +99,12 @@ class CharacterSerializer(serializers.ModelSerializer):
     total_att = serializers.IntegerField(read_only=True)
     total_damage = serializers.IntegerField(read_only=True)
     total_final_damage = serializers.FloatField(read_only=True)
+    # Gain multipliers (1.0 = 100%) with equipment, buffs and events applied.
+    total_exp_rate = serializers.FloatField(read_only=True)
+    total_lumis_rate = serializers.FloatField(read_only=True)
+    total_drop_rate = serializers.FloatField(read_only=True)
+    total_epic_drop_rate = serializers.FloatField(read_only=True)
+    active_buffs = serializers.SerializerMethodField()
     skills = CharacterSkillSerializer(many=True, read_only=True)
 
     class Meta:
@@ -83,7 +116,8 @@ class CharacterSerializer(serializers.ModelSerializer):
             'max_stamina', 'current_stamina', 'last_stamina_update',
             'total_str', 'total_agi', 'total_int', 'total_hp', 'total_mp', 'total_att',
             'total_damage', 'total_final_damage',
-            'skills',
+            'total_exp_rate', 'total_lumis_rate', 'total_drop_rate', 'total_epic_drop_rate',
+            'active_buffs', 'skills',
         ]
         read_only_fields = [
             'id', 'current_location', 'base_hp', 'base_mp', 'base_att',
@@ -101,6 +135,10 @@ class CharacterSerializer(serializers.ModelSerializer):
                 })
             attrs['character_class'] = job.character_class
         return attrs
+
+    def get_active_buffs(self, obj):
+        buffs = obj.buffs.filter(expires_at__gt=timezone.now()).select_related('source_template')
+        return CharacterBuffSerializer(buffs, many=True).data
 
     def get_required_exp(self, obj):
         """EXP required to advance from the character's current level."""

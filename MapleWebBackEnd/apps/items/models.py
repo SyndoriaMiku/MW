@@ -50,6 +50,12 @@ LINE_TYPE_CHOICES = [
     ]
 
 
+def validate_drop_line(stat_type, line_type, *, field):
+    """Drop rate is only ever a percentage (5 = +5%), so a flat drop line is invalid."""
+    if stat_type == 'drop' and line_type == 'flat':
+        raise ValidationError({field: 'Drop rate lines must be percent, not flat.'})
+
+
 class ItemTemplate(models.Model):
     # Item template
     name = models.CharField(max_length=100)
@@ -220,6 +226,7 @@ class AuroraLinePool(models.Model):
         from django.core.exceptions import ValidationError
         if not self.item_types:
             raise ValidationError("You must select at least one item type.")
+        validate_drop_line(self.stat_type, self.line_type, field='line_type')
 
     class Meta:
         verbose_name = "Aurora Line Pool"
@@ -343,6 +350,7 @@ class AuroraModifierRule(models.Model):
             raise ValidationError({
                 'tier_up_chance': 'Only full reroll modifiers can tier up; set this to 0.'
             })
+        validate_drop_line(self.fixed_stat_type, self.fixed_line_type, field='fixed_line_type')
 
     class Meta:
         verbose_name = "Aurora Modifier Rule"
@@ -407,6 +415,38 @@ class LumenModifierRule(models.Model):
 
     def __str__(self):
         return f"{self.item_template.name} -> Lumen {self.target_level}"
+
+
+class TimedBuffRule(models.Model):
+    """
+    Makes a 'use' item give its user a timed buff outside battle, e.g. x2 EXP
+    for 30 minutes. Bonuses are percentage points: 100 = +100%, doubling the
+    base rate. Reusing the same item adds its duration to the time left.
+    """
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='timed_buff_rule')
+    exp_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="EXP gain bonus in % (100 = x2)")
+    lumis_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Lumis gain bonus in % (100 = x2)")
+    drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Common drop rate bonus in % (100 = x2)")
+    epic_drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Epic drop rate bonus in % (100 = x2). Legendary drops are never boosted")
+    duration_minutes = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Buff time added by one use")
+    max_duration_minutes = models.PositiveIntegerField(null=True, blank=True, help_text="Most time the buff may have left after a use; empty means no limit")
+
+    BONUS_FIELDS = ('exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus')
+
+    class Meta:
+        verbose_name = "Timed Buff Rule"
+        verbose_name_plural = "Timed Buff Rules"
+
+    def clean(self):
+        if self.item_template_id and self.item_template.item_type != 'use':
+            raise ValidationError({'item_template': "Only 'use' items can grant timed buffs."})
+        if not any(getattr(self, field) for field in self.BONUS_FIELDS):
+            raise ValidationError("A timed buff must raise at least one rate.")
+        if self.max_duration_minutes is not None and self.max_duration_minutes < self.duration_minutes:
+            raise ValidationError({'max_duration_minutes': 'Must be at least one use of the buff.'})
+
+    def __str__(self):
+        return f"{self.item_template.name} ({self.duration_minutes} min buff)"
 
 
 class AuroraEvent(models.Model):

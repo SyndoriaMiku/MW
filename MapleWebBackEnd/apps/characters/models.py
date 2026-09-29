@@ -118,7 +118,10 @@ class Character(models.Model):
             if template.all_stats_boost > 0:
                 for stat in ['str', 'agi', 'int']:
                     mods[stat]['base_flat'] += template.all_stats_boost
-    
+
+            # Percentage points, like Aurora drop lines: 20 = +20%.
+            mods['drop_rate']['percent'] += template.drop_rate_boost / 100.0
+
     def _get_lumen_ascend_mods(self, mods, equipped_items):
         """Get stat from Lumen Ascend. Stack all levels up to current.
         (DB-1 fix) LumenAscendRule now queried once per tier group instead of per item.
@@ -165,14 +168,15 @@ class Character(models.Model):
                             mods[s]['base_flat'] += value
                         elif line.line_type == 'percent':
                             mods[s]['percent'] += value / 100.0
-                else:
-                    # Map 'drop' to 'drop_rate' key in mods dict
-                    stat_key = 'drop_rate' if stat == 'drop' else stat
-                    if stat_key in mods:
-                        if line.line_type == 'flat':
-                            mods[stat_key]['base_flat'] += value
-                        elif line.line_type == 'percent':
-                            mods[stat_key]['percent'] += value / 100.0
+                elif stat == 'drop':
+                    # Drop is always a percentage (5 = +5%); flat drop lines are
+                    # rejected by validation, and any left over count the same.
+                    mods['drop_rate']['percent'] += value / 100.0
+                elif stat in mods:
+                    if line.line_type == 'flat':
+                        mods[stat]['base_flat'] += value
+                    elif line.line_type == 'percent':
+                        mods[stat]['percent'] += value / 100.0
 
     def _get_item_set_mods(self, mods, equipped_items):
         """Get stat from Item Set effects.
@@ -302,22 +306,33 @@ class Character(models.Model):
         return round(base * (1 + mods['percent'])) + mods['extra_flat']
 
     @cached_property
+    def _rate_bonuses(self):
+        """Fractions (1.0 = +100%) that timed buffs and rate events add to each gain rate."""
+        from .buff_service import rate_bonuses
+        return rate_bonuses(self)
+
+    def _gain_rate(self, key, base=1.0):
+        # Every source adds: base + equipment + best buff + all active events.
+        mods = self._all_stat_modifiers[key]
+        return base + mods['base_flat'] + mods['percent'] + mods['extra_flat'] + self._rate_bonuses[key]
+
+    @cached_property
     def total_drop_rate(self):
-        mods = self._all_stat_modifiers.get('drop_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
-        # Base drop rate modifier is 1.0 (100%), buffs add to it.
-        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+        """Common drop multiplier. Character.drop_rate is the base (1.0 = 100%)."""
+        return self._gain_rate('drop_rate', base=self.drop_rate)
+
+    @cached_property
+    def total_epic_drop_rate(self):
+        """Epic drop multiplier: only buffs and events raise it, never equipment."""
+        return 1.0 + self._rate_bonuses['epic_drop_rate']
 
     @cached_property
     def total_exp_rate(self):
-        mods = self._all_stat_modifiers.get('exp_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
-        # Base exp rate modifier is 1.0 (100%), buffs add to it.
-        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+        return self._gain_rate('exp_rate')
 
     @cached_property
     def total_lumis_rate(self):
-        mods = self._all_stat_modifiers.get('lumis_rate', {'base_flat': 0, 'percent': 0, 'extra_flat': 0})
-        # Base lumis gain rate is 1.0 (100%), buffs add to it.
-        return 1.0 + mods['base_flat'] + mods['percent'] + mods['extra_flat']
+        return self._gain_rate('lumis_rate')
 
     @cached_property
     def total_hp(self):
@@ -478,6 +493,69 @@ class CharacterSkill(models.Model):
     
     def __str__(self):
         return f"{self.character.name} - {self.skill_template.name} (Level {self.level})"
+
+
+# ===================================================================
+# SECTION: GAIN RATE BUFFS & EVENTS
+# Bonuses are percentage points: 100 = +100%, doubling the base rate.
+# ===================================================================
+
+class CharacterBuff(models.Model):
+    """
+    A timed buff from a used item (TimedBuffRule). The bonuses are copied
+    from the rule on each use. One row per item; reusing it extends the row.
+    """
+    character = models.ForeignKey(Character, on_delete=models.CASCADE, related_name='buffs')
+    source_template = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, related_name='+')
+    exp_rate_bonus = models.FloatField(default=0)
+    lumis_rate_bonus = models.FloatField(default=0)
+    drop_rate_bonus = models.FloatField(default=0)
+    epic_drop_rate_bonus = models.FloatField(default=0)
+    started_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        unique_together = ('character', 'source_template')
+        ordering = ['expires_at']
+        verbose_name = "Character Buff"
+        verbose_name_plural = "Character Buffs"
+
+    def __str__(self):
+        return f"{self.character.name} - {self.source_template.name} until {self.expires_at:%Y-%m-%d %H:%M}"
+
+
+class RateEventQuerySet(models.QuerySet):
+    def running(self, now=None):
+        now = now or timezone.now()
+        return self.filter(is_active=True).filter(
+            models.Q(start_time__isnull=True) | models.Q(start_time__lte=now),
+            models.Q(end_time__isnull=True) | models.Q(end_time__gte=now),
+        )
+
+
+class RateEvent(models.Model):
+    """
+    A server-wide gain rate event (e.g. x2 EXP weekend). Every running event
+    adds its bonus to every character, on top of equipment and buffs.
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=False)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    exp_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="EXP gain bonus in % (100 = x2)")
+    lumis_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Lumis gain bonus in % (100 = x2)")
+    drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Common drop rate bonus in % (100 = x2)")
+    epic_drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Epic drop rate bonus in % (100 = x2)")
+
+    objects = RateEventQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Rate Event"
+        verbose_name_plural = "Rate Events"
+
+    def __str__(self):
+        return f"{self.name} (Active: {self.is_active})"
 
 
     

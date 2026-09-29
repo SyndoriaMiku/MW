@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.characters.models import Character, CharacterSkill
+from apps.characters.models import Character, CharacterBuff, CharacterSkill
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
 from apps.items.models import BattleConsumableRule, ItemTemplate
@@ -331,6 +331,48 @@ class NormalAttackSceneContractTests(BattleFixtureMixin, APITestCase):
             InventoryItem.objects.filter(owner=self.character).values_list('template__name', flat=True)
         )
         self.assertEqual(owned, {'common drop'})
+
+    def give_buff(self, **bonuses):
+        now = timezone.now()
+        CharacterBuff.objects.create(
+            character=self.character,
+            source_template=ItemTemplate.objects.create(name='Charm', item_type='use'),
+            started_at=now, expires_at=now + timedelta(minutes=30), **bonuses,
+        )
+
+    def test_epic_drop_buff_boosts_only_epic_loot(self):
+        combat = self.create_battle(enemy_hp=1)
+        target = combat.combatants.get(is_player=False)
+        for drop_type in ('common', 'epic', 'legendary'):
+            LootTable.objects.create(
+                enemy=target.entity,
+                item_template=ItemTemplate.objects.create(name=f'{drop_type} drop', item_type='etc'),
+                base_drop_rate=0.5, drop_type=drop_type,
+            )
+        self.give_buff(epic_drop_rate_bonus=100)
+
+        with mock.patch('apps.battles.reward_service.random.random', return_value=0.6):
+            self.act(combat, target)
+
+        owned = set(
+            InventoryItem.objects.filter(owner=self.character).values_list('template__name', flat=True)
+        )
+        self.assertEqual(owned, {'epic drop'})
+
+    def test_exp_and_lumis_buffs_scale_battle_rewards(self):
+        combat = self.create_battle(enemy_hp=1)
+        target = combat.combatants.get(is_player=False)
+        EnemyTemplate.objects.filter(pk=target.objects_id).update(
+            exp_reward=10, lumis_reward_min=10, lumis_reward_max=10,
+        )
+        self.give_buff(exp_rate_bonus=100, lumis_rate_bonus=50)
+
+        self.act(combat, target)
+
+        self.character.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual(self.character.current_exp, 20)
+        self.assertEqual(self.user.lumis, 15)
 
     def test_victory_loot_merges_when_character_owns_several_stacks(self):
         combat = self.create_battle(enemy_hp=1)
