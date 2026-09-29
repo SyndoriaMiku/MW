@@ -20,6 +20,7 @@ from .models import (
     AuroraLinePool,
     AuroraModifierRule,
     AuroraProperty,
+    BattleConsumableRule,
     ItemTemplate,
     LumenCostRule,
     LumenEvent,
@@ -646,3 +647,20 @@ class LumenLevelModifierTests(APITestCase):
         Listing.objects.create(seller=self.user, item=self.hat, price=10)
 
         self.assert_rejected(self.apply())
+
+
+class ItemUseKindTests(TestCase):
+    def test_use_kind_follows_the_attached_rule(self):
+        def template(name):
+            return ItemTemplate.objects.create(name=name, item_type='use')
+
+        potion, essence, scroll, snack = (template(n) for n in ('Potion', 'Essence', 'Scroll', 'Snack'))
+        BattleConsumableRule.objects.create(item_template=potion, hp_restore=10)
+        AuroraModifierRule.objects.create(item_template=essence, modifier_type='REROLL_ALL')
+        LumenModifierRule.objects.create(item_template=scroll, target_level=5)
+
+        kinds = {t.name: ItemTemplateSerializer(t).data['use_kind'] for t in (potion, essence, scroll, snack)}
+
+        self.assertEqual(kinds, {
+            'Potion': 'battle', 'Essence': 'aurora_modifier', 'Scroll': 'lumen_modifier', 'Snack': None,
+        })

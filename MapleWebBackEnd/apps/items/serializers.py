@@ -27,6 +27,20 @@ class ItemSetSerializer(serializers.ModelSerializer):
 
 class ItemTemplateSerializer(serializers.ModelSerializer):
     item_sets = ItemSetSerializer(many=True, read_only=True)
+    use_kind = serializers.SerializerMethodField()
+
+    # Which screen a 'use' item belongs to, from the rule attached to it.
+    USE_KIND_RULES = (
+        ('battle', 'battle_consumable_rule'),
+        ('aurora_modifier', 'aurora_modifier_rule'),
+        ('lumen_modifier', 'lumen_modifier_rule'),
+    )
+
+    def get_use_kind(self, obj):
+        for kind, relation in self.USE_KIND_RULES:
+            if hasattr(obj, relation):
+                return kind
+        return None
 
     class Meta:
         model = ItemTemplate
@@ -37,7 +51,7 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
             'att_boost', 'str_boost', 'agi_boost', 'int_boost',
             'all_stats_boost', 'drop_rate_boost', 'description',
             'sell_price', 'lumen_tier', 'aurora_tier', 'class_restriction',
-            'job_restriction',
+            'job_restriction', 'use_kind',
         ]
         read_only_fields = fields
 
