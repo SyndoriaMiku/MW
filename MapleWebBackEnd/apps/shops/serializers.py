@@ -58,5 +58,9 @@ class SpecialShopItemSerializer(serializers.ModelSerializer):
         return SpecialShopItemRecipeSerializer(qs, many=True).data
 
 
+class ShopPurchaseSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
+
 class SpecialShopExchangeSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1, default=1)

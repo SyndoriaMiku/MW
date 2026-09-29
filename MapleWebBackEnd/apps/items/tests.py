@@ -283,6 +283,17 @@ class LumenReservationAPITests(APITestCase):
                 fragment.refresh_from_db()
                 self.assertTrue(fragment.is_destroyed)
 
+    def test_restore_rejects_non_integer_ids(self):
+        for data in (
+            {'fragment_item_id': 'abc'},
+            {'fragment_item_id': self.item.id, 'sacrifice_item_id': 'x'},
+        ):
+            with self.subTest(data=data):
+                response = self.client.post(
+                    reverse('lumen-api', args=['restore']), data, format='json'
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_clean_sacrifice_still_restores_fragment(self):
         fragment = InventoryItem.objects.create(
             owner=self.character, template=self.template, is_destroyed=True

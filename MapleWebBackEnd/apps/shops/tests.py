@@ -102,3 +102,35 @@ class ShopPurchaseStackTests(APITestCase):
         self.assertEqual(oldest.quantity, 7)
         self.user.refresh_from_db()
         self.assertEqual(self.user.lumis, 80)
+
+
+class MalformedShopInputTests(APITestCase):
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='shop-bad-input', email='shop-bad@example.com', password='test-pass-123'
+        )
+        self.user.character = Character.objects.create(name='ShopBadInput')
+        self.user.lumis = 100
+        self.user.save(update_fields=['character', 'lumis'])
+        self.client.force_authenticate(self.user)
+        category = ShopCategory.objects.create(name='Bad Input')
+        self.shop_item = ShopItem.objects.create(
+            category=category,
+            item_template=ItemTemplate.objects.create(name='Bad Potion', item_type='use'),
+            price=1,
+        )
+
+    def test_buy_rejects_non_integer_quantity(self):
+        for quantity in ('abc', 1.5, 0):
+            with self.subTest(quantity=quantity):
+                response = self.client.post(
+                    reverse('shop-item-buy', args=[self.shop_item.id]),
+                    {'quantity': quantity}, format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(InventoryItem.objects.exists())
+
+    def test_category_filter_rejects_non_integer(self):
+        response = self.client.get(reverse('shop-item-list'), {'category': 'abc'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

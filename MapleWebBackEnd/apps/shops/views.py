@@ -11,7 +11,9 @@ from .serializers import (
     ShopItemSerializer,
     SpecialShopItemSerializer,
     SpecialShopExchangeSerializer,
+    ShopPurchaseSerializer,
 )
+from apps.request_params import parse_int
 from apps.inventory.grant_service import grant_item
 
 class ShopCategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -39,7 +41,7 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
         )
         category_id = self.request.query_params.get('category')
         if category_id:
-            queryset = queryset.filter(category_id=category_id)
+            queryset = queryset.filter(category_id=parse_int(category_id, 'category'))
         return queryset
 
     @action(detail=True, methods=['post'])
@@ -50,9 +52,9 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
         if not character:
             return Response({"detail": "No character found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        quantity = int(request.data.get('quantity', 1))
-        if quantity <= 0:
-            return Response({"detail": "Invalid quantity."}, status=status.HTTP_400_BAD_REQUEST)
+        purchase = ShopPurchaseSerializer(data=request.data)
+        purchase.is_valid(raise_exception=True)
+        quantity = purchase.validated_data['quantity']
 
         # Check Category status
         if not shop_item.category.is_active:

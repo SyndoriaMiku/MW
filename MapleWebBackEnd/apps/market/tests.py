@@ -220,3 +220,31 @@ class MarketPrivacyTests(APITestCase):
         self.assert_public_only(listing['seller'])
         self.assert_public_only(trade_data['sender'])
         self.assert_public_only(trade_data['receiver'])
+
+
+class MalformedMarketInputTests(APITestCase):
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='bad-input', email='bad-input@example.com', password='test-pass-123'
+        )
+        self.user.character = Character.objects.create(name='BadInput')
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+
+    def test_listing_filters_reject_non_numbers(self):
+        for params in ({'min_lumen': 'abc'}, {'min_aurora': '1.5'}, {'min_str_percent': 'x'}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('listing-list'), params)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_add_item_rejects_non_integer_item_id(self):
+        receiver = GameUser.objects.create_user(
+            username='bad-input-rx', email='bad-input-rx@example.com', password='test-pass-123'
+        )
+        trade = Trade.objects.create(sender=self.user, receiver=receiver)
+
+        response = self.client.post(
+            reverse('trade-add-item', args=[trade.pk]), {'item_id': 'abc'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

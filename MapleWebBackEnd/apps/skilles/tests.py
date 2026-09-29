@@ -292,3 +292,10 @@ class CharacterSkillAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['detail'], 'Skill not found.')
+
+
+class SkillCatalogFilterTests(APITestCase):
+    def test_job_filter_rejects_non_integer(self):
+        response = self.client.get('/api/skills/', {'job': 'abc'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

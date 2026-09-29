@@ -13,6 +13,7 @@ from .serializers import (
 from apps.inventory.models import InventoryItem
 from apps.inventory.serializers import InventoryItemSerializer
 from .services import LumenService
+from apps.request_params import parse_int
 from .aurora_service import AuroraService
 
 class ItemTemplateViewSet(viewsets.ReadOnlyModelViewSet):
@@ -62,8 +63,8 @@ class LumenAPIView(APIView):
             return self._response(result)
             
         elif action == 'restore':
-            fragment_item_id = request.data.get('fragment_item_id')
-            sacrifice_item_id = request.data.get('sacrifice_item_id')
+            fragment_item_id = parse_int(request.data.get('fragment_item_id'), 'fragment_item_id')
+            sacrifice_item_id = parse_int(request.data.get('sacrifice_item_id'), 'sacrifice_item_id')
             
             if not fragment_item_id:
                 return Response(

@@ -9,6 +9,7 @@ from .models import Listing, Trade, TradeItem, Transaction as MarketTransaction
 from .serializers import ListingSerializer, TradeSerializer
 from apps.inventory.grant_service import grant_item
 from apps.inventory.models import InventoryItem
+from apps.request_params import parse_float, parse_int
 from apps.users.models import GameUser
 
 class ListingViewSet(viewsets.ModelViewSet):
@@ -39,20 +40,24 @@ class ListingViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(item__template__name__icontains=name)
 
         # Filter by Lumen / Aurora Level
-        min_lumen = self.request.query_params.get('min_lumen')
+        params = self.request.query_params
+        min_lumen = parse_int(params.get('min_lumen'), 'min_lumen')
         if min_lumen is not None:
-            queryset = queryset.filter(item__lumen_ascend_level__gte=int(min_lumen))
+            queryset = queryset.filter(item__lumen_ascend_level__gte=min_lumen)
 
-        min_aurora = self.request.query_params.get('min_aurora')
+        min_aurora = parse_int(params.get('min_aurora'), 'min_aurora')
         if min_aurora is not None:
-            queryset = queryset.filter(item__aurora_level__gte=int(min_aurora))
+            queryset = queryset.filter(item__aurora_level__gte=min_aurora)
 
         # Advanced Aurora Stat Filters
         stat_filters = ['str', 'agi', 'int', 'hp', 'mp', 'att', 'drop']
+        min_stat_percents = {
+            stat: parse_float(params.get(f'min_{stat}_percent'), f'min_{stat}_percent')
+            for stat in stat_filters
+        }
         annotations = {}
         for stat in stat_filters:
-            min_stat_pct = self.request.query_params.get(f'min_{stat}_percent')
-            if min_stat_pct is not None:
+            if min_stat_percents[stat] is not None:
                 target_stats = [stat]
                 if stat in ['str', 'agi', 'int']:
                     target_stats.append('all')
@@ -73,9 +78,8 @@ class ListingViewSet(viewsets.ModelViewSet):
             queryset = queryset.annotate(**annotations)
             # Filter based on annotations
             for stat in stat_filters:
-                min_stat_pct = self.request.query_params.get(f'min_{stat}_percent')
-                if min_stat_pct is not None:
-                    queryset = queryset.filter(**{f'total_{stat}_pct__gte': float(min_stat_pct)})
+                if min_stat_percents[stat] is not None:
+                    queryset = queryset.filter(**{f'total_{stat}_pct__gte': min_stat_percents[stat]})
 
         return queryset
 
@@ -303,7 +307,7 @@ class TradeViewSet(viewsets.ModelViewSet):
         if (role == 'sender' and trade.sender_ready) or (role == 'receiver' and trade.receiver_ready):
             return Response({"detail": "Cannot modify items while ready."}, status=status.HTTP_400_BAD_REQUEST)
 
-        item_id = request.data.get('item_id')
+        item_id = parse_int(request.data.get('item_id'), 'item_id')
         try:
             item = InventoryItem.objects.select_for_update().get(pk=item_id)
         except InventoryItem.DoesNotExist:

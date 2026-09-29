@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from .models import SkillTemplate
+from apps.request_params import parse_int
 from .serializers import SkillTemplateSerializer, SkillTemplateListSerializer
 
 
@@ -32,7 +33,7 @@ class SkillTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         if job == 'null':
             qs = qs.filter(job__isnull=True)
         elif job:
-            qs = qs.filter(job_id=job)
+            qs = qs.filter(job_id=parse_int(job, 'job'))
         if availability:
             qs = qs.filter(availability=availability.upper())
         return qs

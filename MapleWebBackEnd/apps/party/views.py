@@ -11,6 +11,7 @@ from .serializers import (
 )
 from apps.characters.models import Character
 from apps.inventory.grant_service import grant_item
+from apps.request_params import parse_int
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ class PartyViewSet(viewsets.GenericViewSet):
         if PartyMember.objects.filter(character=character).exists():
             return Response({"detail": "You are already in a party. Leave first."}, status=status.HTTP_400_BAD_REQUEST)
 
-        name = request.data.get('name', '').strip()
+        name = str(request.data.get('name') or '').strip()
         if not name:
             name = f"{character.name}'s Party"
 
@@ -463,7 +464,7 @@ class PartyViewSet(viewsets.GenericViewSet):
         if not character:
             return Response({"detail": "User has no character."}, status=status.HTTP_400_BAD_REQUEST)
 
-        loot_id = request.data.get('loot_id')
+        loot_id = parse_int(request.data.get('loot_id'), 'loot_id')
         target_char_id = request.data.get('character_id')
         if not loot_id or not target_char_id:
             return Response({"detail": "Both loot_id and character_id are required."}, status=status.HTTP_400_BAD_REQUEST)
