@@ -45,10 +45,11 @@ class GameUser(AbstractBaseUser):
     nova = models.PositiveIntegerField(default=0) #Nova currency
     
     
-    #One to one relationship with character
+    #One to one relationship with character. Deleting the character must not
+    #delete the account, so the user simply loses it.
     character = models.OneToOneField(
         'characters.Character',
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='user'
