@@ -110,6 +110,12 @@ DATABASES = {
     }
 }
 
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    # SQLite ignores select_for_update(). IMMEDIATE transactions take the write
+    # lock up front, so concurrent requests queue (and then fail the app's own
+    # checks with a 4xx) instead of dying with "database is locked" 500s.
+    DATABASES['default']['OPTIONS'] = {'transaction_mode': 'IMMEDIATE', 'timeout': 20}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
