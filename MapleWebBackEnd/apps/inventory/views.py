@@ -6,7 +6,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import InventoryItem
-from .reservations import character_in_active_battle
+from .reservations import character_in_active_battle, exclude_reserved
+from apps.request_params import parse_int
 from apps.characters.models import EquippedItem, EquipmentSlotConfig, Character
 from .serializers import InventoryItemSerializer, EquippedItemSerializer
 
@@ -144,6 +145,55 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             'status': 'Item unequipped successfully.',
             'item': InventoryItemSerializer(item).data,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def sell(self, request, pk=None):
+        """Sell `quantity` (default 1) of an item to the NPC for its sell_price each."""
+        if not request.user.character_id:
+            return Response({'error': 'Create a character first.'}, status=status.HTTP_400_BAD_REQUEST)
+        quantity = parse_int(request.data.get('quantity', 1), 'quantity', min_value=1)
+        if quantity is None:
+            quantity = 1
+
+        from apps.users.models import GameUser
+
+        with transaction.atomic():
+            user = GameUser.objects.select_for_update().get(pk=request.user.pk)
+            try:
+                item = InventoryItem.objects.select_for_update().select_related('template').get(
+                    pk=pk, owner_id=request.user.character_id
+                )
+            except InventoryItem.DoesNotExist:
+                return Response({'error': 'Item not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            if not item.template.is_sellable:
+                return Response({'error': 'This item cannot be sold.'}, status=status.HTTP_400_BAD_REQUEST)
+            if hasattr(item, 'equipped_in'):
+                return Response({'error': 'Unequip the item before selling it.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not exclude_reserved(InventoryItem.objects.filter(pk=item.pk)).exists():
+                return Response(
+                    {'error': 'Items listed on the market or offered in a trade cannot be sold.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if item.is_destroyed:
+                return Response({'error': 'Destroyed items cannot be sold.'}, status=status.HTTP_400_BAD_REQUEST)
+            if quantity > item.quantity or (not item.template.is_stackable and quantity != 1):
+                return Response({'error': 'Invalid quantity.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            lumis_gained = max(0, item.template.sell_price) * quantity
+            if quantity == item.quantity:
+                item.delete()
+            else:
+                item.quantity -= quantity
+                item.save(update_fields=['quantity'])
+            user.lumis += lumis_gained
+            user.save(update_fields=['lumis'])
+
+        return Response({
+            'status': 'Item sold.',
+            'lumis_gained': lumis_gained,
+            'lumis': user.lumis,
         }, status=status.HTTP_200_OK)
 
 

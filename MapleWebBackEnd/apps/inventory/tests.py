@@ -356,3 +356,70 @@ class GrantItemTests(TestCase):
                 with self.assertRaises(ValueError):
                     grant_item(self.character, self.potion, quantity)
         self.assertEqual(self.stacks(), [])
+
+
+class SellToNpcTests(APITestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='Seller')
+        self.user = GameUser.objects.create_user(
+            username='npc-seller', email='npc-seller@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+        self.potion = ItemTemplate.objects.create(name='Sell Potion', item_type='use', sell_price=5)
+        self.stack = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=10)
+
+    def sell(self, item, quantity=None):
+        data = {} if quantity is None else {'quantity': quantity}
+        return self.client.post(reverse('inventory-item-sell', args=[item.pk]), data, format='json')
+
+    def test_selling_part_of_a_stack_pays_lumis(self):
+        response = self.sell(self.stack, 4)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['lumis_gained'], 20)
+        self.stack.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual((self.stack.quantity, self.user.lumis), (6, 20))
+
+    def test_selling_the_whole_stack_removes_it(self):
+        self.sell(self.stack, 10)
+
+        self.assertFalse(InventoryItem.objects.filter(pk=self.stack.pk).exists())
+
+    def test_rejects_unsellable_reserved_or_excess_quantities(self):
+        bound = InventoryItem.objects.create(
+            owner=self.character,
+            template=ItemTemplate.objects.create(name='Quest Key', item_type='etc', is_sellable=False),
+        )
+        receiver = GameUser.objects.create_user(
+            username='npc-rx', email='npc-rx@example.com', password='test-pass-123'
+        )
+        traded = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=1)
+        trade = Trade.objects.create(sender=self.user, receiver=receiver)
+        TradeItem.objects.create(trade=trade, item=traded, is_sender=True)
+        listed = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=1)
+        Listing.objects.create(seller=self.user, item=listed, price=1)
+        sword = InventoryItem.objects.create(
+            owner=self.character,
+            template=ItemTemplate.objects.create(name='Sell Sword', item_type='weapon'),
+        )
+
+        for item, quantity in ((bound, 1), (traded, 1), (listed, 1), (self.stack, 11), (sword, 2), (self.stack, 0)):
+            with self.subTest(item=item.template.name, quantity=quantity):
+                self.assertEqual(self.sell(item, quantity).status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 0)
+
+    def test_equipped_items_cannot_be_sold(self):
+        sword = InventoryItem.objects.create(
+            owner=self.character,
+            template=ItemTemplate.objects.create(name='Worn Sword', item_type='weapon'),
+        )
+        slot = EquipmentSlotConfig.objects.create(
+            slot_type='weapon', display_name='Weapon', allowed_item_types=['weapon']
+        )
+        EquippedItem.objects.create(character=self.character, slot=slot, item=sword)
+
+        self.assertEqual(self.sell(sword).status_code, status.HTTP_400_BAD_REQUEST)
