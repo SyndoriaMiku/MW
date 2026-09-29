@@ -234,30 +234,42 @@ class Character(models.Model):
         Base Damage = [(Main_Stat * Stat_Weight) * (Total_ATT * ATT_Weight)] / 100
         Char Damage = Base Damage * (1 + Char_Final_Damage)
         """
+        return self.damage_from(
+            str_value=self.total_str,
+            agi_value=self.total_agi,
+            int_value=self.total_int,
+            att_value=self.total_att,
+        )
+
+    def damage_from(self, *, str_value, agi_value, int_value, att_value):
+        """
+        Apply the damage formula to the given final stats. Combat passes
+        buffed/debuffed stats here; total_damage passes the equipment totals.
+        """
         if not self.job or not self.character_class:
-            return self.total_att
-        
+            return round(att_value)
+
         job = self.job
         main_stat = self.character_class.main_stat
-        
+
         # Calculate Main Stat Value
         if main_stat == 'all':
-            main_stat_value = self.total_str + self.total_agi + self.total_int
+            main_stat_value = str_value + agi_value + int_value
         else:
             stats = {
-                "str": self.total_str,
-                "agi": self.total_agi,
-                "int": self.total_int,
+                "str": str_value,
+                "agi": agi_value,
+                "int": int_value,
             }
             main_stat_value = stats.get(main_stat, 0)
-            
+
         # Step 1: Base Damage
         dmg_stat = main_stat_value * job.main_stat_weight
-        base_damage = (dmg_stat * self.total_att) / 100.0
-        
+        base_damage = (dmg_stat * att_value) / 100.0
+
         # Step 2: Character Damage (amplified by final damage)
         char_damage = base_damage * (1 + self.total_final_damage)
-        
+
         return round(char_damage)
         
 

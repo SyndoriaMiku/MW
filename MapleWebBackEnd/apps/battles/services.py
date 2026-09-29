@@ -157,9 +157,8 @@ class BattleService:
         target_mods = BattleService.get_combat_modifiers(target)
 
         if template.effect_type == 'DAMAGE':
-            buffed_damage = total_damage + attacker_mods['flat_att']
-            buffed_damage = int(buffed_damage * (1 + attacker_mods['percent_att']))
-            skill_damage = (buffed_damage * template.power_ratio) + template.base_power
+            # total_damage already includes the attacker's stat/ATT effects.
+            skill_damage = (total_damage * template.power_ratio) + template.base_power
             skill_damage *= level_damage_multiplier
             skill_damage *= 1 + bonus_final_damage + attacker_mods['final_damage_modifier']
             skill_damage *= 1 + attacker_mods['damage_dealt_modifier']
@@ -535,13 +534,8 @@ class BattleService:
                 and target.current_hp > 0
             ):
                 caster = effect.caster
-                caster_entity = caster.entity
-                caster_damage = (
-                    caster_entity.total_damage
-                    if caster.is_player
-                    else getattr(caster_entity, 'base_att', 0)
-                )
                 caster_mods = BattleService.get_combat_modifiers(caster)
+                caster_damage = BattleService.get_attack_power(caster, caster_mods)
                 target_mods = BattleService.get_combat_modifiers(target)
                 dot_damage = caster_damage * template.damage_power_ratio_per_turn
                 dot_damage *= 1 + caster_mods['final_damage_modifier']
@@ -621,6 +615,29 @@ class BattleService:
         return mods
 
     @staticmethod
+    def get_attack_power(combatant: Combatant, mods: dict = None) -> int:
+        """
+        Damage basis of a combatant with its active stat effects applied.
+        Flat changes add to the stat, then percent changes scale it; players
+        then go through the normal damage formula with those stats.
+        """
+        if mods is None:
+            mods = BattleService.get_combat_modifiers(combatant)
+        entity = combatant.entity
+
+        def buffed(value, stat):
+            return (value + mods[f'flat_{stat}']) * (1 + mods[f'percent_{stat}'])
+
+        if not combatant.is_player:
+            return max(0, int(buffed(getattr(entity, 'base_att', 10), 'att')))
+        return max(0, int(entity.damage_from(
+            str_value=buffed(entity.total_str, 'str'),
+            agi_value=buffed(entity.total_agi, 'agi'),
+            int_value=buffed(entity.total_int, 'int'),
+            att_value=buffed(entity.total_att, 'att'),
+        )))
+
+    @staticmethod
     def execute_action(combatant: Combatant, action_type: str, target: Combatant = None, **kwargs):
         """
         Executes an action (Attack, Skill).
@@ -686,13 +703,9 @@ class BattleService:
                 result_log["message"] = "Basic attacks must target an opponent."
                 result_log["success"] = False
                 return result_log
-            if combatant.is_player:
-                damage = int(attacker_entity.total_damage)
-                skill_name = "Đánh thường"
-            else:
-                damage = int(getattr(attacker_entity, 'base_att', 10))
-                skill_name = "Đánh thường"
-            
+            damage = BattleService.get_attack_power(combatant, attacker_mods)
+            skill_name = "Đánh thường"
+
             # Apply active effect modifiers to basic attack
             target_mods = BattleService.get_combat_modifiers(target)
             damage = int(damage * (1 + attacker_mods['damage_dealt_modifier'])
@@ -740,7 +753,7 @@ class BattleService:
                     result_log["success"] = False
                     return result_log
                 bonus_final_damage = char_skill.bonus_final_damage
-                total_damage = attacker_entity.total_damage
+                total_damage = BattleService.get_attack_power(combatant, attacker_mods)
                 
                 # Check player cooldown
                 current_cd = combatant.skill_cooldowns.get(str(template.id), 0)
@@ -766,7 +779,7 @@ class BattleService:
                     result_log["success"] = False
                     return result_log
                 bonus_final_damage = 0.0
-                total_damage = getattr(attacker_entity, 'base_att', 10)
+                total_damage = BattleService.get_attack_power(combatant, attacker_mods)
 
             if not BattleService._is_valid_skill_target(combatant, target, template.target_type):
                 result_log["message"] = f"{template.name} cannot target {result_log['target']}."

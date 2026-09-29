@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.characters.models import Character, CharacterSkill
+from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.party.models import Party, PartyMember
@@ -595,6 +596,59 @@ class NormalAttackSceneContractTests(APITestCase):
 
         enemy.refresh_from_db()
         self.assertEqual(enemy.current_hp, 90)
+
+    def make_strength_fighter(self):
+        """STR class/job with 10 STR and 100 ATT: base damage 10*100/100 = 10."""
+        warrior = CharacterClass.objects.create(name='Warrior', main_stat='str')
+        self.character.character_class = warrior
+        self.character.job = Job.objects.create(name='Fighter', character_class=warrior)
+        self.character.base_str = 10
+        self.character.base_att = 100
+        self.character.save()
+
+    def buff(self, combatant, **changes):
+        effect = EffectTemplate.objects.create(name='Buff', duration_turns=3, **changes)
+        ActiveEffect.objects.create(
+            combat_instance=combatant.combat_instance, target=combatant,
+            effect_template=effect, remaining_turns=3,
+        )
+
+    def test_main_stat_buff_raises_player_attack_damage(self):
+        self.make_strength_fighter()
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        self.buff(player, flat_str_change=10)
+
+        log = BattleService.execute_action(player, 'ATTACK', enemy)
+
+        self.assertEqual(log['damage'], 20)
+
+    def test_att_buff_scales_through_the_damage_formula_for_skills(self):
+        self.make_strength_fighter()
+        _, owned = self.create_owned_skill(
+            name='Slash', target_type='ENEMY', base_power=0, power_ratio=1,
+        )
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        self.buff(player, flat_att_change=100)
+
+        log = BattleService.execute_action(
+            player, 'SKILL', enemy, character_skill_id=owned.id
+        )
+
+        self.assertEqual(log['damage'], 20)
+
+    def test_att_buff_raises_enemy_basic_attack(self):
+        combat = self.create_battle(enemy_attack=10)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        self.buff(enemy, percent_att_change=0.5)
+
+        log = BattleService.execute_action(enemy, 'ATTACK', player)
+
+        self.assertEqual(log['damage'], 15)
 
     def test_area_effect_is_applied_independently_to_every_target(self):
         burn = EffectTemplate.objects.create(
