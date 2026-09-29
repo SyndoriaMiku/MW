@@ -1,3 +1,4 @@
+import uuid
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
@@ -209,6 +210,82 @@ class NormalAttackSceneContractTests(APITestCase):
         self.assertEqual(response.data['combat']['status'], 'victory')
         self.assertEqual(response.data['events'][0]['battle_result']['status'], 'victory')
         self.assertIsNotNone(response.data['events'][0]['battle_result']['rewards'])
+
+    def act(self, combat, target, **extra):
+        return self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': 'ATTACK', 'target_id': target.id, **extra},
+            format='json',
+        )
+
+    def test_snapshot_exposes_a_version_that_each_action_increments(self):
+        combat = self.create_battle(enemy_hp=100)
+        target = combat.combatants.get(is_player=False)
+        before = self.client.get(reverse('battles:battle-state', args=[combat.id]))
+
+        response = self.act(combat, target)
+
+        self.assertEqual(before.data['version'], 0)
+        self.assertEqual(response.data['combat']['version'], 1)
+
+    def test_retrying_a_client_action_id_replays_instead_of_acting_again(self):
+        combat = self.create_battle(enemy_hp=100)
+        target = combat.combatants.get(is_player=False)
+        action_id = str(uuid.uuid4())
+
+        first = self.act(combat, target, client_action_id=action_id)
+        target.refresh_from_db()
+        hp_after_first = target.current_hp
+        retry = self.act(combat, target, client_action_id=action_id)
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(retry.status_code, status.HTTP_200_OK)
+        self.assertFalse(first.data['replayed'])
+        self.assertTrue(retry.data['replayed'])
+        self.assertEqual(retry.data['events'], first.data['events'])
+        target.refresh_from_db()
+        self.assertEqual(target.current_hp, hp_after_first)
+        combat.refresh_from_db()
+        self.assertEqual(combat.version, 1)
+
+    def test_retrying_the_finishing_action_does_not_grant_rewards_twice(self):
+        combat = self.create_battle(enemy_hp=1)
+        EnemyTemplate.objects.filter(pk=combat.combatants.get(is_player=False).objects_id).update(
+            lumis_reward_min=10, lumis_reward_max=10,
+        )
+        target = combat.combatants.get(is_player=False)
+        action_id = str(uuid.uuid4())
+
+        first = self.act(combat, target, client_action_id=action_id)
+        retry = self.act(combat, target, client_action_id=action_id)
+
+        self.assertEqual(first.data['combat']['status'], 'victory')
+        self.assertTrue(retry.data['replayed'])
+        self.assertEqual(retry.data['combat']['status'], 'victory')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 10)
+
+    def test_stale_expected_version_is_rejected_with_current_snapshot(self):
+        combat = self.create_battle(enemy_hp=100)
+        target = combat.combatants.get(is_player=False)
+        self.act(combat, target, expected_version=0)
+        target.refresh_from_db()
+        hp_before = target.current_hp
+
+        stale = self.act(combat, target, expected_version=0)
+
+        self.assertEqual(stale.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(stale.data['combat']['version'], 1)
+        target.refresh_from_db()
+        self.assertEqual(target.current_hp, hp_before)
+
+    def test_client_action_id_must_be_a_uuid(self):
+        combat = self.create_battle(enemy_hp=100)
+        target = combat.combatants.get(is_player=False)
+
+        response = self.act(combat, target, client_action_id='not-a-uuid')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_victory_loot_merges_when_character_owns_several_stacks(self):
         combat = self.create_battle(enemy_hp=1)

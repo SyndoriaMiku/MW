@@ -3,9 +3,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import transaction
+from django.db.models import F
 from django.contrib.contenttypes.models import ContentType
 
-from .models import CombatInstance, Combatant
+from .models import BattleActionReceipt, CombatInstance, Combatant
 from .serializers import (
     CombatInstanceSerializer, PlayerActionSerializer
 )
@@ -65,37 +66,21 @@ def player_action(request, combat_id):
     if not user.character:
         return Response({"detail": "You don't have a character."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Pre-validate outside transaction for fast-fail
-    try:
-        pre_check = CombatInstance.objects.only('id', 'status', 'turn_phase').get(id=combat_id)
-    except CombatInstance.DoesNotExist:
-        return Response({"detail": "Battle not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    if pre_check.status != 'in_progress':
-        return Response({"detail": "This battle has already ended."}, status=status.HTTP_400_BAD_REQUEST)
-    if pre_check.turn_phase != 'player_phase':
-        return Response({"detail": "It's not the player phase."}, status=status.HTTP_400_BAD_REQUEST)
-
     action_type = serializer.validated_data['action_type']
     target_id = serializer.validated_data.get('target_id')
     target_position = serializer.validated_data.get('target_position')
+    client_action_id = serializer.validated_data.get('client_action_id')
+    expected_version = serializer.validated_data.get('expected_version')
     kwargs = {}
     if action_type == 'SKILL':
         kwargs['character_skill_id'] = serializer.validated_data['character_skill_id']
 
-    log = None
     with transaction.atomic():
         # (C-1 fix) Lock combat row — prevents 2 concurrent requests from both executing
         try:
             combat = CombatInstance.objects.select_for_update().get(id=combat_id)
         except CombatInstance.DoesNotExist:
             return Response({"detail": "Battle not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Re-check state under lock
-        if combat.status != 'in_progress':
-            return Response({"detail": "This battle has already ended."}, status=status.HTTP_400_BAD_REQUEST)
-        if combat.turn_phase != 'player_phase':
-            return Response({"detail": "It's not the player phase."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             ct = ContentType.objects.get_for_model(user.character)
@@ -105,38 +90,75 @@ def player_action(request, combat_id):
         except Combatant.DoesNotExist:
             return Response({"detail": "You are not in this battle."}, status=status.HTTP_403_FORBIDDEN)
 
+        # (CRIT-08) A retry of an executed action replays its stored result.
+        # This runs before the state checks: the original action may have
+        # ended the battle or passed the turn.
+        if client_action_id is not None:
+            receipt = BattleActionReceipt.objects.filter(
+                combat_instance=combat, client_action_id=client_action_id
+            ).first()
+            if receipt is not None:
+                if receipt.character_id != user.character.pk:
+                    return Response(
+                        {"detail": "This client_action_id was already used by another participant."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                return Response({**receipt.response_data, "replayed": True})
+
+        # Re-check state under lock
+        if combat.status != 'in_progress':
+            return Response({"detail": "This battle has already ended."}, status=status.HTTP_400_BAD_REQUEST)
+        if expected_version is not None and expected_version != combat.version:
+            return Response(
+                {
+                    "detail": "The battle has changed since this action was built. Reload and retry.",
+                    "combat": CombatInstanceSerializer(combat).data,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        if combat.turn_phase != 'player_phase':
+            return Response({"detail": "It's not the player phase."}, status=status.HTTP_400_BAD_REQUEST)
         if player_combatant.position != combat.current_player_position:
             return Response({"detail": "It's not your turn."}, status=status.HTTP_400_BAD_REQUEST)
 
         if player_combatant.current_hp <= 0:
-            events = BattleService.end_turn(combat)
-            combat.refresh_from_db()
-            return Response({
+            payload = {
                 "detail": "Your character is dead. Turn skipped.",
-                "events": events,
-                "combat": CombatInstanceSerializer(combat).data
-            })
+                "events": BattleService.end_turn(combat),
+            }
+            state_changed = True
+        else:
+            target = None
+            if target_id is not None or target_position is not None:
+                try:
+                    target_lookup = {'id': target_id} if target_id is not None else {'position': target_position}
+                    target = combat.combatants.get(**target_lookup)
+                except Combatant.DoesNotExist:
+                    return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
 
-        target = None
-        if target_id is not None or target_position is not None:
-            try:
-                target_lookup = {'id': target_id} if target_id is not None else {'position': target_position}
-                target = combat.combatants.get(**target_lookup)
-            except Combatant.DoesNotExist:
-                return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
+            log = BattleService.execute_action(player_combatant, action_type, target, **kwargs)
+            events = [log]
 
-        log = BattleService.execute_action(player_combatant, action_type, target, **kwargs)
-        events = [log]
+            # Only advance turn if the action was actually executed (not blocked by cooldown/MP)
+            state_changed = log.get("success", True)
+            if state_changed:
+                combat.refresh_from_db()
+                if combat.status == 'in_progress':
+                    events.extend(BattleService.end_turn(combat))
+            payload = {"action_log": log, "events": events}
 
-        # Only advance turn if the action was actually executed (not blocked by cooldown/MP)
-        if log.get("success", True):
-            combat.refresh_from_db()
-            if combat.status == 'in_progress':
-                events.extend(BattleService.end_turn(combat))
+        if state_changed:
+            # end_turn saves whole combat rows, so bump with an UPDATE afterwards.
+            CombatInstance.objects.filter(pk=combat.pk).update(version=F('version') + 1)
+        combat.refresh_from_db()
+        payload["combat"] = CombatInstanceSerializer(combat).data
 
-    combat.refresh_from_db()
-    return Response({
-        "action_log": log,
-        "events": events,
-        "combat": CombatInstanceSerializer(combat).data
-    })
+        if client_action_id is not None:
+            BattleActionReceipt.objects.create(
+                combat_instance=combat,
+                character=user.character,
+                client_action_id=client_action_id,
+                response_data=payload,
+            )
+
+    return Response({**payload, "replayed": False})

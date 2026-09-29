@@ -38,6 +38,10 @@ class CombatInstance(models.Model):
     stamina_cost_on_victory = models.PositiveIntegerField(default=0)
     stamina_charged = models.BooleanField(default=False)
 
+    # Bumped once per accepted player action. Clients send it back as
+    # expected_version so an action built from an outdated snapshot is refused.
+    version = models.PositiveIntegerField(default=0)
+
     #Time
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -71,6 +75,29 @@ class Combatant(models.Model):
         ordering = ['position']
     def __str__(self):
         return f"Combatant {self.content_type} {self.objects_id} in CombatInstance {self.combat_instance.id}"
+
+class BattleActionReceipt(models.Model):
+    """
+    The stored response of an executed player action, keyed by the client's
+    action UUID, so a network retry replays the result instead of acting again.
+    """
+    combat_instance = models.ForeignKey('battles.CombatInstance', on_delete=models.CASCADE, related_name='action_receipts')
+    character = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='battle_action_receipts')
+    client_action_id = models.UUIDField()
+    response_data = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['combat_instance', 'client_action_id'],
+                name='unique_battle_action_receipt',
+            ),
+        ]
+
+    def __str__(self):
+        return f"Action {self.client_action_id} in CombatInstance {self.combat_instance_id}"
+
 
 class ActiveEffect(models.Model):
     """

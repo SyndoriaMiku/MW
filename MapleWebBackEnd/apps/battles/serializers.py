@@ -142,7 +142,7 @@ class CombatInstanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CombatInstance
         fields = [
-            'id', 'status', 'turn_phase', 'turn_count',
+            'id', 'version', 'status', 'turn_phase', 'turn_count',
             'current_player_position', 'encounter', 'stamina_cost_on_victory',
             'stamina_charged', 'combatants',
             'created_at', 'updated_at'
@@ -182,6 +182,18 @@ class PlayerActionSerializer(serializers.Serializer):
     skill_id = serializers.IntegerField(
         required=False,
         help_text='Deprecated alias for character_skill_id.',
+    )
+    client_action_id = serializers.UUIDField(
+        required=False,
+        help_text=(
+            "Client-generated UUID for this action. Resending the same UUID "
+            "returns the stored result instead of acting again."
+        ),
+    )
+    expected_version = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        help_text="Battle version the action was built from; a mismatch returns 409.",
     )
 
     def validate(self, attrs):
