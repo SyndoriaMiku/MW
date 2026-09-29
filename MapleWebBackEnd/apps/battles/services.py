@@ -361,16 +361,25 @@ class BattleService:
         """
         import random
         logs = []
-        monsters = list(combat_instance.combatants.filter(is_player=False, current_hp__gt=0).order_by('position'))
-        players = list(combat_instance.combatants.filter(is_player=True, current_hp__gt=0))
-
-        if not players:
+        if not combat_instance.combatants.filter(is_player=True, current_hp__gt=0).exists():
             return logs
 
-        for monster in monsters:
-            alive_players = [p for p in players if p.current_hp > 0]
-            alive_monsters = [m for m in monsters if m.current_hp > 0]
-            
+        monster_ids = list(
+            combat_instance.combatants.filter(is_player=False, current_hp__gt=0)
+            .order_by('position').values_list('id', flat=True)
+        )
+        for monster_id in monster_ids:
+            # Earlier actions this phase (area skills, heals, kills) were saved
+            # through other Combatant instances. Reload so this monster neither
+            # acts after dying nor overwrites HP changes with stale values.
+            living = list(combat_instance.combatants.filter(current_hp__gt=0))
+            _prefetch_entities(living)
+            monster = next((c for c in living if c.pk == monster_id), None)
+            if monster is None:
+                continue
+            alive_players = [c for c in living if c.is_player]
+            alive_monsters = [c for c in living if not c.is_player]
+
             if not alive_players:
                 break
 
@@ -473,15 +482,23 @@ class BattleService:
         effect_logs = []
         effects = list(ActiveEffect.objects.filter(
             combat_instance=combat_instance
-        ).select_related('effect_template', 'target'))
-        
+        ).select_related('effect_template'))
+
+        # One shared instance per combatant: effects stacked on the same target
+        # must build on each other's HP/MP changes instead of each saving a
+        # separately loaded copy.
+        targets_by_id = {
+            combatant.pk: combatant
+            for combatant in combat_instance.combatants.filter(
+                pk__in={effect.target_id for effect in effects}
+            )
+        }
         # (M4 fix) Batch-resolve entities to avoid N+1 queries
-        targets = [e.target for e in effects if e.target]
-        _prefetch_entities(targets)
-        
+        _prefetch_entities(list(targets_by_id.values()))
+
         for effect in effects:
             template = effect.effect_template
-            target = effect.target
+            target = targets_by_id[effect.target_id]
             
             # Skip effects on dead targets
             if target.current_hp <= 0:

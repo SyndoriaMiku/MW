@@ -10,7 +10,9 @@ from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.party.models import Party, PartyMember
 from apps.users.models import GameUser
-from apps.world.models import EnemyTemplate, LootTable, NormalDungeonTemplate, NormalStageEnemy
+from apps.world.models import (
+    EnemySkill, EnemyTemplate, LootTable, NormalDungeonTemplate, NormalStageEnemy,
+)
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate
 
 from .models import ActiveEffect, CombatInstance
@@ -454,6 +456,68 @@ class NormalAttackSceneContractTests(APITestCase):
         for player in players:
             player.refresh_from_db()
             self.assertEqual(player.current_hp, hp_before[player.id] - 4)
+
+    def create_enemy(self, name, *, hp=100, attack=0, skill=None):
+        enemy = EnemyTemplate.objects.create(
+            name=name, level=1, base_hp=hp, base_mp=0, base_att=attack,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        if skill:
+            EnemySkill.objects.create(enemy_template=enemy, skill_template=skill, priority_index=1)
+        return enemy
+
+    def run_monster_phase(self, enemies):
+        combat = BattleService.create_combat_instance(self.party, enemies)
+        BattleService.start_combat(combat)
+        combat.turn_phase = CombatInstance.TURN_PHASE.MONSTER_PHASE
+        combat.save(update_fields=['turn_phase'])
+        return combat, BattleService.process_monster_phase(combat)
+
+    def test_monster_area_damage_is_kept_when_a_later_monster_attacks(self):
+        quake = SkillTemplate.objects.create(
+            name='Quake', availability='ENEMY', target_type='E_AREA',
+            effect_type='DAMAGE', base_power=5, power_ratio=0,
+        )
+        caster = self.create_enemy('Quake Caster', skill=quake)
+        brute = self.create_enemy('Brute', attack=3)
+
+        combat, _ = self.run_monster_phase([caster, brute])
+
+        player = combat.combatants.get(is_player=True)
+        self.assertEqual(player.current_hp, self.character.total_hp - 5 - 3)
+
+    def test_monster_killed_earlier_in_the_phase_does_not_act(self):
+        blast = SkillTemplate.objects.create(
+            name='Blast', availability='ENEMY', target_type='GLOBAL',
+            effect_type='DAMAGE', base_power=10, power_ratio=0,
+        )
+        bomber = self.create_enemy('Bomber', skill=blast)
+        weakling = self.create_enemy('Weakling', hp=5, attack=7)
+
+        combat, logs = self.run_monster_phase([bomber, weakling])
+
+        player = combat.combatants.get(is_player=True)
+        self.assertEqual(player.current_hp, self.character.total_hp - 10)
+        self.assertEqual([log['actor'] for log in logs], ['Bomber'])
+
+    def test_every_periodic_effect_on_the_same_target_is_applied(self):
+        poison = EffectTemplate.objects.create(
+            name='Poison', duration_turns=2, hp_change_per_turn=-5,
+            stacking_rule='INDEPENDENT',
+        )
+        combat = self.create_multi_enemy_battle(count=1, enemy_hp=100)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        for _ in range(2):
+            ActiveEffect.objects.create(
+                combat_instance=combat, target=enemy, effect_template=poison,
+                remaining_turns=2, caster=player,
+            )
+
+        BattleService.process_active_effects(combat)
+
+        enemy.refresh_from_db()
+        self.assertEqual(enemy.current_hp, 90)
 
     def test_area_effect_is_applied_independently_to_every_target(self):
         burn = EffectTemplate.objects.create(
