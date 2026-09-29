@@ -71,3 +71,19 @@ class SessionBootstrapTests(APITestCase):
         self.assertEqual(data['party']['id'], party.id)
         self.assertEqual(data['active_battle']['id'], combat.id)
         self.assertEqual(data['active_battle']['version'], 0)
+
+
+class DefaultPermissionTests(APITestCase):
+    def test_endpoints_require_authentication_unless_declared_public(self):
+        self.assertEqual(self.client.get('/api/market/').status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.get('/api/inventory/').status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_public_catalog_and_registration_stay_anonymous(self):
+        self.assertEqual(self.client.get('/api/classes/').status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get('/api/skills/').status_code, status.HTTP_200_OK)
+        response = self.client.post(
+            reverse('register'),
+            {'username': 'anon-register', 'email': 'anon@example.com', 'password': 'Sturdy-pass-4821'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
