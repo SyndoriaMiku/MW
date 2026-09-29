@@ -64,9 +64,10 @@ class AuroraService:
         }
 
     @staticmethod
-    def _generate_lines_for_item(inventory_item, count=None):
+    def _generate_lines_for_item(inventory_item, count=None, aurora_level=None):
         """
         Generates `count` lines for an item. If count is None, generates max lines.
+        Lines use `aurora_level`, defaulting to the item's current level.
         Returns a list of dicts containing line data.
         """
         template = inventory_item.template
@@ -78,7 +79,8 @@ class AuroraService:
             count = max_lines
 
         item_type = template.item_type
-        aurora_level = inventory_item.aurora_level
+        if aurora_level is None:
+            aurora_level = inventory_item.aurora_level
         if aurora_level == 0:
             aurora_level = 1 # Minimum level to have lines
 
@@ -274,21 +276,31 @@ class AuroraService:
         else:
             modifier_item.save(update_fields=['quantity'])
 
-        # Check Tier Up
+        # Check Tier Up. Only full rerolls can tier up, and the new level
+        # travels with the rolled lines: applied now for REROLL_ALL, and only
+        # when the new lines are confirmed for the choice modifiers.
         tier_up_occurred = False
-        if target_item.aurora_level < rule.max_aurora_target:
+        new_level = target_item.aurora_level
+        if (
+            mod_type in AuroraModifierRule.TIER_UP_MODIFIER_TYPES
+            and target_item.aurora_level < rule.max_aurora_target
+        ):
             event_mult = AuroraService.get_active_tier_up_multiplier()
             final_chance = min(1.0, max(0.0, rule.tier_up_chance * event_mult))
             if random.random() < final_chance:
                 tier_up_occurred = True
-                target_item.aurora_level += 1
-                target_item.save(update_fields=['aurora_level'])
+                new_level += 1
 
         if mod_type == 'REROLL_ALL':
-            new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)
+            new_lines = AuroraService._generate_lines_for_item(
+                target_item, count=max_lines, aurora_level=new_level
+            )
             if len(new_lines) != max_lines:
                 transaction.set_rollback(True)
                 return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
+            if tier_up_occurred:
+                target_item.aurora_level = new_level
+                target_item.save(update_fields=['aurora_level'])
             target_item.aurora_lines.all().delete()
             for data in new_lines:
                 AuroraLine.objects.create(
@@ -304,14 +316,17 @@ class AuroraService:
             return {"success": True, "message": msg, "tier_up": tier_up_occurred, "new_lines": new_lines}
 
         elif mod_type == 'REROLL_CHOICE':
-            new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines)
+            new_lines = AuroraService._generate_lines_for_item(
+                target_item, count=max_lines, aurora_level=new_level
+            )
             if len(new_lines) != max_lines:
                 transaction.set_rollback(True)
                 return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
             PendingAuroraRoll.objects.create(
                 inventory_item=target_item,
                 modifier_type=mod_type,
-                generated_lines_data=new_lines
+                generated_lines_data=new_lines,
+                new_aurora_level=new_level,
             )
             msg = "Roll generated. Please choose to keep old or select new."
             if tier_up_occurred:
@@ -319,7 +334,9 @@ class AuroraService:
             return {"success": True, "message": msg, "pending": True, "new_lines": new_lines, "tier_up": tier_up_occurred}
 
         elif mod_type == 'REROLL_TRIPLE_CHOICE':
-            new_lines = AuroraService._generate_lines_for_item(target_item, count=max_lines * 3)
+            new_lines = AuroraService._generate_lines_for_item(
+                target_item, count=max_lines * 3, aurora_level=new_level
+            )
             if len(new_lines) != max_lines * 3:
                 transaction.set_rollback(True)
                 return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
@@ -330,9 +347,13 @@ class AuroraService:
             PendingAuroraRoll.objects.create(
                 inventory_item=target_item,
                 modifier_type=mod_type,
-                generated_lines_data=new_lines
+                generated_lines_data=new_lines,
+                new_aurora_level=new_level,
             )
-            return {"success": True, "message": "Select your desired lines.", "pending": True, "choices": new_lines}
+            msg = "Select your desired lines."
+            if tier_up_occurred:
+                msg = "TIER UP! " + msg
+            return {"success": True, "message": msg, "pending": True, "choices": new_lines, "tier_up": tier_up_occurred}
 
         elif mod_type == 'REROLL_SINGLE':
             new_line = AuroraService._generate_random_line(target_item.template.aurora_tier, target_item.template.item_type, target_item.aurora_level, target_line_index)
@@ -356,11 +377,22 @@ class AuroraService:
             return {"success": True, "message": f"Line {target_line_index} replaced with fixed stat."}
 
         elif mod_type == 'FORCE_SET':
-            target_item.aurora_level = rule.forced_aurora_level
+            # Line 0 is the fixed stat; the remaining lines roll at the forced level.
+            forced_level = rule.forced_aurora_level
+            extra_lines = [
+                AuroraService._generate_random_line(
+                    target_item.template.aurora_tier, target_item.template.item_type,
+                    forced_level, line_index,
+                )
+                for line_index in range(1, max_lines)
+            ]
+            if any(line is None for line in extra_lines):
+                transaction.set_rollback(True)
+                return {"success": False, "message": "No complete Aurora line pool is configured for this item."}
+
+            target_item.aurora_level = forced_level
             target_item.save(update_fields=['aurora_level'])
-            
             target_item.aurora_lines.all().delete()
-            # Assuming force set just sets one fixed line for now, could be expanded to a list
             AuroraLine.objects.create(
                 inventory_item=target_item,
                 line_index=0,
@@ -368,10 +400,25 @@ class AuroraService:
                 line_type=rule.fixed_line_type,
                 value=rule.fixed_value
             )
+            for data in extra_lines:
+                AuroraLine.objects.create(
+                    inventory_item=target_item,
+                    line_index=data['line_index'],
+                    stat_type=data['stat_type'],
+                    line_type=data['line_type'],
+                    value=data['value']
+                )
             return {"success": True, "message": "Item forced to fixed state."}
 
         transaction.set_rollback(True)
         return {"success": False, "message": "Modifier type not fully implemented."}
+
+    @staticmethod
+    def _apply_pending_level(item, pending):
+        """Take the roll's Aurora level (a tier-up) along with its lines."""
+        if pending.new_aurora_level is not None and pending.new_aurora_level != item.aurora_level:
+            item.aurora_level = pending.new_aurora_level
+            item.save(update_fields=['aurora_level'])
 
     @staticmethod
     @transaction.atomic
@@ -397,6 +444,7 @@ class AuroraService:
             return {"success": True, "message": "Kept old lines."}
 
         elif action == 'take_new' and pending.modifier_type == 'REROLL_CHOICE':
+            AuroraService._apply_pending_level(item, pending)
             item.aurora_lines.all().delete()
             for data in pending.generated_lines_data:
                 AuroraLine.objects.create(
@@ -422,6 +470,7 @@ class AuroraService:
             if len(selected_lines) != expected_count:
                 return {"success": False, "message": "One or more selected lines are invalid."}
             
+            AuroraService._apply_pending_level(item, pending)
             item.aurora_lines.all().delete()
             for idx, data in enumerate(selected_lines):
                 AuroraLine.objects.create(

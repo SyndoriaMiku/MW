@@ -42,6 +42,10 @@ class PendingAuroraRoll(models.Model):
     inventory_item = models.OneToOneField(InventoryItem, on_delete=models.CASCADE, related_name='pending_aurora_roll')
     modifier_type = models.CharField(max_length=50, help_text="The type of modifier used (e.g. REROLL_CHOICE, REROLL_TRIPLE_CHOICE)")
     generated_lines_data = models.JSONField(default=list, help_text="JSON storing the newly rolled lines data")
+    new_aurora_level = models.IntegerField(
+        null=True, blank=True,
+        help_text="Aurora level of the rolled lines (a tier-up). Applied only if the new lines are taken.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

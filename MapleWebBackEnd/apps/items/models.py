@@ -334,6 +334,16 @@ class AuroraModifierRule(models.Model):
     fixed_line_type = models.CharField(max_length=20, choices=LINE_TYPE_CHOICES, null=True, blank=True)
     fixed_value = models.FloatField(null=True, blank=True)
 
+    # Only full rerolls can raise the Aurora level; the others keep the
+    # existing lines, which would then be out of step with a new level.
+    TIER_UP_MODIFIER_TYPES = ('REROLL_ALL', 'REROLL_CHOICE', 'REROLL_TRIPLE_CHOICE')
+
+    def clean(self):
+        if self.tier_up_chance and self.modifier_type not in self.TIER_UP_MODIFIER_TYPES:
+            raise ValidationError({
+                'tier_up_chance': 'Only full reroll modifiers can tier up; set this to 0.'
+            })
+
     class Meta:
         verbose_name = "Aurora Modifier Rule"
         verbose_name_plural = "Aurora Modifier Rules"

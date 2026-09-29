@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -308,7 +309,9 @@ class LumenReservationAPITests(APITestCase):
         self.assertFalse(InventoryItem.objects.filter(pk=sacrifice.pk).exists())
 
 
-class EssenceAPITests(APITestCase):
+class EssenceFixture(APITestCase):
+    """A weapon with one revealed Aurora line and a stack of 2 essences."""
+
     def setUp(self):
         self.character = Character.objects.create(name='Essence Tester')
         self.user = GameUser.objects.create_user(
@@ -368,6 +371,8 @@ class EssenceAPITests(APITestCase):
         payload.update(overrides)
         return self.client.post(self.modify_url, payload, format='json')
 
+
+class EssenceAPITests(EssenceFixture):
     def test_essence_rerolls_and_returns_updated_item(self):
         response = self.modify()
 
@@ -477,3 +482,82 @@ class EssenceAPITests(APITestCase):
         self.assertEqual(confirm_response.status_code, status.HTTP_200_OK)
         self.assertEqual(confirm_response.data['item']['id'], self.target.id)
         self.assertFalse(PendingAuroraRoll.objects.filter(inventory_item=self.target).exists())
+
+
+class AuroraTierUpTests(EssenceFixture):
+    """Tier-up belongs to the rolled result: kept or discarded with it."""
+
+    def use_rule(self, modifier_type, **changes):
+        for field, value in {'modifier_type': modifier_type, 'tier_up_chance': 1.0, **changes}.items():
+            setattr(self.rule, field, value)
+        self.rule.save()
+
+    def confirm(self, action, **extra):
+        return self.client.post(
+            self.confirm_url,
+            {'inventory_item_id': self.target.id, 'action': action, **extra},
+            format='json',
+        )
+
+    def target_state(self):
+        self.target.refresh_from_db()
+        return self.target.aurora_level, list(self.target.aurora_lines.values_list('value', flat=True))
+
+    def test_keeping_old_lines_discards_the_tier_up(self):
+        self.use_rule('REROLL_CHOICE')
+
+        rolled = self.modify()
+        pending_state = self.target_state()
+        self.confirm('keep_old')
+
+        self.assertTrue(rolled.data['tier_up'])
+        self.assertEqual(rolled.data['new_lines'][0]['value'], 4)
+        self.assertEqual(pending_state, (1, [1]))
+        self.assertEqual(self.target_state(), (1, [1]))
+
+    def test_taking_new_lines_applies_the_tier_up(self):
+        self.use_rule('REROLL_CHOICE')
+
+        self.modify()
+        self.confirm('take_new')
+
+        self.assertEqual(self.target_state(), (2, [4]))
+
+    def test_triple_choice_applies_the_tier_up_on_selection(self):
+        self.use_rule('REROLL_TRIPLE_CHOICE')
+
+        rolled = self.modify()
+        self.confirm('select_specific', selected_temp_ids=[rolled.data['choices'][0]['temp_id']])
+
+        self.assertTrue(rolled.data['tier_up'])
+        self.assertEqual(self.target_state(), (2, [4]))
+
+    def test_single_line_modifiers_never_tier_up(self):
+        self.use_rule('REROLL_SINGLE')
+
+        response = self.modify(target_line_index=0)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.target_state()[0], 1)
+
+    def test_force_set_fills_every_line_without_tier_up(self):
+        AuroraLineCountConfig.objects.update(max_lines=2)
+        self.use_rule(
+            'FORCE_SET', forced_aurora_level=2,
+            fixed_stat_type='str', fixed_line_type='percent', fixed_value=5,
+        )
+
+        response = self.modify()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lines = list(self.target.aurora_lines.order_by('line_index').values_list('stat_type', 'value'))
+        self.assertEqual(self.target_state()[0], 2)
+        self.assertEqual(lines, [('str', 5), ('att', 4)])
+
+    def test_rules_without_tier_up_reject_a_tier_up_chance(self):
+        for modifier_type in ('REROLL_SINGLE', 'REPLACE_FIXED', 'FORCE_SET'):
+            with self.subTest(modifier_type=modifier_type):
+                self.rule.modifier_type = modifier_type
+                self.rule.tier_up_chance = 0.5
+                with self.assertRaises(ValidationError):
+                    self.rule.clean()
