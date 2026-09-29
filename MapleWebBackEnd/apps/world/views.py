@@ -108,62 +108,65 @@ class BossDungeonViewSet(viewsets.ReadOnlyModelViewSet):
         if not character:
             return Response({"detail": "User has no character."}, status=status.HTTP_400_BAD_REQUEST)
 
-        party_member = PartyMember.objects.filter(character=character).select_related('party').first()
-        if not party_member:
-            return Response({"detail": "You must be in a party to enter a Boss Dungeon."}, status=status.HTTP_400_BAD_REQUEST)
-
-        party = party_member.party
-        if party.leader != character:
-            return Response({"detail": "Only the Party Leader can start the Boss Dungeon."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Check if party already in combat
-        if CombatInstance.objects.filter(party=party, status='in_progress').exists():
-            return Response({"detail": "Party is already in an active battle."}, status=status.HTTP_400_BAD_REQUEST)
-
-        members = list(party.party_members.select_related('character').all())
-        if len(members) > dungeon.max_party_size:
-            return Response({"detail": f"Party size exceeds max size ({dungeon.max_party_size}) for this dungeon."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Level & cooldown checks per member
-        now = timezone.now()
-        char_ct = ContentType.objects.get_for_model(character)
-        for pm in members:
-            c = pm.character
-
-            # Level check
-            if c.level < dungeon.required_level:
-                return Response({"detail": f"Member {c.name} does not meet the level requirement ({dungeon.required_level})."}, status=status.HTTP_400_BAD_REQUEST)
-
-            # (LG-1) Check not already in another battle
-            if Combatant.objects.filter(
-                content_type=char_ct,
-                objects_id=str(c.id),
-                combat_instance__status='in_progress'
-            ).exists():
-                return Response({"detail": f"Member {c.name} is already in another active battle."}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check clear cooldown
-            last_clear = DungeonClearLog.objects.filter(character=c, dungeon=dungeon).order_by('-cleared_at').first()
-            if last_clear:
-                cleared_at = last_clear.cleared_at
-                is_cooldown = False
-                if dungeon.time_type == BossDungeonTemplate.TimeType.DAILY:
-                    is_cooldown = (now - cleared_at).total_seconds() < 86400
-                elif dungeon.time_type == BossDungeonTemplate.TimeType.WEEKLY:
-                    is_cooldown = (now - cleared_at).days < 7
-                elif dungeon.time_type == BossDungeonTemplate.TimeType.MONTHLY:
-                    is_cooldown = (now - cleared_at).days < 30
-                
-                if is_cooldown:
-                    return Response({"detail": f"Member {c.name} has already cleared this {dungeon.time_type} dungeon."}, status=status.HTTP_400_BAD_REQUEST)
-
         # Get enemies from dungeon
         enemies = list(dungeon.stage_enemies.select_related('enemy').all())
         if not enemies:
             return Response({"detail": "No enemies configured for this dungeon."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # (B-2 fix) Use BattleService to properly create and initialize combat
+        # (CRIT-09) Lock the party row before any mutable-state check so two
+        # concurrent requests cannot both see "no active battle" and each
+        # start one. Membership and leadership are re-read under the lock.
         with transaction.atomic():
+            party_member = PartyMember.objects.filter(character=character).first()
+            if not party_member:
+                return Response({"detail": "You must be in a party to enter a Boss Dungeon."}, status=status.HTTP_400_BAD_REQUEST)
+
+            party = Party.objects.select_for_update().get(pk=party_member.party_id)
+            if party.leader_id != character.pk:
+                return Response({"detail": "Only the Party Leader can start the Boss Dungeon."}, status=status.HTTP_403_FORBIDDEN)
+
+            # Check if party already in combat
+            if CombatInstance.objects.filter(party=party, status='in_progress').exists():
+                return Response({"detail": "Party is already in an active battle."}, status=status.HTTP_400_BAD_REQUEST)
+
+            members = list(party.party_members.select_related('character').all())
+            if len(members) > dungeon.max_party_size:
+                return Response({"detail": f"Party size exceeds max size ({dungeon.max_party_size}) for this dungeon."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Level & cooldown checks per member
+            now = timezone.now()
+            char_ct = ContentType.objects.get_for_model(character)
+            for pm in members:
+                c = pm.character
+
+                # Level check
+                if c.level < dungeon.required_level:
+                    return Response({"detail": f"Member {c.name} does not meet the level requirement ({dungeon.required_level})."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # (LG-1) Check not already in another battle
+                if Combatant.objects.filter(
+                    content_type=char_ct,
+                    objects_id=str(c.id),
+                    combat_instance__status='in_progress'
+                ).exists():
+                    return Response({"detail": f"Member {c.name} is already in another active battle."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Check clear cooldown
+                last_clear = DungeonClearLog.objects.filter(character=c, dungeon=dungeon).order_by('-cleared_at').first()
+                if last_clear:
+                    cleared_at = last_clear.cleared_at
+                    is_cooldown = False
+                    if dungeon.time_type == BossDungeonTemplate.TimeType.DAILY:
+                        is_cooldown = (now - cleared_at).total_seconds() < 86400
+                    elif dungeon.time_type == BossDungeonTemplate.TimeType.WEEKLY:
+                        is_cooldown = (now - cleared_at).days < 7
+                    elif dungeon.time_type == BossDungeonTemplate.TimeType.MONTHLY:
+                        is_cooldown = (now - cleared_at).days < 30
+
+                    if is_cooldown:
+                        return Response({"detail": f"Member {c.name} has already cleared this {dungeon.time_type} dungeon."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # (B-2 fix) Use BattleService to properly create and initialize combat
             combat = BattleService.create_combat_instance(party, enemies)
             combat.boss_dungeon = dungeon
             BattleService.start_combat(combat)
