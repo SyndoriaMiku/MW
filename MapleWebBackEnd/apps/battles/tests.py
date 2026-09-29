@@ -1,8 +1,10 @@
 import uuid
+from datetime import timedelta
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -765,6 +767,84 @@ class NormalAttackSceneContractTests(APITestCase):
                 self.assertEqual(active.remaining_turns, expected_remaining)
             else:
                 self.assertIsNone(active)
+
+    def add_party_member(self, name):
+        """Second player at position 2; returns (user, character)."""
+        self.party.max_size = 2
+        self.party.save(update_fields=['max_size'])
+        character = Character.objects.create(name=name)
+        user = GameUser.objects.create_user(
+            username=name, email=f'{name}@example.com', password='test-pass-123'
+        )
+        user.character = character
+        user.save(update_fields=['character'])
+        PartyMember.objects.create(party=self.party, character=character, position=2)
+        return user, character
+
+    def test_forfeit_ends_a_solo_battle_as_defeat(self):
+        combat = self.create_battle(enemy_hp=500)
+
+        response = self.client.post(reverse('battles:forfeit', args=[combat.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['combat']['status'], 'defeat')
+        self.assertEqual(response.data['combat']['version'], 1)
+        self.assertIsNone(BattleService.get_active_combat_for_character(self.character))
+
+    def test_forfeit_rejects_outsiders_and_finished_battles(self):
+        combat = self.create_battle(enemy_hp=500)
+        outsider = GameUser.objects.create_user(
+            username='forfeit-outsider', email='fo@example.com', password='test-pass-123'
+        )
+        outsider.character = Character.objects.create(name='Outsider')
+        outsider.save(update_fields=['character'])
+        url = reverse('battles:forfeit', args=[combat.id])
+
+        self.client.force_authenticate(outsider)
+        self.assertEqual(self.client.post(url).status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.user)
+        self.client.post(url)
+        self.assertEqual(self.client.post(url).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_current_actor_forfeiting_passes_the_turn_on(self):
+        _, ally = self.add_party_member('forfeit-ally')
+        combat = self.create_battle(enemy_hp=500)
+
+        response = self.client.post(reverse('battles:forfeit', args=[combat.id]))
+
+        self.assertEqual(response.data['combat']['status'], 'in_progress')
+        self.assertEqual(response.data['combat']['current_player_position'], 2)
+
+    @override_settings(BATTLE_TURN_TIMEOUT_SECONDS=60)
+    def test_idle_turn_can_be_skipped_only_after_the_timeout(self):
+        ally_user, _ = self.add_party_member('idle-ally')
+        combat = self.create_battle(enemy_hp=500)
+        url = reverse('battles:skip-idle-turn', args=[combat.id])
+        self.client.force_authenticate(ally_user)
+
+        too_early = self.client.post(url)
+        CombatInstance.objects.filter(pk=combat.pk).update(
+            turn_started_at=timezone.now() - timedelta(seconds=61)
+        )
+        skipped = self.client.post(url)
+
+        self.assertEqual(too_early.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(skipped.status_code, status.HTTP_200_OK)
+        self.assertEqual(skipped.data['combat']['current_player_position'], 2)
+        self.assertEqual(skipped.data['combat']['version'], 1)
+
+    def test_turn_start_time_moves_with_the_turn(self):
+        combat = self.create_battle(enemy_hp=500)
+        started = combat.turn_started_at
+        CombatInstance.objects.filter(pk=combat.pk).update(
+            turn_started_at=timezone.now() - timedelta(hours=1)
+        )
+
+        self.act(combat, combat.combatants.get(is_player=False))
+
+        combat.refresh_from_db()
+        self.assertIsNotNone(started)
+        self.assertGreater(combat.turn_started_at, timezone.now() - timedelta(minutes=1))
 
     def test_active_battle_can_restore_scene(self):
         combat = self.create_battle()

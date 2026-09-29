@@ -1,5 +1,6 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.response import Response
@@ -44,6 +45,7 @@ class SessionBootstrapView(generics.GenericAPIView):
         return Response({
             "server_time": timezone.now(),
             "api_version": "1.0",
+            "battle_turn_timeout_seconds": settings.BATTLE_TURN_TIMEOUT_SECONDS,
             "profile": UserProfileSerializer(request.user).data,
             "character": CharacterSerializer(character).data if character else None,
             "party": PartySerializer(party).data if party else None,
@@ -54,6 +56,7 @@ class SessionBootstrapView(generics.GenericAPIView):
                 "effect_tick_events": True,
                 "action_idempotency": True,
                 "trade_cancel": True,
+                "battle_forfeit": True,
                 "realtime_battle": False,
             },
         })

@@ -42,6 +42,10 @@ class CombatInstance(models.Model):
     # expected_version so an action built from an outdated snapshot is refused.
     version = models.PositiveIntegerField(default=0)
 
+    # When the current player's turn began; lets party members skip an idle
+    # player after settings.BATTLE_TURN_TIMEOUT_SECONDS.
+    turn_started_at = models.DateTimeField(null=True, blank=True)
+
     #Time
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

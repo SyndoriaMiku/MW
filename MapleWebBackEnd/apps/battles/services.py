@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from .models import CombatInstance, Combatant, ActiveEffect
 from apps.party.models import Party
 from apps.world.models import EnemyTemplate
@@ -287,7 +288,8 @@ class BattleService:
         first_player = combat_instance.combatants.filter(is_player=True).order_by('position').first()
         if first_player:
             combat_instance.current_player_position = first_player.position
-            
+        combat_instance.turn_started_at = timezone.now()
+
         combat_instance.save()
 
     @staticmethod
@@ -308,6 +310,7 @@ class BattleService:
 
             if next_player:
                 combat_instance.current_player_position = next_player.position
+                combat_instance.turn_started_at = timezone.now()
                 combat_instance.save()
             else:
                 # No more players this round, switch to Monster Phase
@@ -348,7 +351,8 @@ class BattleService:
             first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
             if first_player:
                 combat_instance.current_player_position = first_player.position
-            
+            combat_instance.turn_started_at = timezone.now()
+
             combat_instance.save()
 
         return events
@@ -900,6 +904,56 @@ class BattleService:
             }
         
         return result_log
+
+    @staticmethod
+    def _is_current_actor(combat_instance, combatant) -> bool:
+        return (
+            combat_instance.turn_phase == CombatInstance.TURN_PHASE.PLAYER_PHASE
+            and combatant.position == combat_instance.current_player_position
+        )
+
+    @staticmethod
+    def forfeit(combat_instance: CombatInstance, combatant: Combatant) -> list:
+        """
+        Take a player out of the battle. The battle is lost once no player is
+        left; otherwise a forfeiting current actor passes the turn on.
+        """
+        was_current_actor = BattleService._is_current_actor(combat_instance, combatant)
+        combatant.current_hp = 0
+        combatant.save(update_fields=['current_hp'])
+        name = getattr(combatant.entity, 'name', str(combatant.entity))
+        event = {
+            "event_type": "forfeit",
+            "actor_id": combatant.id,
+            "actor_type": "character",
+            "actor": name,
+            "message": f"{name} left the battle.",
+        }
+        events = [event]
+
+        battle_result = BattleService.check_combat_status(combat_instance)
+        if battle_result["status"] != CombatInstance.CombatStatus.IN_PROGRESS:
+            event["battle_result"] = {
+                "status": battle_result["status"],
+                "rewards": battle_result["logs"],
+            }
+        elif was_current_actor:
+            events.extend(BattleService.end_turn(combat_instance))
+        return events
+
+    @staticmethod
+    def skip_turn(combat_instance: CombatInstance, combatant: Combatant) -> list:
+        """Pass an idle current actor's turn without an action."""
+        name = getattr(combatant.entity, 'name', str(combatant.entity))
+        events = [{
+            "event_type": "turn_skipped",
+            "actor_id": combatant.id,
+            "actor_type": "character",
+            "actor": name,
+            "message": f"{name}'s turn was skipped for inactivity.",
+        }]
+        events.extend(BattleService.end_turn(combat_instance))
+        return events
 
     @staticmethod
     def check_combat_status(combat_instance) -> dict:

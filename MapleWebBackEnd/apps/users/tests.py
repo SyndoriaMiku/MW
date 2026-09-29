@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -48,6 +49,7 @@ class SessionBootstrapTests(APITestCase):
         self.assertIsNone(data['party'])
         self.assertIsNone(data['active_battle'])
         self.assertTrue(data['feature_flags']['action_idempotency'])
+        self.assertEqual(data['battle_turn_timeout_seconds'], settings.BATTLE_TURN_TIMEOUT_SECONDS)
 
     def test_character_in_party_and_active_battle(self):
         character = Character.objects.create(name='Bootstrapper')

@@ -142,7 +142,7 @@ class CombatInstanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CombatInstance
         fields = [
-            'id', 'version', 'status', 'turn_phase', 'turn_count',
+            'id', 'version', 'status', 'turn_phase', 'turn_count', 'turn_started_at',
             'current_player_position', 'encounter', 'stamina_cost_on_victory',
             'stamina_charged', 'combatants',
             'created_at', 'updated_at'

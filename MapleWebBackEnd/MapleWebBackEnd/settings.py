@@ -215,3 +215,7 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+# Game settings
+# Seconds a player may hold their battle turn before party members can skip it.
+BATTLE_TURN_TIMEOUT_SECONDS = config('BATTLE_TURN_TIMEOUT_SECONDS', default=60, cast=int)
