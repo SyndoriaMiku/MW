@@ -17,6 +17,7 @@ from apps.users.models import GameUser
 
 from .models import (
     AuroraLineCountConfig,
+    AuroraLumisCostRule,
     AuroraLinePool,
     AuroraModifierRule,
     AuroraProperty,
@@ -373,6 +374,63 @@ class EssenceFixture(APITestCase):
         }
         payload.update(overrides)
         return self.client.post(self.modify_url, payload, format='json')
+
+
+class LumisRerollCostTests(EssenceFixture):
+    """The Lumis price of a reroll comes from AuroraLumisCostRule by item level and Aurora level."""
+
+    def setUp(self):
+        super().setUp()
+        AuroraLumisCostRule.objects.create(min_item_level=0, aurora_level=1, lumis_cost=100)
+        AuroraLumisCostRule.objects.create(min_item_level=0, aurora_level=2, lumis_cost=300)
+        AuroraLumisCostRule.objects.create(min_item_level=50, aurora_level=1, lumis_cost=1000)
+        self.set_lumis(5000)
+
+    def set_lumis(self, amount):
+        GameUser.objects.filter(pk=self.user.pk).update(lumis=amount)
+
+    def lumis(self):
+        return GameUser.objects.get(pk=self.user.pk).lumis
+
+    def reroll(self):
+        return self.client.post(
+            self.modify_url, {'target_item_id': self.target.id, 'use_lumis': True}, format='json',
+        )
+
+    def test_price_follows_item_level_and_aurora_level(self):
+        for minimum_level, aurora_level, cost in [(1, 1, 100), (1, 2, 300), (60, 1, 1000)]:
+            with self.subTest(minimum_level=minimum_level, aurora_level=aurora_level):
+                ItemTemplate.objects.filter(pk=self.target.template_id).update(minimum_level=minimum_level)
+                InventoryItem.objects.filter(pk=self.target.pk).update(aurora_level=aurora_level)
+                self.set_lumis(5000)
+
+                response = self.reroll()
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data['lumis_spent'], cost)
+                self.assertEqual(self.lumis(), 5000 - cost)
+
+    def test_no_configured_price_means_no_lumis_reroll(self):
+        InventoryItem.objects.filter(pk=self.target.pk).update(aurora_level=3)
+
+        response = self.reroll()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.lumis(), 5000)
+
+    def test_not_enough_lumis_changes_nothing(self):
+        self.set_lumis(99)
+
+        response = self.reroll()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.lumis(), 99)
+        self.assertEqual(list(self.target.aurora_lines.values_list('value', flat=True)), [1])
+
+    def test_inventory_shows_the_reroll_price(self):
+        data = self.client.get(reverse('inventory-item-detail', args=[self.target.pk])).data
+
+        self.assertEqual(data['aurora_lumis_reroll_cost'], 100)
 
 
 class EssenceAPITests(EssenceFixture):

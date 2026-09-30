@@ -22,6 +22,18 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     aurora_lines = AuroraLineSerializer(many=True, read_only=True)
     template = ItemTemplateSerializer(read_only=True)
     lumen_breakdown = serializers.SerializerMethodField()
+    # Lumis price of an Aurora reroll right now; null when not available.
+    aurora_lumis_reroll_cost = serializers.SerializerMethodField()
+
+    def get_aurora_lumis_reroll_cost(self, obj):
+        from apps.items.models import AuroraLumisCostRule
+
+        if not obj.template.aurora_tier_id or obj.aurora_level < 1:
+            return None
+        # Load the small price table once per response, not once per item.
+        if '_aurora_lumis_cost_rules' not in self.context:
+            self.context['_aurora_lumis_cost_rules'] = list(AuroraLumisCostRule.objects.all())
+        return AuroraLumisCostRule.cost_for(obj, self.context['_aurora_lumis_cost_rules'])
 
     def get_lumen_breakdown(self, obj):
         tier = obj.template.lumen_tier
@@ -58,7 +70,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
         fields = [
-            'id', 'aurora_lines', 'template', 'lumen_breakdown',
+            'id', 'aurora_lines', 'template', 'lumen_breakdown', 'aurora_lumis_reroll_cost',
             'lumen_ascend_level', 'aurora_level', 'quantity', 'is_untrade',
             'expired_at', 'is_destroyed', 'owner',
         ]

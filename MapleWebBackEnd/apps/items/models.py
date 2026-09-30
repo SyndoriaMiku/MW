@@ -178,7 +178,43 @@ class AuroraLineCountConfig(models.Model):
     def __str__(self):
         return f"Level {self.min_item_level}+ -> {self.max_lines} lines"
 
-     
+
+
+class AuroraLumisCostRule(models.Model):
+    """
+    Lumis price of an Aurora reroll paid with Lumis, by the item's minimum level
+    and its current Aurora level. For the item's Aurora level, the row with the
+    highest min_item_level the item reaches applies; no row means the item
+    cannot be rerolled with Lumis.
+    """
+    min_item_level = models.IntegerField(default=0, help_text="Applies to items whose minimum level is at least this")
+    aurora_level = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Current Aurora level of the item")
+    lumis_cost = models.PositiveBigIntegerField(help_text="Lumis charged per reroll")
+
+    class Meta:
+        verbose_name = "Aurora Lumis Cost Rule"
+        verbose_name_plural = "Aurora Lumis Cost Rules"
+        unique_together = ('min_item_level', 'aurora_level')
+        ordering = ['aurora_level', '-min_item_level']
+
+    @staticmethod
+    def cost_for(inventory_item, rules=None):
+        """Lumis price for rerolling this item now, or None when not configured."""
+        if rules is None:
+            rules = AuroraLumisCostRule.objects.filter(aurora_level=inventory_item.aurora_level)
+        item_level = inventory_item.template.minimum_level
+        matching = [
+            rule for rule in rules
+            if rule.aurora_level == inventory_item.aurora_level and rule.min_item_level <= item_level
+        ]
+        if not matching:
+            return None
+        return max(matching, key=lambda rule: rule.min_item_level).lumis_cost
+
+    def __str__(self):
+        return f"Item level {self.min_item_level}+, Aurora {self.aurora_level}: {self.lumis_cost} Lumis"
+
+
 class LumenCostRule(models.Model):
     """
     Cost and success rules for Lumen Ascend

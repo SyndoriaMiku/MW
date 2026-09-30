@@ -2,7 +2,8 @@ import random
 from django.db import transaction
 from django.db.models import F
 from apps.items.models import (
-    AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate, AuroraLineCountConfig
+    AuroraProperty, AuroraLinePool, AuroraModifierRule, AuroraEvent, ItemTemplate, AuroraLineCountConfig,
+    AuroraLumisCostRule,
 )
 from apps.inventory.models import InventoryItem, AuroraLine, PendingAuroraRoll
 from apps.inventory.reservations import character_in_active_battle, mutation_block_reason
@@ -175,7 +176,9 @@ class AuroraService:
         # LUMIS REROLL
         # -------------------------------------------------------------------
         if use_lumis:
-            cost = 500 # Define cost logic later
+            cost = AuroraLumisCostRule.cost_for(target_item)
+            if cost is None:
+                return {"success": False, "message": "This item cannot be rerolled with Lumis."}
             # (C-3 fix) Lock user row and re-check balance under lock
             from apps.users.models import GameUser
             locked_user = GameUser.objects.select_for_update().get(pk=user.pk)
@@ -200,7 +203,10 @@ class AuroraService:
                     line_type=data['line_type'],
                     value=data['value']
                 )
-            return {"success": True, "message": "Rerolled successfully using Lumis.", "result": new_lines}
+            return {
+                "success": True, "message": "Rerolled successfully using Lumis.",
+                "result": new_lines, "lumis_spent": cost,
+            }
 
         # -------------------------------------------------------------------
         # ITEM REROLL (CUBES/SCROLLS)

@@ -3,7 +3,7 @@ from .models import (
     ItemTemplate, ItemSet, ItemSetEffect,
     LumenTierProperty, AuroraProperty, LumenCostRule, AuroraLineCountConfig,
     AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent,
-    LumenModifierRule, BattleConsumableRule, TimedBuffRule,
+    LumenModifierRule, BattleConsumableRule, TimedBuffRule, AuroraLumisCostRule,
 )
 from .forms import LumenAscendRuleForm
 
@@ -220,6 +220,14 @@ class LumenModifierRuleAdmin(admin.ModelAdmin):
 class TimedBuffRuleAdmin(admin.ModelAdmin):
     list_display = ('item_template', 'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'duration_minutes', 'max_duration_minutes')
     search_fields = ('item_template__name',)
+
+@admin.register(AuroraLumisCostRule)
+class AuroraLumisCostRuleAdmin(admin.ModelAdmin):
+    """Giá reroll Aurora bằng Lumis theo cấp item và cấp Aurora hiện tại."""
+    list_display = ('aurora_level', 'min_item_level', 'lumis_cost')
+    list_filter = ('aurora_level',)
+    list_editable = ('lumis_cost',)
+    ordering = ('aurora_level', 'min_item_level')
 
 @admin.register(AuroraLineCountConfig)
 class AuroraLineCountConfigAdmin(admin.ModelAdmin):
