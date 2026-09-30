@@ -71,9 +71,12 @@ class TransactionAdmin(admin.ModelAdmin):
     """
     Giao diện xem lại lịch sử giao dịch trên thị trường.
     """
-    list_display = ('id', 'listing_info', 'buyer', 'seller', 'created_at')
-    search_fields = ('buyer__username', 'seller__username', 'listing__item__template__name')
-    readonly_fields = ('listing', 'buyer', 'seller', 'created_at')
+    list_display = ('id', 'item_template', 'quantity', 'price', 'fee', 'seller_received', 'buyer', 'seller', 'created_at')
+    search_fields = ('buyer__username', 'seller__username', 'item_template__name')
+    readonly_fields = (
+        'listing', 'buyer', 'seller', 'item_template', 'quantity',
+        'price', 'fee', 'seller_received', 'created_at',
+    )
     
     # Không cho phép thêm mới hoặc xóa Transaction từ admin
     def has_add_permission(self, request):
@@ -81,9 +84,3 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-        
-    @admin.display(description='Item from Listing')
-    def listing_info(self, obj):
-        if obj.listing and obj.listing.item:
-            return str(obj.listing.item.template)
-        return "N/A"

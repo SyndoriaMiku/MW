@@ -232,6 +232,8 @@ CORS_ALLOW_HEADERS = [
 # Game settings
 # Seconds a player may hold their battle turn before party members can skip it.
 BATTLE_TURN_TIMEOUT_SECONDS = config('BATTLE_TURN_TIMEOUT_SECONDS', default=60, cast=int)
+# Percent of each market sale taken from the seller's proceeds (rounded down).
+MARKET_FEE_PERCENT = config('MARKET_FEE_PERCENT', default=5, cast=int)
 
 # Failed-login limits (apps/users/login_limits.py): wrong passwords allowed per
 # account and per IP before that account/IP is locked until the window ends.

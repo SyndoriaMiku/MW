@@ -63,6 +63,12 @@ class Transaction(models.Model):
     buyer = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='transactions')
     #Seller of the item
     seller = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='sales')
+    # What sold and for how much, kept even if the listing or item changes later.
+    item_template = models.ForeignKey('items.ItemTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.PositiveIntegerField(default=0, help_text="Lumis the buyer paid for the whole listing")
+    fee = models.PositiveIntegerField(default=0, help_text="Market fee taken from the seller's proceeds")
+    seller_received = models.PositiveIntegerField(default=0, help_text="price - fee")
     #Transaction time
     created_at = models.DateTimeField(auto_now_add=True)
     

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -11,7 +11,7 @@ from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 
-from .models import Listing, Trade, TradeItem
+from .models import Listing, Trade, TradeItem, Transaction
 from .views import ListingViewSet, TradeViewSet
 
 
@@ -26,7 +26,9 @@ class MarketMutationSurfaceTests(SimpleTestCase):
         self.assertNotIn('delete', TradeViewSet.http_method_names)
 
 
-class MarketStackPurchaseTests(APITestCase):
+class MarketListingFixture:
+    """A seller with a stack of 10 potions, 2 of them listed for 50 Lumis; buyer logged in."""
+
     def create_player(self, name):
         character = Character.objects.create(name=name)
         user = GameUser.objects.create_user(
@@ -49,6 +51,8 @@ class MarketStackPurchaseTests(APITestCase):
         )
         self.client.force_authenticate(self.buyer)
 
+
+class MarketStackPurchaseTests(MarketListingFixture, APITestCase):
     def test_partial_stack_purchase_merges_into_buyer_stack(self):
         buyer_stack = InventoryItem.objects.create(
             owner=self.buyer_character, template=self.potion, quantity=3
@@ -103,6 +107,75 @@ class MarketStackPurchaseTests(APITestCase):
             owner=self.buyer_character, template=self.potion, is_untrade=True
         )
         self.assertEqual(bought.quantity, 2)
+
+
+class MarketFeeAndPriceTests(MarketListingFixture, APITestCase):
+    """5% of each sale goes to the house; sellers may reprice or cancel any time."""
+
+    def buy(self, **data):
+        self.client.force_authenticate(self.buyer)
+        return self.client.post(reverse('listing-buy', args=[self.listing.id]), data, format='json')
+
+    def set_price(self, price, user=None):
+        self.client.force_authenticate(user or self.seller)
+        return self.client.post(
+            reverse('listing-set-price', args=[self.listing.id]), {'price': price}, format='json',
+        )
+
+    def lumis(self, user):
+        return GameUser.objects.get(pk=user.pk).lumis
+
+    def test_seller_receives_the_price_minus_a_five_percent_fee(self):
+        response = self.buy()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual((response.data['price'], response.data['fee']), (50, 2))
+        self.assertEqual(self.lumis(self.buyer), 950)
+        self.assertEqual(self.lumis(self.seller), 1048)
+
+    def test_transaction_records_the_sale(self):
+        self.buy()
+
+        sale = Transaction.objects.get()
+        self.assertEqual(
+            (sale.item_template, sale.quantity, sale.price, sale.fee, sale.seller_received),
+            (self.potion, 2, 50, 2, 48),
+        )
+
+    @override_settings(MARKET_FEE_PERCENT=10)
+    def test_fee_rate_comes_from_settings(self):
+        self.buy()
+
+        self.assertEqual(Transaction.objects.get().fee, 5)
+
+    def test_seller_can_change_the_price(self):
+        response = self.set_price(80)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['price'], 80)
+        self.buy()
+        self.assertEqual(self.lumis(self.buyer), 920)
+
+    def test_only_the_seller_can_change_the_price_and_it_must_be_positive(self):
+        self.assertEqual(self.set_price(80, user=self.buyer).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.set_price(0).status_code, status.HTTP_400_BAD_REQUEST)
+        self.listing.refresh_from_db()
+        self.assertEqual(self.listing.price, 50)
+
+    def test_cancelled_listing_price_cannot_change(self):
+        Listing.objects.filter(pk=self.listing.pk).update(is_active=False)
+
+        self.assertEqual(self.set_price(80).status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_buyer_is_protected_from_a_price_change_they_did_not_see(self):
+        self.set_price(500)
+
+        response = self.buy(expected_price=50)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data['price'], 500)
+        self.assertEqual(self.lumis(self.buyer), 1000)
+        self.assertTrue(Listing.objects.get(pk=self.listing.pk).is_active)
 
 
 class TradeLifecycleTests(APITestCase):

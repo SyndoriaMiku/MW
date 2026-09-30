@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Case, When, F, FloatField, Q
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -16,6 +17,11 @@ from apps.users.models import GameUser
 
 def _is_expired(item):
     return item.expired_at is not None and item.expired_at <= timezone.now()
+
+
+def market_fee(price):
+    """The house's cut of a sale, taken from the seller (rounded down)."""
+    return price * settings.MARKET_FEE_PERCENT // 100
 
 
 class ListingViewSet(viewsets.ModelViewSet):
@@ -145,9 +151,32 @@ class ListingViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
+    def set_price(self, request, pk=None):
+        """Change the price of your own active listing. Body: {"price": <int > 0>}."""
+        price = parse_int(request.data.get('price'), 'price', min_value=1)
+        if price is None:
+            return Response({"price": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            listing = Listing.objects.select_for_update().get(pk=self.get_object().pk)
+            if listing.seller_id != request.user.pk:
+                return Response(
+                    {"detail": "You may only reprice your own listing."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            listing.price = price
+            listing.save(update_fields=['price'])
+        return Response(self.get_serializer(listing).data)
+
+    @action(detail=True, methods=['post'])
     def buy(self, request, pk=None):
+        """
+        Buy a listing. Send the price you saw as "expected_price": if the seller
+        changed it meanwhile, nothing is bought and 409 returns the new price.
+        """
         listing = self.get_object()
         buyer = request.user
+        expected_price = parse_int(request.data.get('expected_price'), 'expected_price', min_value=1)
 
         if listing.seller == buyer:
             return Response({"detail": "You cannot buy your own listing."}, status=status.HTTP_400_BAD_REQUEST)
@@ -164,6 +193,11 @@ class ListingViewSet(viewsets.ModelViewSet):
             listing = Listing.objects.select_for_update().get(pk=listing.pk)
             if not listing.is_active:
                 return Response({"detail": "This listing is no longer active."}, status=status.HTTP_400_BAD_REQUEST)
+            if expected_price is not None and expected_price != listing.price:
+                return Response(
+                    {"detail": "The seller changed the price.", "price": listing.price},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             item = InventoryItem.objects.select_for_update().select_related(
                 'template', 'owner__user'
@@ -194,9 +228,10 @@ class ListingViewSet(viewsets.ModelViewSet):
             if buyer_profile.lumis < listing.price:
                 return Response({"detail": "Not enough Lumis."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Transfer Lumis
+            # Transfer Lumis; the market fee comes out of the seller's proceeds.
+            fee = market_fee(listing.price)
             buyer_profile.lumis -= listing.price
-            seller_profile.lumis += listing.price
+            seller_profile.lumis += listing.price - fee
             buyer_profile.save(update_fields=['lumis'])
             seller_profile.save(update_fields=['lumis'])
 
@@ -236,10 +271,20 @@ class ListingViewSet(viewsets.ModelViewSet):
             MarketTransaction.objects.create(
                 listing=listing,
                 buyer=buyer,
-                seller=listing.seller
+                seller=listing.seller,
+                item_template=item.template,
+                quantity=listing.quantity,
+                price=listing.price,
+                fee=fee,
+                seller_received=listing.price - fee,
             )
 
-        return Response({"detail": "Item purchased successfully."})
+        return Response({
+            "detail": "Item purchased successfully.",
+            "price": listing.price,
+            "fee": fee,
+            "quantity": listing.quantity,
+        })
 
 
 
