@@ -61,9 +61,11 @@ class EffectTemplate(models.Model):
     percent_agi_change = models.FloatField(default=0) #Percentage agility change, positive for buff, negative for debuff
     flat_int_change = models.IntegerField(default=0) #Intelligence change, positive for buff, negative for debuff
     percent_int_change = models.FloatField(default=0) #Percentage intelligence change, positive for buff, negative for debuff
-    drop_rate_change = models.FloatField(default=0) #Drop rate change, positive for buff, negative for debuff
-    exp_rate_change = models.FloatField(default=0) #EXP rate change, positive for buff, negative for debuff
-    lumis_rate_change = models.FloatField(default=0, help_text="Lumis gain rate change, positive for buff, negative for debuff")
+    # Reward rate changes, in percentage points like item buffs and events
+    # (100 = x2). They count if still active on the player when the battle is won.
+    drop_rate_change = models.FloatField(default=0, help_text="Common drop rate change in % (100 = x2); negative for a debuff")
+    exp_rate_change = models.FloatField(default=0, help_text="EXP gain change in % (100 = x2); negative for a debuff")
+    lumis_rate_change = models.FloatField(default=0, help_text="Lumis gain change in % (100 = x2); negative for a debuff")
     final_damage_modifier = models.FloatField(default=0, help_text="Final damage percent modifier, positive for buff, negative for debuff")
 
     shields_points = models.IntegerField(default=0, help_text="Amount of damage the shield can absorb") #Amount of damage the shield can absorb

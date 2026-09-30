@@ -687,6 +687,10 @@ class BattleService:
             'mana_received_modifier': 0.0,
             'mana_dealt_modifier': 0.0,
             'cooldown_reduction': 0,
+            # Reward rate bonuses as fractions (1.0 = +100%), applied at victory.
+            'exp_rate': 0.0,
+            'lumis_rate': 0.0,
+            'drop_rate': 0.0,
         }
 
         for effect in combatant.active_effects.select_related('effect_template').all():
@@ -713,6 +717,10 @@ class BattleService:
             mods['mana_received_modifier'] += t.mana_received_modifier * stacks
             mods['mana_dealt_modifier'] += t.mana_dealt_modifier * stacks
             mods['cooldown_reduction'] += t.cooldown_reduction * stacks
+            # EffectTemplate rate changes are percentage points like other rate bonuses.
+            mods['exp_rate'] += t.exp_rate_change / 100.0 * stacks
+            mods['lumis_rate'] += t.lumis_rate_change / 100.0 * stacks
+            mods['drop_rate'] += t.drop_rate_change / 100.0 * stacks
 
         return mods
 

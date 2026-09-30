@@ -4,7 +4,7 @@ from django.db.models import F
 from apps.battles.models import CombatInstance
 from apps.inventory.grant_service import grant_item
 from apps.party.models import PendingPartyLoot
-from apps.battles.services import _prefetch_entities
+from apps.battles.services import BattleService, _prefetch_entities
 
 class RewardService:
 
@@ -54,6 +54,21 @@ class RewardService:
 
         num_players = len(rewarded_players)
 
+        # Each player's rates: equipment, timed buffs and events (Character
+        # properties) plus rate effects active on them in this battle.
+        rates = {}
+        for combatant in player_combatants:
+            player = combatant.entity
+            if player is None:
+                continue
+            mods = BattleService.get_combat_modifiers(combatant)
+            rates[player.pk] = {
+                'drop': player.total_drop_rate + mods['drop_rate'],
+                'epic_drop': player.total_epic_drop_rate,
+                'exp': player.total_exp_rate + mods['exp_rate'],
+                'lumis': player.total_lumis_rate + mods['lumis_rate'],
+            }
+
         # 1. Calculate Total EXP & Lumis pool
         total_exp = 0
         total_lumis = 0
@@ -65,8 +80,8 @@ class RewardService:
         base_lumis_per_player = total_lumis // num_players
 
         # 2. Get highest drop rates for Party Shared Loot
-        highest_party_drop_rate = max(p.total_drop_rate for p in rewarded_players)
-        highest_party_epic_drop_rate = max(p.total_epic_drop_rate for p in rewarded_players)
+        highest_party_drop_rate = max(rate['drop'] for rate in rates.values())
+        highest_party_epic_drop_rate = max(rate['epic_drop'] for rate in rates.values())
 
         # Initialize log dictionary for each player
         for p in rewarded_players:
@@ -116,7 +131,7 @@ class RewardService:
                     # Personal Loot
                     for player in rewarded_players:
                         if random.random() <= RewardService.effective_drop_rate(
-                            loot, player.total_drop_rate, player.total_epic_drop_rate
+                            loot, rates[player.pk]['drop'], rates[player.pk]['epic_drop']
                         ):
                             qty = random.randint(loot.min_quantity, loot.max_quantity)
                             if qty > 0:
@@ -182,8 +197,8 @@ class RewardService:
         # Apply EXP and Lumis
         for player in rewarded_players:
             # Applying character-specific multipliers
-            final_exp = int(base_exp_per_player * player.total_exp_rate)
-            final_lumis = int(base_lumis_per_player * player.total_lumis_rate)
+            final_exp = int(base_exp_per_player * rates[player.pk]['exp'])
+            final_lumis = int(base_lumis_per_player * rates[player.pk]['lumis'])
 
             # Give Lumis (RC-5 fix: atomic F() increment)
             from apps.users.models import GameUser

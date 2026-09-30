@@ -359,6 +359,34 @@ class NormalAttackSceneContractTests(BattleFixtureMixin, APITestCase):
         )
         self.assertEqual(owned, {'epic drop'})
 
+    def test_in_battle_rate_effects_add_to_the_rewards(self):
+        combat = self.create_battle(enemy_hp=1)
+        target = combat.combatants.get(is_player=False)
+        EnemyTemplate.objects.filter(pk=target.objects_id).update(
+            exp_reward=10, lumis_reward_min=10, lumis_reward_max=10,
+        )
+        LootTable.objects.create(
+            enemy=target.entity, base_drop_rate=0.5,
+            item_template=ItemTemplate.objects.create(name='Lucky Drop', item_type='etc'),
+        )
+        fortune = EffectTemplate.objects.create(
+            name='Fortune', duration_turns=3,
+            exp_rate_change=100, lumis_rate_change=50, drop_rate_change=100,
+        )
+        ActiveEffect.objects.create(
+            combat_instance=combat, target=combat.combatants.get(is_player=True),
+            effect_template=fortune, remaining_turns=3,
+        )
+
+        # A roll of 0.6 only succeeds when the 0.5 base rate is doubled.
+        with mock.patch('apps.battles.reward_service.random.random', return_value=0.6):
+            self.act(combat, target)
+
+        self.character.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual((self.character.current_exp, self.user.lumis), (20, 15))
+        self.assertTrue(InventoryItem.objects.filter(owner=self.character, template__name='Lucky Drop').exists())
+
     def test_exp_and_lumis_buffs_scale_battle_rewards(self):
         combat = self.create_battle(enemy_hp=1)
         target = combat.combatants.get(is_player=False)
