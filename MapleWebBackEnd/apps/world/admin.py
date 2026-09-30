@@ -87,14 +87,16 @@ class NormalDungeonTemplateAdmin(admin.ModelAdmin):
     """
     Giao diện quản lý cho các Mẫu Dungeon thông thường.
     """
-    list_display = ('name', 'required_level', 'stamina_cost', 'exp_reward')
+    list_display = ('name', 'location', 'required_level', 'stamina_cost', 'exp_reward')
+    list_filter = ('location__region',)
     search_fields = ('name',)
     readonly_fields = ('id',)
+    autocomplete_fields = ['location']
     inlines = [NormalStageEnemyInline]
-    
+
     fieldsets = (
         ('Dungeon Information', {
-            'fields': ('id', 'name', 'description')
+            'fields': ('id', 'name', 'description', 'location')
         }),
         ('Requirements & Cost', {
             'fields': ('required_level', 'stamina_cost')
@@ -110,15 +112,16 @@ class BossDungeonTemplateAdmin(admin.ModelAdmin):
     """
     Giao diện quản lý cho các Mẫu Dungeon Boss.
     """
-    list_display = ('name', 'required_level', 'time_type', 'max_party_size')
-    list_filter = ('time_type',)
+    list_display = ('name', 'location', 'required_level', 'time_type', 'max_party_size')
+    list_filter = ('time_type', 'location__region')
     search_fields = ('name',)
     readonly_fields = ('id',)
+    autocomplete_fields = ['location']
     inlines = [BossStageEnemyInline]
-    
+
     fieldsets = (
         ('Dungeon Information', {
-            'fields': ('id', 'name', 'description')
+            'fields': ('id', 'name', 'description', 'location')
         }),
         ('Requirements & Rules', {
             'fields': ('required_level', 'time_type', 'max_party_size')
@@ -136,13 +139,13 @@ class BossDungeonTemplateAdmin(admin.ModelAdmin):
 class LocationInline(admin.TabularInline):
     model = Location
     extra = 1
-    fields = ('name', 'required_level', 'normal_dungeon', 'boss_dungeon', 'has_shop', 'order')
-    autocomplete_fields = ['normal_dungeon', 'boss_dungeon']
+    fields = ('name', 'order')
 
 
 @admin.register(Region)
 class RegionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'required_level', 'order', 'get_location_count')
+    """Khu vực chỉ là tên để hiển thị dungeon nằm ở đâu, không ảnh hưởng gameplay."""
+    list_display = ('name', 'order', 'get_location_count')
     search_fields = ('name',)
     ordering = ('order',)
     inlines = [LocationInline]
@@ -154,22 +157,12 @@ class RegionAdmin(admin.ModelAdmin):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'region', 'required_level', 'has_shop')
-    list_filter = ('region', 'has_shop')
+    """Địa điểm trong khu vực. Dungeon chọn địa điểm của mình ở trang dungeon."""
+    list_display = ('name', 'region', 'order')
+    list_filter = ('region',)
     search_fields = ('name', 'region__name')
-    autocomplete_fields = ['region', 'normal_dungeon', 'boss_dungeon']
-    filter_horizontal = ('field_enemies',)
-    fieldsets = (
-        ('Basic Info', {
-            'fields': ('name', 'description', 'region', 'required_level', 'order')
-        }),
-        ('Dungeon Links', {
-            'fields': ('normal_dungeon', 'boss_dungeon')
-        }),
-        ('Field Content', {
-            'fields': ('field_enemies', 'has_shop')
-        }),
-    )
+    autocomplete_fields = ['region']
+    fields = ('name', 'description', 'region', 'order')
 
 
 @admin.register(DungeonClearLog)

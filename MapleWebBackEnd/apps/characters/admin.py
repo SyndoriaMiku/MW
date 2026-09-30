@@ -75,7 +75,7 @@ class CharacterAdmin(admin.ModelAdmin):
     # Nhóm các trường lại cho giao diện gọn gàng, dễ hiểu
     fieldsets = (
         ('Core Information', {
-            'fields': ('id', 'name', 'character_class', 'job', 'current_location')
+            'fields': ('id', 'name', 'character_class', 'job')
         }),
         ('Leveling & Experience', {
             'fields': ('level', 'current_exp')

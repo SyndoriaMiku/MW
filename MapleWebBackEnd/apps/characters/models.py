@@ -27,13 +27,6 @@ class Character(models.Model):
     )
     name = models.CharField(max_length=20, help_text="Unique, ignoring case")
 
-    # Location in the world
-    current_location = models.ForeignKey(
-        'world.Location', on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='characters_here',
-        help_text="Character's current location in the world"
-    )
-    
     #stats
     
     base_hp = models.IntegerField(default=50) #base hp stat

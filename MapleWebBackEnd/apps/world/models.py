@@ -111,7 +111,9 @@ class NormalDungeonTemplate(BaseStageTemplate):
     Normal dungeon template
     """
     stamina_cost = models.PositiveIntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(100)]) #Stamina cost to enter the dungeon
-    
+    # Where the dungeon is, for display only (e.g. "Slime Cave, Henesys").
+    location = models.ForeignKey('world.Location', on_delete=models.SET_NULL, null=True, blank=True, related_name='normal_dungeons')
+
     enemies = models.ManyToManyField('world.EnemyTemplate', through='NormalStageEnemy', related_name='normal_stages', blank=True)
 
     class Meta(BaseStageTemplate.Meta):
@@ -142,6 +144,8 @@ class BossDungeonTemplate(BaseStageTemplate):
 
     time_type = models.CharField(max_length=10, choices=TimeType.choices, default=TimeType.DAILY)
     max_party_size = models.IntegerField(default=4)
+    # Where the dungeon is, for display only.
+    location = models.ForeignKey('world.Location', on_delete=models.SET_NULL, null=True, blank=True, related_name='boss_dungeons')
     
     enemies = models.ManyToManyField('world.EnemyTemplate', through='BossStageEnemy', related_name='boss_stages', blank=True)
 
@@ -168,10 +172,12 @@ class BossStageEnemy(models.Model):
 # ===================================================================
 
 class Region(models.Model):
-    """Represents a large area in the game world (e.g., Henesys, Perion)."""
+    """
+    A large area of the world (e.g., Henesys, Perion). Regions and locations
+    only name where dungeons are; they have no gameplay of their own.
+    """
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    required_level = models.IntegerField(default=1)
     order = models.PositiveIntegerField(default=0, help_text="Display order")
 
     class Meta:
@@ -184,20 +190,13 @@ class Region(models.Model):
 
 
 class Location(models.Model):
-    """A specific location within a region (e.g., Henesys Hunting Ground 1)."""
+    """
+    A place within a region (e.g., Henesys Town). Dungeons name their location
+    (NormalDungeonTemplate/BossDungeonTemplate.location) for display only.
+    """
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     region = models.ForeignKey('world.Region', on_delete=models.CASCADE, related_name='locations')
-    required_level = models.IntegerField(default=1)
-
-    # Link to dungeon templates (if this location is a dungeon entrance)
-    normal_dungeon = models.ForeignKey('world.NormalDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='locations', help_text="Linked normal dungeon, if any")
-    boss_dungeon = models.ForeignKey('world.BossDungeonTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='locations', help_text="Linked boss dungeon, if any")
-
-    # Field enemies for open-world hunting at this location
-    field_enemies = models.ManyToManyField('world.EnemyTemplate', blank=True, related_name='field_locations', help_text="Enemies that can be encountered in the field")
-
-    has_shop = models.BooleanField(default=False, help_text="Whether this location has an NPC shop")
     order = models.PositiveIntegerField(default=0, help_text="Display order within region")
 
     class Meta:

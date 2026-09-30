@@ -110,7 +110,7 @@ class CharacterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Character
         fields = [
-            'id', 'name', 'current_location', 'base_hp', 'base_mp', 'base_att',
+            'id', 'name', 'base_hp', 'base_mp', 'base_att',
             'base_str', 'base_agi', 'base_int', 'drop_rate', 'character_class', 'job',
             'level', 'current_exp', 'required_exp',
             'max_stamina', 'current_stamina', 'last_stamina_update',
@@ -120,7 +120,7 @@ class CharacterSerializer(serializers.ModelSerializer):
             'active_buffs', 'skills',
         ]
         read_only_fields = [
-            'id', 'current_location', 'base_hp', 'base_mp', 'base_att',
+            'id', 'base_hp', 'base_mp', 'base_att',
             'base_str', 'base_agi', 'base_int', 'drop_rate',
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
         ]
