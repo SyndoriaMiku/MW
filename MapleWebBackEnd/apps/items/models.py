@@ -489,6 +489,31 @@ class LumenModifierRule(models.Model):
         return f"{self.item_template.name} -> Lumen {self.target_level}"
 
 
+class FragmentRestoreRule(models.Model):
+    """
+    Makes an item (typically an event reward) restore a fragment, i.e. gear
+    destroyed by a Lumen heavy failure. Always succeeds; the gear keeps its
+    Lumen level.
+    """
+    item_template = models.OneToOneField('items.ItemTemplate', on_delete=models.CASCADE, related_name='fragment_restore_rule')
+    restorable_items = models.ManyToManyField(
+        'items.ItemTemplate', blank=True, related_name='restored_by_rules',
+        limit_choices_to=~models.Q(item_type__in=('use', 'etc')),
+        help_text="Gear it restores (empty means any)",
+    )
+
+    class Meta:
+        verbose_name = "Fragment Restore Rule"
+        verbose_name_plural = "Fragment Restore Rules"
+
+    def clean(self):
+        if self.item_template_id and self.item_template.item_type not in ('use', 'etc'):
+            raise ValidationError({'item_template': "Only 'use' or 'etc' items can restore fragments."})
+
+    def __str__(self):
+        return f"{self.item_template.name} (fragment restore)"
+
+
 class TimedBuffRule(models.Model):
     """
     Makes a 'use' item give its user a timed buff outside battle, e.g. x2 EXP

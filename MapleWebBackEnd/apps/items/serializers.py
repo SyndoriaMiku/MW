@@ -35,6 +35,7 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
         ('aurora_modifier', 'aurora_modifier_rule'),
         ('lumen_modifier', 'lumen_modifier_rule'),
         ('timed_buff', 'timed_buff_rule'),
+        ('fragment_restore', 'fragment_restore_rule'),
     )
 
     def get_use_kind(self, obj):

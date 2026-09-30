@@ -4,6 +4,7 @@ from .models import (
     LumenTierProperty, AuroraProperty, LumenCostRule, AuroraLineCountConfig,
     AuroraLinePool, LumenAscendRule, LumenEvent, AuroraModifierRule, AuroraEvent,
     LumenModifierRule, BattleConsumableRule, TimedBuffRule, AuroraLumisCostRule,
+    FragmentRestoreRule,
 )
 from .forms import LumenAscendRuleForm
 
@@ -220,6 +221,12 @@ class LumenModifierRuleAdmin(admin.ModelAdmin):
     list_display = ('item_template', 'target_level')
     search_fields = ('item_template__name',)
     filter_horizontal = ('lumen_tiers',)
+
+@admin.register(FragmentRestoreRule)
+class FragmentRestoreRuleAdmin(admin.ModelAdmin):
+    list_display = ('item_template',)
+    search_fields = ('item_template__name',)
+    filter_horizontal = ('restorable_items',)
 
 @admin.register(TimedBuffRule)
 class TimedBuffRuleAdmin(admin.ModelAdmin):

@@ -22,6 +22,7 @@ from .models import (
     AuroraModifierRule,
     AuroraProperty,
     BattleConsumableRule,
+    FragmentRestoreRule,
     ItemTemplate,
     LumenCostRule,
     LumenEvent,
@@ -722,27 +723,141 @@ class LumenLevelModifierTests(APITestCase):
         self.assert_rejected(self.apply())
 
 
+class FragmentRestoreItemTests(APITestCase):
+    """Items that restore a fragment (destroyed gear): always succeed, keep the Lumen level."""
+
+    def setUp(self):
+        self.character = Character.objects.create(name='Fragment Mender')
+        self.user = GameUser.objects.create_user(
+            username='fragment-mender', email='fragment-mender@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+
+        tier = LumenTierProperty.objects.create(name='Mend Tier', tier=95, max_lumen_level=10)
+        self.hat_template = ItemTemplate.objects.create(
+            name='Mend Hat', item_type='hat', lumen_tier=tier
+        )
+        self.fragment = InventoryItem.objects.create(
+            owner=self.character, template=self.hat_template,
+            lumen_ascend_level=6, is_destroyed=True,
+        )
+        charm_template = ItemTemplate.objects.create(name='Mending Charm', item_type='use')
+        self.rule = FragmentRestoreRule.objects.create(item_template=charm_template)
+        self.charm = InventoryItem.objects.create(
+            owner=self.character, template=charm_template, quantity=2
+        )
+
+    def restore(self, **data):
+        payload = {'fragment_item_id': self.fragment.id, 'restore_item_id': self.charm.id}
+        payload.update(data)
+        return self.client.post(
+            reverse('lumen-api', args=['restore']),
+            {key: value for key, value in payload.items() if value is not None},
+            format='json',
+        )
+
+    def assert_rejected(self, response):
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.fragment.refresh_from_db()
+        self.charm.refresh_from_db()
+        self.assertEqual((self.fragment.is_destroyed, self.charm.quantity), (True, 2))
+
+    def test_restores_keeps_the_level_and_consumes_one_item(self):
+        response = self.restore()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['item']['is_destroyed'])
+        self.fragment.refresh_from_db()
+        self.assertFalse(self.fragment.is_destroyed)
+        self.assertEqual(self.fragment.lumen_ascend_level, 6)
+        self.charm.refresh_from_db()
+        self.assertEqual(self.charm.quantity, 1)
+
+    def test_last_item_of_the_stack_is_removed(self):
+        self.charm.quantity = 1
+        self.charm.save(update_fields=['quantity'])
+
+        self.assertEqual(self.restore().status_code, status.HTTP_200_OK)
+        self.assertFalse(InventoryItem.objects.filter(pk=self.charm.pk).exists())
+
+    def test_only_restores_the_listed_items(self):
+        other = ItemTemplate.objects.create(name='Other Hat', item_type='hat')
+        self.rule.restorable_items.add(other)
+        self.assert_rejected(self.restore())
+
+        self.rule.restorable_items.add(self.hat_template)
+        self.assertEqual(self.restore().status_code, status.HTTP_200_OK)
+
+    def test_item_without_a_rule_is_refused(self):
+        plain = InventoryItem.objects.create(
+            owner=self.character,
+            template=ItemTemplate.objects.create(name='Plain Snack', item_type='use'),
+        )
+
+        self.assert_rejected(self.restore(restore_item_id=plain.id))
+
+    def test_fragment_must_be_destroyed(self):
+        self.fragment.is_destroyed = False
+        self.fragment.save(update_fields=['is_destroyed'])
+
+        self.assertEqual(self.restore().status_code, status.HTTP_400_BAD_REQUEST)
+        self.charm.refresh_from_db()
+        self.assertEqual(self.charm.quantity, 2)
+
+    def test_expired_or_listed_restore_item_is_refused(self):
+        self.charm.expired_at = timezone.now() - timedelta(seconds=1)
+        self.charm.save(update_fields=['expired_at'])
+        self.assert_rejected(self.restore())
+
+        self.charm.expired_at = None
+        self.charm.save(update_fields=['expired_at'])
+        Listing.objects.create(seller=self.user, item=self.charm, price=10)
+        self.assert_rejected(self.restore())
+
+    def test_expired_fragment_is_refused(self):
+        self.fragment.expired_at = timezone.now() - timedelta(seconds=1)
+        self.fragment.save(update_fields=['expired_at'])
+
+        self.assert_rejected(self.restore())
+
+    def test_one_method_at_a_time(self):
+        sacrifice = InventoryItem.objects.create(owner=self.character, template=self.hat_template)
+
+        self.assert_rejected(self.restore(sacrifice_item_id=sacrifice.id))
+        self.assertTrue(InventoryItem.objects.filter(pk=sacrifice.pk).exists())
+        self.assert_rejected(self.restore(restore_item_id=None))
+
+    def test_gear_cannot_be_a_restore_item(self):
+        rule = FragmentRestoreRule(item_template=ItemTemplate.objects.create(name='Hat Charm', item_type='hat'))
+
+        with self.assertRaises(ValidationError):
+            rule.full_clean()
+
+
 class ItemUseKindTests(TestCase):
     def test_use_kind_follows_the_attached_rule(self):
         def template(name):
             return ItemTemplate.objects.create(name=name, item_type='use')
 
-        potion, essence, scroll, charm, snack = (
-            template(n) for n in ('Potion', 'Essence', 'Scroll', 'Charm', 'Snack')
+        potion, essence, scroll, charm, mender, snack = (
+            template(n) for n in ('Potion', 'Essence', 'Scroll', 'Charm', 'Mender', 'Snack')
         )
         BattleConsumableRule.objects.create(item_template=potion, hp_restore=10)
         AuroraModifierRule.objects.create(item_template=essence, modifier_type='REROLL_ALL')
         LumenModifierRule.objects.create(item_template=scroll, target_level=5)
         TimedBuffRule.objects.create(item_template=charm, exp_rate_bonus=100, duration_minutes=30)
+        FragmentRestoreRule.objects.create(item_template=mender)
 
         kinds = {
             t.name: ItemTemplateSerializer(t).data['use_kind']
-            for t in (potion, essence, scroll, charm, snack)
+            for t in (potion, essence, scroll, charm, mender, snack)
         }
 
         self.assertEqual(kinds, {
             'Potion': 'battle', 'Essence': 'aurora_modifier', 'Scroll': 'lumen_modifier',
-            'Charm': 'timed_buff', 'Snack': None,
+            'Charm': 'timed_buff', 'Mender': 'fragment_restore', 'Snack': None,
         })
 
 

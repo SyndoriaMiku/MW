@@ -78,14 +78,20 @@ class LumenAPIView(APIView):
         elif action == 'restore':
             fragment_item_id = parse_int(request.data.get('fragment_item_id'), 'fragment_item_id')
             sacrifice_item_id = parse_int(request.data.get('sacrifice_item_id'), 'sacrifice_item_id')
-            
+            restore_item_id = parse_int(request.data.get('restore_item_id'), 'restore_item_id')
+
             if not fragment_item_id:
                 return Response(
                     {"success": False, "message": "fragment_item_id is required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-                
-            result = LumenService.restore_fragment(request.user, fragment_item_id, sacrifice_item_id)
+
+            result = LumenService.restore_fragment(
+                request.user, fragment_item_id, sacrifice_item_id, restore_item_id,
+            )
+            if result.get('success'):
+                item = InventoryItem.objects.filter(pk=fragment_item_id).first()
+                result = {**result, 'item': InventoryItemSerializer(item).data}
             return self._response(result)
             
         return Response(

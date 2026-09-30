@@ -1,6 +1,7 @@
 import random
 from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
 from apps.items.models import LumenCostRule, LumenEvent
 from apps.inventory.models import InventoryItem
 from apps.inventory.reservations import character_in_active_battle, mutation_block_reason
@@ -299,11 +300,16 @@ class LumenService:
 
     @staticmethod
     @transaction.atomic
-    def restore_fragment(user, fragment_item_id, sacrifice_item_id=None):
+    def restore_fragment(user, fragment_item_id, sacrifice_item_id=None, restore_item_id=None):
         """
-        Restore a destroyed item (fragment) using a sacrifice item (phôi trắng).
-        Note: Logic for restoring via special points/items during events can be added here in the future.
+        Restore a destroyed item (fragment) with exactly one of:
+        - a sacrifice item (phôi trắng): a clean copy of the same template;
+        - a restore item: one item with a FragmentRestoreRule covering it.
+        The gear keeps its Lumen level either way.
         """
+        if bool(sacrifice_item_id) == bool(restore_item_id):
+            return {"success": False, "message": "Provide either a sacrifice item or a restore item."}
+
         # (C-2 fix) Lock fragment row first to prevent concurrent restores
         try:
             fragment = InventoryItem.objects.select_for_update().get(id=fragment_item_id, owner__user=user)
@@ -312,40 +318,66 @@ class LumenService:
 
         if not fragment.is_destroyed:
             return {"success": False, "message": "Item is not destroyed."}
+        if fragment.expired_at and fragment.expired_at <= timezone.now():
+            return {"success": False, "message": "Fragment is expired."}
 
-        # Future Logic Hook: 
-        # if use_special_event_item:
-        #     deduct_item()
-        #     restore()
+        if restore_item_id:
+            return LumenService._restore_with_item(user, fragment, restore_item_id)
 
-        # Method: Using a Sacrifice Item (Phôi)
-        if sacrifice_item_id:
-            try:
-                # (C-2 fix) Lock sacrifice row — prevents same item being used in concurrent restores
-                sacrifice = InventoryItem.objects.select_for_update().get(id=sacrifice_item_id, owner__user=user)
-            except InventoryItem.DoesNotExist:
-                return {"success": False, "message": "Sacrifice item not found."}
+        try:
+            # (C-2 fix) Lock sacrifice row — prevents same item being used in concurrent restores
+            sacrifice = InventoryItem.objects.select_for_update().get(id=sacrifice_item_id, owner__user=user)
+        except InventoryItem.DoesNotExist:
+            return {"success": False, "message": "Sacrifice item not found."}
 
-            if sacrifice.is_destroyed:
-                return {"success": False, "message": "Cannot use a destroyed item as a sacrifice."}
-            if hasattr(sacrifice, 'equipped_in'):
-                return {"success": False, "message": "Equipped items cannot be used as a sacrifice."}
-            blocked_reason = mutation_block_reason(sacrifice, role='Sacrifice item')
-            if blocked_reason:
-                return {"success": False, "message": blocked_reason}
+        if sacrifice.is_destroyed:
+            return {"success": False, "message": "Cannot use a destroyed item as a sacrifice."}
+        if hasattr(sacrifice, 'equipped_in'):
+            return {"success": False, "message": "Equipped items cannot be used as a sacrifice."}
+        blocked_reason = mutation_block_reason(sacrifice, role='Sacrifice item')
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
 
-            if sacrifice.template != fragment.template:
-                return {"success": False, "message": "Sacrifice item must be the exact same type (same template)."}
+        if sacrifice.template != fragment.template:
+            return {"success": False, "message": "Sacrifice item must be the exact same type (same template)."}
 
-            if sacrifice.lumen_ascend_level > 0 or sacrifice.aurora_level > 0:
-                return {"success": False, "message": "Sacrifice item must be a clean/base item (no upgrades)."}
+        if sacrifice.lumen_ascend_level > 0 or sacrifice.aurora_level > 0:
+            return {"success": False, "message": "Sacrifice item must be a clean/base item (no upgrades)."}
 
-            # Consume sacrifice and restore fragment
-            sacrifice.delete()
-            
-            fragment.is_destroyed = False
-            fragment.save(update_fields=['is_destroyed'])
-            return {"success": True, "message": "Fragment restored successfully using a sacrifice item!"}
-            
-        return {"success": False, "message": "Must provide a sacrifice item to restore the fragment."}
+        sacrifice.delete()
+        fragment.is_destroyed = False
+        fragment.save(update_fields=['is_destroyed'])
+        return {"success": True, "message": "Fragment restored successfully using a sacrifice item!"}
+
+    @staticmethod
+    def _restore_with_item(user, fragment, restore_item_id):
+        """Consume one restore item on a locked fragment and restore it."""
+        from apps.items.models import FragmentRestoreRule
+
+        try:
+            restore_item = InventoryItem.objects.select_for_update().select_related(
+                'template'
+            ).get(id=restore_item_id, owner__user=user)
+        except InventoryItem.DoesNotExist:
+            return {"success": False, "message": "Restore item not found."}
+        blocked_reason = mutation_block_reason(restore_item, role='Restore item')
+        if blocked_reason:
+            return {"success": False, "message": blocked_reason}
+
+        try:
+            rule = restore_item.template.fragment_restore_rule
+        except FragmentRestoreRule.DoesNotExist:
+            return {"success": False, "message": "This item cannot restore fragments."}
+        restorable = rule.restorable_items.all()
+        if restorable.exists() and not restorable.filter(pk=fragment.template_id).exists():
+            return {"success": False, "message": "This item cannot restore that fragment."}
+
+        restore_item.quantity -= 1
+        if restore_item.quantity <= 0:
+            restore_item.delete()
+        else:
+            restore_item.save(update_fields=['quantity'])
+        fragment.is_destroyed = False
+        fragment.save(update_fields=['is_destroyed'])
+        return {"success": True, "message": f"Fragment restored with {restore_item.template.name}."}
 
