@@ -151,6 +151,7 @@ class BossDungeonViewSet(viewsets.ReadOnlyModelViewSet):
                 if Combatant.objects.filter(
                     content_type=char_ct,
                     objects_id=str(c.id),
+                    has_left=False,
                     combat_instance__status='in_progress'
                 ).exists():
                     return Response({"detail": f"Member {c.name} is already in another active battle."}, status=status.HTTP_400_BAD_REQUEST)

@@ -36,21 +36,23 @@ class RewardService:
         
         # (M5 fix) Bulk-resolve entities: 2 queries instead of N
         enemy_combatants = list(combat_instance.combatants.filter(is_player=False, current_hp__lte=0))
-        player_combatants = list(combat_instance.combatants.filter(is_player=True, current_hp__gt=0))
+        # Everyone still in the battle shares a victory, including players who
+        # died in it; only players who forfeited are left out.
+        player_combatants = list(combat_instance.combatants.filter(is_player=True, has_left=False))
         _prefetch_entities(enemy_combatants + player_combatants)
-        
+
         defeated_enemies = [c.entity for c in enemy_combatants]
-        alive_players = [c.entity for c in player_combatants]
-        
-        if not alive_players or not defeated_enemies:
-            return {"message": "No alive players or no defeated enemies."}
+        rewarded_players = [c.entity for c in player_combatants if c.entity is not None]
+
+        if not rewarded_players or not defeated_enemies:
+            return {"message": "No rewarded players or no defeated enemies."}
             
         # (S2 fix) Provision active quests for all alive players ONCE per battle
         from apps.quests.services import QuestService
-        for player in alive_players:
+        for player in rewarded_players:
             QuestService.get_active_quests(player)
 
-        num_players = len(alive_players)
+        num_players = len(rewarded_players)
 
         # 1. Calculate Total EXP & Lumis pool
         total_exp = 0
@@ -63,11 +65,11 @@ class RewardService:
         base_lumis_per_player = total_lumis // num_players
 
         # 2. Get highest drop rates for Party Shared Loot
-        highest_party_drop_rate = max(p.total_drop_rate for p in alive_players)
-        highest_party_epic_drop_rate = max(p.total_epic_drop_rate for p in alive_players)
+        highest_party_drop_rate = max(p.total_drop_rate for p in rewarded_players)
+        highest_party_epic_drop_rate = max(p.total_epic_drop_rate for p in rewarded_players)
 
         # Initialize log dictionary for each player
-        for p in alive_players:
+        for p in rewarded_players:
             logs[p.name] = {
                 "exp_gained": 0,
                 "lumis_gained": 0,
@@ -82,7 +84,7 @@ class RewardService:
         # 3. Distribute EXP, Lumis, and Items
         for enemy in defeated_enemies:
             # Update quests for defeated enemy
-            for player in alive_players:
+            for player in rewarded_players:
                 QuestService.update_progress(player, 'DEFEAT_ENEMY', enemy_id=enemy.id, count=1)
 
             # Process Loot Table
@@ -95,7 +97,7 @@ class RewardService:
                         qty = random.randint(loot.min_quantity, loot.max_quantity)
                         if party and party.is_solo:
                             # Nobody to share with: the solo player gets it directly.
-                            solo_player = alive_players[0]
+                            solo_player = rewarded_players[0]
                             if qty > 0:
                                 grant_item(solo_player, loot.item_template, qty)
                             logs[solo_player.name]["items_dropped"].append({"name": loot.item_template.name, "qty": qty})
@@ -112,7 +114,7 @@ class RewardService:
                             logs["party_loot"].append({"name": loot.item_template.name, "qty": qty})
                 else:
                     # Personal Loot
-                    for player in alive_players:
+                    for player in rewarded_players:
                         if random.random() <= RewardService.effective_drop_rate(
                             loot, player.total_drop_rate, player.total_epic_drop_rate
                         ):
@@ -155,7 +157,7 @@ class RewardService:
             base_exp_per_player = total_exp // num_players
             base_lumis_per_player = total_lumis // num_players
             
-            for player in alive_players:
+            for player in rewarded_players:
                 # Update quest progress for Normal Dungeon clear
                 QuestService.update_progress(player, 'CLEAR_NORMAL_DUNGEON', dungeon_id=dungeon.id)
                     
@@ -168,7 +170,7 @@ class RewardService:
             
             # Create Clear Logs
             from apps.world.models import DungeonClearLog
-            for player in alive_players:
+            for player in rewarded_players:
                 DungeonClearLog.objects.create(
                     character=player,
                     dungeon=dungeon
@@ -178,7 +180,7 @@ class RewardService:
                 QuestService.update_progress(player, 'CLEAR_BOSS_DUNGEON', boss_dungeon_id=dungeon.id)
 
         # Apply EXP and Lumis
-        for player in alive_players:
+        for player in rewarded_players:
             # Applying character-specific multipliers
             final_exp = int(base_exp_per_player * player.total_exp_rate)
             final_lumis = int(base_lumis_per_player * player.total_lumis_rate)

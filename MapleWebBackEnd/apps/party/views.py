@@ -34,6 +34,7 @@ def _character_in_active_battle(character):
     combatant = Combatant.objects.filter(
         content_type=ct,
         objects_id=str(character.id),
+        has_left=False,
         combat_instance__status='in_progress'
     ).select_related('combat_instance').first()
     return combatant.combat_instance if combatant else None

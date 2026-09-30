@@ -1177,6 +1177,107 @@ class BattleConsumableTests(BattleFixtureMixin, APITestCase):
         self.assertIn('inventory_item_id', serializer.errors)
 
 
+class FallenPlayerRewardTests(BattleFixtureMixin, APITestCase):
+    """Players who die still share the victory; players who forfeit leave with nothing."""
+
+    def setUp(self):
+        super().setUp()
+        self.ally_user, self.ally = self.add_party_member('fallen-ally')
+        self.combat = self.create_battle(enemy_hp=1)
+        self.enemy = self.combat.combatants.get(is_player=False)
+        EnemyTemplate.objects.filter(pk=self.enemy.objects_id).update(exp_reward=10)
+        LootTable.objects.create(
+            enemy_id=self.enemy.objects_id, base_drop_rate=1,
+            item_template=ItemTemplate.objects.create(name='Trophy', item_type='etc'),
+        )
+        self.ally_combatant = self.combat.combatants.get(is_player=True, position=2)
+
+    def win(self):
+        self.client.force_authenticate(self.user)
+        return self.client.post(
+            reverse('battles:player-action', args=[self.combat.id]),
+            {'action_type': 'ATTACK', 'target_id': self.enemy.id}, format='json',
+        )
+
+    def forfeit_as_ally(self):
+        self.client.force_authenticate(self.ally_user)
+        return self.client.post(reverse('battles:forfeit', args=[self.combat.id]))
+
+    def trophies(self, character):
+        return InventoryItem.objects.filter(owner=character, template__name='Trophy').count()
+
+    def test_player_dead_at_victory_shares_the_rewards(self):
+        self.ally_combatant.current_hp = 0
+        self.ally_combatant.save(update_fields=['current_hp'])
+
+        response = self.win()
+
+        self.assertEqual(response.data['combat']['status'], 'victory')
+        self.ally.refresh_from_db()
+        self.character.refresh_from_db()
+        self.assertEqual((self.ally.current_exp, self.character.current_exp), (5, 5))
+        self.assertEqual((self.trophies(self.ally), self.trophies(self.character)), (1, 1))
+
+    def test_dead_player_only_watches(self):
+        self.ally_combatant.current_hp = 0
+        self.ally_combatant.save(update_fields=['current_hp'])
+        self.client.force_authenticate(self.ally_user)
+
+        watched = self.client.get(reverse('battles:battle-state', args=[self.combat.id]))
+        acted = self.client.post(
+            reverse('battles:player-action', args=[self.combat.id]),
+            {'action_type': 'ATTACK', 'target_id': self.enemy.id}, format='json',
+        )
+
+        self.assertEqual(watched.status_code, status.HTTP_200_OK)
+        self.assertEqual(acted.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_forfeited_player_gets_nothing(self):
+        self.assertEqual(self.forfeit_as_ally().status_code, status.HTTP_200_OK)
+
+        self.win()
+
+        self.ally.refresh_from_db()
+        self.character.refresh_from_db()
+        self.assertEqual((self.ally.current_exp, self.character.current_exp), (0, 10))
+        self.assertEqual(self.trophies(self.ally), 0)
+
+    def test_dead_player_may_still_forfeit_and_give_up_the_rewards(self):
+        self.ally_combatant.current_hp = 0
+        self.ally_combatant.save(update_fields=['current_hp'])
+
+        self.assertEqual(self.forfeit_as_ally().status_code, status.HTTP_200_OK)
+        self.assertEqual(self.forfeit_as_ally().status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.win()
+        self.ally.refresh_from_db()
+        self.assertEqual(self.ally.current_exp, 0)
+
+    def test_forfeited_player_is_free_to_do_other_things(self):
+        from apps.inventory.reservations import character_in_active_battle
+
+        self.forfeit_as_ally()
+
+        self.assertIsNone(BattleService.get_active_combat_for_character(self.ally))
+        self.assertFalse(character_in_active_battle(self.ally))
+        self.assertIsNotNone(BattleService.get_active_combat_for_character(self.character))
+
+    def test_boss_clear_is_logged_for_dead_members_too(self):
+        from apps.world.models import BossDungeonTemplate, DungeonClearLog
+
+        boss = BossDungeonTemplate.objects.create(name='Fallen Boss')
+        CombatInstance.objects.filter(pk=self.combat.pk).update(boss_dungeon=boss)
+        self.ally_combatant.current_hp = 0
+        self.ally_combatant.save(update_fields=['current_hp'])
+
+        self.win()
+
+        self.assertEqual(
+            set(DungeonClearLog.objects.filter(dungeon=boss).values_list('character_id', flat=True)),
+            {self.character.pk, self.ally.pk},
+        )
+
+
 class CombatEffectMechanicsTests(BattleFixtureMixin, APITestCase):
     """Effect durations, stun/silence, max HP/MP, restore modifiers, cooldown reduction and dispels."""
 

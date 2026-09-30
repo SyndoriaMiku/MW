@@ -38,7 +38,7 @@ class CombatantSerializer(serializers.ModelSerializer):
         model = Combatant
         fields = [
             'id', 'entity_id', 'entity_type', 'name', 'visual_key', 'is_player',
-            'is_current_actor', 'valid_actions', 'current_hp', 'current_mp',
+            'is_current_actor', 'valid_actions', 'current_hp', 'current_mp', 'has_left',
             'max_hp', 'max_mp', 'position', 'skill_cooldowns', 'active_effects',
             'skills', 'consumables',
         ]

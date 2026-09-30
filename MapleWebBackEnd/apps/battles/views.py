@@ -198,8 +198,9 @@ def forfeit_battle(request, combat_id):
             return error
         if combat.status != 'in_progress':
             return Response({"detail": "This battle has already ended."}, status=status.HTTP_400_BAD_REQUEST)
-        if combatant.current_hp <= 0:
-            return Response({"detail": "You are already out of this battle."}, status=status.HTTP_400_BAD_REQUEST)
+        # A dead player may still leave (giving up the rewards); a player who left may not twice.
+        if combatant.has_left:
+            return Response({"detail": "You already left this battle."}, status=status.HTTP_400_BAD_REQUEST)
 
         payload = {"events": BattleService.forfeit(combat, combatant)}
         _finish_battle_request(combat, payload)

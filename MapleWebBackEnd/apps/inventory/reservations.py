@@ -11,6 +11,7 @@ def character_in_active_battle(character):
     return Combatant.objects.filter(
         content_type=ContentType.objects.get_for_model(character),
         objects_id=str(character.pk),
+        has_left=False,
         combat_instance__status='in_progress',
     ).exists()
 

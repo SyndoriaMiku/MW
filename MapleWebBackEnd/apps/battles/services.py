@@ -39,6 +39,7 @@ class BattleService:
             combatants__is_player=True,
             combatants__content_type=character_type,
             combatants__objects_id=str(character.pk),
+            combatants__has_left=False,
             status=CombatInstance.CombatStatus.IN_PROGRESS,
         ).select_related('normal_dungeon', 'boss_dungeon').order_by('-updated_at').first()
 
@@ -1183,9 +1184,12 @@ class BattleService:
         Take a player out of the battle. The battle is lost once no player is
         left; otherwise a forfeiting current actor passes the turn on.
         """
-        was_current_actor = BattleService._is_current_actor(combat_instance, combatant)
+        was_current_actor = (
+            combatant.current_hp > 0 and BattleService._is_current_actor(combat_instance, combatant)
+        )
         combatant.current_hp = 0
-        combatant.save(update_fields=['current_hp'])
+        combatant.has_left = True
+        combatant.save(update_fields=['current_hp', 'has_left'])
         name = getattr(combatant.entity, 'name', str(combatant.entity))
         event = {
             "event_type": "forfeit",

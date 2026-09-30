@@ -68,6 +68,10 @@ class Combatant(models.Model):
     current_hp = models.IntegerField()
     current_mp = models.IntegerField()
 
+    # Forfeited: out of the battle and its rewards, and free to do other things.
+    # A player who merely died stays in, watches, and still shares a victory.
+    has_left = models.BooleanField(default=False)
+
     #Position in turn
     position = models.PositiveIntegerField()
 
