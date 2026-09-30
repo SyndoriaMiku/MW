@@ -1,5 +1,8 @@
+from unittest import mock
+
 from django.conf import settings
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -24,6 +27,81 @@ class CharacterDeletionTests(TestCase):
 
         user.refresh_from_db()
         self.assertIsNone(user.character)
+
+
+@override_settings(
+    LOGIN_FAILURE_LIMIT_PER_USER=3,
+    LOGIN_FAILURE_LIMIT_PER_IP=5,
+    LOGIN_FAILURE_WINDOW_SECONDS=900,
+)
+class LoginFailureLimitTests(APITestCase):
+    """Wrong passwords are limited per account and per IP; correct logins are not counted."""
+
+    def setUp(self):
+        cache.clear()
+        for name in ('victim', 'other'):
+            GameUser.objects.create_user(
+                username=name, email=f'{name}@example.com', password='right-pass-123'
+            )
+
+    def login(self, username='victim', password='wrong-pass', ip='10.0.0.1'):
+        return self.client.post(
+            reverse('token_obtain_pair'), {'username': username, 'password': password},
+            format='json', REMOTE_ADDR=ip,
+        )
+
+    def test_account_is_locked_after_too_many_wrong_passwords(self):
+        for _ in range(3):
+            self.assertEqual(self.login().status_code, status.HTTP_401_UNAUTHORIZED)
+
+        blocked = self.login(password='right-pass-123')
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('Retry-After', blocked)
+        # The lock is per account: another account on the same IP still works.
+        self.assertEqual(self.login('other', 'right-pass-123').status_code, status.HTTP_200_OK)
+
+    def test_account_lock_holds_across_ips(self):
+        for index in range(3):
+            self.login(ip=f'10.0.0.{index + 1}')
+
+        self.assertEqual(
+            self.login(password='right-pass-123', ip='10.0.0.99').status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_correct_login_clears_the_account_counter(self):
+        self.login()
+        self.login()
+        self.assertEqual(self.login(password='right-pass-123').status_code, status.HTTP_200_OK)
+
+        self.login()
+        self.login()
+
+        self.assertEqual(self.login(password='right-pass-123').status_code, status.HTTP_200_OK)
+
+    def test_ip_is_blocked_after_too_many_failures_on_any_accounts(self):
+        for index in range(5):
+            self.login(username=f'guess-{index}')
+
+        blocked = self.login('other', 'right-pass-123')
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(
+            self.login('other', 'right-pass-123', ip='10.0.0.2').status_code, status.HTTP_200_OK,
+        )
+
+    def test_lock_ends_when_the_window_passes(self):
+        start = 1_000_000.0
+        with mock.patch('apps.users.login_limits.time.time', return_value=start):
+            for _ in range(3):
+                self.login()
+            self.assertEqual(
+                self.login(password='right-pass-123').status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        with mock.patch('apps.users.login_limits.time.time', return_value=start + 901):
+            self.assertEqual(self.login(password='right-pass-123').status_code, status.HTTP_200_OK)
 
 
 class SessionBootstrapTests(APITestCase):

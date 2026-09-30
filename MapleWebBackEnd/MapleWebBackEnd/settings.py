@@ -232,3 +232,10 @@ CORS_ALLOW_HEADERS = [
 # Game settings
 # Seconds a player may hold their battle turn before party members can skip it.
 BATTLE_TURN_TIMEOUT_SECONDS = config('BATTLE_TURN_TIMEOUT_SECONDS', default=60, cast=int)
+
+# Failed-login limits (apps/users/login_limits.py): wrong passwords allowed per
+# account and per IP before that account/IP is locked until the window ends.
+# Counters use the cache; with several server processes use a shared cache.
+LOGIN_FAILURE_LIMIT_PER_USER = config('LOGIN_FAILURE_LIMIT_PER_USER', default=5, cast=int)
+LOGIN_FAILURE_LIMIT_PER_IP = config('LOGIN_FAILURE_LIMIT_PER_IP', default=20, cast=int)
+LOGIN_FAILURE_WINDOW_SECONDS = config('LOGIN_FAILURE_WINDOW_SECONDS', default=900, cast=int)

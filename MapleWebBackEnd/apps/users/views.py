@@ -1,13 +1,45 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.throttling import BaseThrottle
+from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from . import login_limits
 from .serializers import UserRegistrationSerializer, UserProfileSerializer
 
 User = get_user_model()
+
+class LoginView(TokenObtainPairView):
+    """JWT login that locks an account or IP after too many wrong passwords."""
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username') if hasattr(request.data, 'get') else None
+        username = username if isinstance(username, str) else ''
+        ip = BaseThrottle().get_ident(request)
+
+        wait = login_limits.seconds_locked(username, ip)
+        if wait:
+            return Response(
+                {"detail": f"Too many failed login attempts. Try again in {wait} seconds."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={'Retry-After': str(wait)},
+            )
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except (AuthenticationFailed, InvalidToken):
+            # simplejwt raises on wrong credentials; dispatch turns it into a 401.
+            login_limits.record_failure(username, ip)
+            raise
+        if response.status_code == status.HTTP_200_OK:
+            login_limits.record_success(username)
+        return response
+
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
