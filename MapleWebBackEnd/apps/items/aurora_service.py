@@ -287,9 +287,11 @@ class AuroraService:
         # when the new lines are confirmed for the choice modifiers.
         tier_up_occurred = False
         new_level = target_item.aurora_level
+        # The item's own Aurora tier caps the level too, not just the modifier.
         if (
             mod_type in AuroraModifierRule.TIER_UP_MODIFIER_TYPES
             and target_item.aurora_level < rule.max_aurora_target
+            and target_item.aurora_level < target_item.template.aurora_tier.max_aurora_level
         ):
             event_mult = AuroraService.get_active_tier_up_multiplier()
             final_chance = min(1.0, max(0.0, rule.tier_up_chance * event_mult))

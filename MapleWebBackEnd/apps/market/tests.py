@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.test import SimpleTestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -62,6 +65,27 @@ class MarketStackPurchaseTests(APITestCase):
             InventoryItem.objects.filter(owner=self.buyer_character, template=self.potion).count(),
             1,
         )
+
+    def test_expired_items_cannot_be_listed_or_bought(self):
+        expired_at = timezone.now() - timedelta(seconds=1)
+        stale = InventoryItem.objects.create(
+            owner=self.seller_character, template=self.potion, quantity=5, expired_at=expired_at,
+        )
+        self.client.force_authenticate(self.seller)
+
+        listed = self.client.post(
+            reverse('listing-list'), {'item': stale.pk, 'price': 10, 'quantity': 1}, format='json',
+        )
+
+        self.assertEqual(listed.status_code, status.HTTP_400_BAD_REQUEST)
+
+        InventoryItem.objects.filter(pk=self.seller_stack.pk).update(expired_at=expired_at)
+        self.client.force_authenticate(self.buyer)
+        bought = self.client.post(reverse('listing-buy', args=[self.listing.id]))
+
+        self.assertEqual(bought.status_code, status.HTTP_400_BAD_REQUEST)
+        self.buyer.refresh_from_db()
+        self.assertEqual(self.buyer.lumis, 1000)
 
     def test_trade_once_split_does_not_merge_into_tradeable_stack(self):
         self.potion.is_trade_once = True
@@ -131,6 +155,22 @@ class TradeLifecycleTests(APITestCase):
         response = self.post(self.bob, 'trade-add-item', second, {'item_id': self.sword.pk})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_expired_item_cannot_be_offered_or_handed_over(self):
+        expired_at = timezone.now() - timedelta(seconds=1)
+        trade = self.open_trade(self.alice, self.bob)
+        InventoryItem.objects.filter(pk=self.sword.pk).update(expired_at=expired_at)
+
+        refused = self.post(self.alice, 'trade-add-item', trade, {'item_id': self.sword.pk})
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+        InventoryItem.objects.filter(pk=self.sword.pk).update(expired_at=None)
+        self.post(self.alice, 'trade-add-item', trade, {'item_id': self.sword.pk})
+        InventoryItem.objects.filter(pk=self.sword.pk).update(expired_at=expired_at)
+        self.complete_trade(trade)
+
+        self.sword.refresh_from_db()
+        self.assertEqual(self.sword.owner, self.alice_character)
 
     def test_either_participant_can_cancel_and_items_are_released(self):
         for canceller in (self.alice, self.bob):

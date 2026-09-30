@@ -61,9 +61,10 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
         if not shop_item.category.is_active:
             return Response({"detail": "This shop category is not active."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check Level
-        if character.level < shop_item.required_level:
-            return Response({"detail": f"Required level is {shop_item.required_level}."}, status=status.HTTP_400_BAD_REQUEST)
+        # Check Level (the category's requirement applies to every item in it)
+        required_level = max(shop_item.required_level, shop_item.category.required_level)
+        if character.level < required_level:
+            return Response({"detail": f"Required level is {required_level}."}, status=status.HTTP_400_BAD_REQUEST)
 
         total_price = shop_item.price * quantity
         currency = shop_item.category.currency_type

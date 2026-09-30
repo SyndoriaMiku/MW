@@ -269,6 +269,19 @@ class MaterialConsumptionTests(TestCase):
         traded_item.refresh_from_db()
         self.assertEqual(traded_item.quantity, 5)
 
+    def test_expired_item_is_not_consumed(self):
+        expired = InventoryItem.objects.create(
+            owner=self.character, template=self.material_a, quantity=5,
+            expired_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        with self.assertRaises(MaterialConsumptionError):
+            consume_materials(self.character, [
+                {'item_template_id': self.material_a.id, 'quantity': 1},
+            ])
+        expired.refresh_from_db()
+        self.assertEqual(expired.quantity, 5)
+
 
 class GrantItemTests(TestCase):
     def setUp(self):

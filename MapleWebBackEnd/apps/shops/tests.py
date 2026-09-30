@@ -8,6 +8,7 @@ from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 
 from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe
+from .serializers import MAX_QUANTITY_PER_REQUEST
 
 
 class SpecialShopAtomicityTests(APITestCase):
@@ -102,6 +103,25 @@ class ShopPurchaseStackTests(APITestCase):
         self.assertEqual(oldest.quantity, 7)
         self.user.refresh_from_db()
         self.assertEqual(self.user.lumis, 80)
+
+    def buy(self, quantity=1):
+        return self.client.post(
+            reverse('shop-item-buy', args=[self.shop_item.id]), {'quantity': quantity}, format='json'
+        )
+
+    def test_category_level_requirement_is_enforced(self):
+        # Saved without clean(), as a direct DB edit could leave it.
+        ShopCategory.objects.filter(pk=self.shop_item.category_id).update(required_level=10)
+
+        self.assertEqual(self.buy().status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 100)
+
+    def test_quantity_per_purchase_is_capped(self):
+        ShopItem.objects.filter(pk=self.shop_item.pk).update(price=0)
+
+        self.assertEqual(self.buy(MAX_QUANTITY_PER_REQUEST + 1).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.buy(MAX_QUANTITY_PER_REQUEST).status_code, status.HTTP_200_OK)
 
 
 class MalformedShopInputTests(APITestCase):

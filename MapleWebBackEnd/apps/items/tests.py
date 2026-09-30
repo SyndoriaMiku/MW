@@ -433,6 +433,20 @@ class LumisRerollCostTests(EssenceFixture):
         self.assertEqual(data['aurora_lumis_reroll_cost'], 100)
 
 
+class AuroraTierUpCapTests(EssenceFixture):
+    def test_tier_up_never_passes_the_items_own_maximum(self):
+        AuroraProperty.objects.filter(pk=self.aurora.pk).update(max_aurora_level=1)
+        self.rule.tier_up_chance = 1
+        self.rule.save(update_fields=['tier_up_chance'])
+
+        response = self.modify()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['tier_up'])
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.aurora_level, 1)
+
+
 class EssenceAPITests(EssenceFixture):
     def test_essence_rerolls_and_returns_updated_item(self):
         response = self.modify()

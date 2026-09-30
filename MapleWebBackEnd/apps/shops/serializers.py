@@ -58,9 +58,14 @@ class SpecialShopItemSerializer(serializers.ModelSerializer):
         return SpecialShopItemRecipeSerializer(qs, many=True).data
 
 
+# Equipment is granted one row per copy, so an unbounded quantity could create
+# an unbounded number of rows in one request.
+MAX_QUANTITY_PER_REQUEST = 999
+
+
 class ShopPurchaseSerializer(serializers.Serializer):
-    quantity = serializers.IntegerField(min_value=1, default=1)
+    quantity = serializers.IntegerField(min_value=1, max_value=MAX_QUANTITY_PER_REQUEST, default=1)
 
 
 class SpecialShopExchangeSerializer(serializers.Serializer):
-    quantity = serializers.IntegerField(min_value=1, default=1)
+    quantity = serializers.IntegerField(min_value=1, max_value=MAX_QUANTITY_PER_REQUEST, default=1)

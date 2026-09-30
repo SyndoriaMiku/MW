@@ -37,6 +37,10 @@ class PartyMember(models.Model):
 
     class Meta:
         unique_together = (('party', 'character'), ('party', 'position'))
+        constraints = [
+            # A character belongs to at most one party at a time.
+            models.UniqueConstraint(fields=['character'], name='one_party_per_character'),
+        ]
         ordering = ['party', 'position']
     def __str__(self):
         return f"{self.character.name} in Party {self.party.name} at position {self.position}"

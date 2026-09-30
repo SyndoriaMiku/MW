@@ -108,7 +108,8 @@ class PartyViewSet(viewsets.GenericViewSet):
             name = f"{character.name}'s Party"
 
         with transaction.atomic():
-            # Prevent joining two parties
+            # Serialize party changes for this character, then prevent joining two parties.
+            Character.objects.select_for_update().get(pk=character.pk)
             if not _leave_solo_party(character):
                 return Response({"detail": "You are already in a party. Leave first."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -412,7 +413,9 @@ class PartyViewSet(viewsets.GenericViewSet):
             return Response({"detail": "This invitation has expired or is no longer valid."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            # Lock the party row to safely check size
+            # Lock the character first so two accepted invitations cannot both
+            # pass the "not in a party" check, then the party to check its size.
+            Character.objects.select_for_update().get(pk=character.pk)
             party = Party.objects.select_for_update().get(pk=invitation.party_id)
 
             # Re-check: character might have joined another party between invite and accept

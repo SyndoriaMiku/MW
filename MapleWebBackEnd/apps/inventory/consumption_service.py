@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from django.db import transaction
+from django.utils import timezone
 
 from .models import InventoryItem
 from .reservations import exclude_reserved
@@ -59,7 +60,7 @@ def consume_materials(character, requirements):
     Lock, preflight and then consume every required material as one unit.
 
     Equipped items, active market listings and pending trade items are reserved
-    and never eligible for consumption.
+    and never eligible for consumption, and neither are expired items.
     """
     required_by_template = normalize_material_requirements(requirements)
 
@@ -71,6 +72,7 @@ def consume_materials(character, requirements):
                 is_destroyed=False,
             )
         )
+        .exclude(expired_at__lte=timezone.now())
         .order_by('template_id', 'quantity', 'id')
     )
 

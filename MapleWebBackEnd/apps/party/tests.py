@@ -93,6 +93,48 @@ class SoloDungeonPartyTests(APITestCase):
         )
 
 
+class OnePartyPerCharacterTests(APITestCase):
+    def create_player(self, name):
+        user = GameUser.objects.create_user(
+            username=name, email=f'{name}@example.com', password='test-pass-123'
+        )
+        user.character = Character.objects.create(name=name)
+        user.save(update_fields=['character'])
+        return user
+
+    def invite_from_new_party(self, leader_name, target):
+        leader = self.create_player(leader_name)
+        self.client.force_authenticate(leader)
+        self.client.post(reverse('party-create-party'), {'name': leader_name}, format='json')
+        return self.client.post(
+            reverse('party-invite'), {'character_id': target.character.id}, format='json'
+        ).data['id']
+
+    def test_second_accepted_invitation_is_refused(self):
+        joiner = self.create_player('joiner')
+        first = self.invite_from_new_party('leader-one', joiner)
+        second = self.invite_from_new_party('leader-two', joiner)
+        self.client.force_authenticate(joiner)
+
+        self.client.post(reverse('party-accept-invitation', args=[first]))
+        refused = self.client.post(reverse('party-accept-invitation', args=[second]))
+
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(PartyMember.objects.filter(character=joiner.character).count(), 1)
+
+    def test_database_allows_one_membership_per_character(self):
+        from django.db import IntegrityError, transaction
+
+        character = Character.objects.create(name='Doubled')
+        for name in ('First', 'Second'):
+            Party.objects.create(name=name, leader=character)
+        first, second = Party.objects.order_by('name')
+        PartyMember.objects.create(party=first, character=character, position=1)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PartyMember.objects.create(party=second, character=character, position=1)
+
+
 class PendingLootOnDissolutionTests(APITestCase):
     """Undistributed party loot goes to the leader instead of vanishing."""
 

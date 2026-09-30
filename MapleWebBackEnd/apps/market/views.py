@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Case, When, F, FloatField, Q
 from django.db import transaction
+from django.utils import timezone
 
 from .models import Listing, Trade, TradeItem, Transaction as MarketTransaction
 from .serializers import ListingSerializer, TradeSerializer
@@ -11,6 +12,11 @@ from apps.inventory.grant_service import grant_item
 from apps.inventory.models import InventoryItem
 from apps.request_params import parse_float, parse_int
 from apps.users.models import GameUser
+
+
+def _is_expired(item):
+    return item.expired_at is not None and item.expired_at <= timezone.now()
+
 
 class ListingViewSet(viewsets.ModelViewSet):
     """
@@ -91,7 +97,7 @@ class ListingViewSet(viewsets.ModelViewSet):
             'template', 'owner__user'
         ).get(pk=serializer.validated_data['item'].pk)
         # Prevent listing untradeable items
-        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed:
+        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed or _is_expired(item):
             raise serializers.ValidationError("This item cannot be traded.")
 
         price = serializer.validated_data['price']
@@ -163,7 +169,10 @@ class ListingViewSet(viewsets.ModelViewSet):
                 'template', 'owner__user'
             ).get(pk=listing.item_id)
             owner_user = getattr(item.owner, 'user', None)
-            if owner_user is None or owner_user.pk != listing.seller_id or item.is_destroyed or item.is_untrade:
+            if (
+                owner_user is None or owner_user.pk != listing.seller_id
+                or item.is_destroyed or item.is_untrade or _is_expired(item)
+            ):
                 listing.is_active = False
                 listing.save(update_fields=['is_active'])
                 return Response({"detail": "This listing is no longer valid."}, status=status.HTTP_400_BAD_REQUEST)
@@ -318,7 +327,7 @@ class TradeViewSet(viewsets.ModelViewSet):
         
         if getattr(item.owner, 'user', None) != user:
             return Response({"detail": "You do not own this item."}, status=status.HTTP_400_BAD_REQUEST)
-        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed:
+        if not item.template.is_tradeable or item.is_untrade or item.is_destroyed or _is_expired(item):
             return Response({"detail": "Item is untradeable."}, status=status.HTTP_400_BAD_REQUEST)
 
         if hasattr(item, 'equipped_in'):
@@ -477,6 +486,7 @@ class TradeViewSet(viewsets.ModelViewSet):
                         or actual_owner.pk != expected_owner.pk
                         or item.is_destroyed
                         or item.is_untrade
+                        or _is_expired(item)
                         or not item.template.is_tradeable
                         or hasattr(item, 'equipped_in')
                         or Listing.objects.filter(item=item, is_active=True).exists()
