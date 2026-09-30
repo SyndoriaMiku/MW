@@ -103,7 +103,14 @@ class ItemTemplate(models.Model):
     @property
     def is_stackable(self):
         return self.item_type in ['use', 'etc']
-    
+
+    def clean(self):
+        # Jobs are limited to one weapon type, so every weapon needs one.
+        if self.item_type == 'weapon' and not self.weapon_type:
+            raise ValidationError({'weapon_type': 'Weapons need a weapon type.'})
+        if self.item_type != 'weapon' and self.weapon_type:
+            raise ValidationError({'weapon_type': 'Only weapons have a weapon type.'})
+
     
     def __str__(self):
         return self.name

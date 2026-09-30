@@ -177,6 +177,54 @@ class EquipmentAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(EquippedItem.objects.filter(item=self.item).exists())
 
+    def give_job(self, weapon_type):
+        from apps.classes.models import CharacterClass, Job
+
+        archer = CharacterClass.objects.create(name='Archer', main_stat='agi')
+        self.character.character_class = archer
+        self.character.job = Job.objects.create(name='Hunter', character_class=archer, weapon_type=weapon_type)
+        self.character.save(update_fields=['character_class', 'job'])
+
+    def weapon(self, weapon_type):
+        template = ItemTemplate.objects.create(
+            name=f'{weapon_type} weapon', item_type='weapon', weapon_type=weapon_type,
+        )
+        return InventoryItem.objects.create(owner=self.character, template=template)
+
+    def equip(self, item):
+        return self.client.post(self.equip_url(item), {'slot_index': 0}, format='json')
+
+    def test_job_only_equips_its_own_weapon_type(self):
+        self.give_job('bow')
+
+        self.assertEqual(self.equip(self.weapon('staff')).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.equip(self.weapon('bow')).status_code, status.HTTP_200_OK)
+
+    def test_weapon_type_does_not_limit_other_gear(self):
+        self.give_job('bow')
+        EquipmentSlotConfig.objects.create(slot_type='hat', display_name='Hat', allowed_item_types=['hat'])
+        hat = InventoryItem.objects.create(
+            owner=self.character, template=ItemTemplate.objects.create(name='Cap', item_type='hat'),
+        )
+
+        self.assertEqual(self.equip(hat).status_code, status.HTTP_200_OK)
+
+    def test_character_without_a_job_or_job_without_a_type_equips_any_weapon(self):
+        self.assertEqual(self.equip(self.weapon('staff')).status_code, status.HTTP_200_OK)
+
+        self.give_job(None)
+        self.assertEqual(self.equip(self.weapon('bow')).status_code, status.HTTP_200_OK)
+
+
+class WeaponTypeValidationTests(TestCase):
+    def test_weapons_need_a_type_and_other_items_must_not_have_one(self):
+        from django.core.exceptions import ValidationError
+
+        ItemTemplate(name='Bow', item_type='weapon', weapon_type='bow').full_clean()
+        for fields in ({'item_type': 'weapon'}, {'item_type': 'hat', 'weapon_type': 'bow'}):
+            with self.subTest(**fields), self.assertRaises(ValidationError):
+                ItemTemplate(name='Broken', **fields).full_clean()
+
 
 class MaterialConsumptionTests(TestCase):
     def setUp(self):

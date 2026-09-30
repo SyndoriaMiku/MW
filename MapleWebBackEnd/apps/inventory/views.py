@@ -72,6 +72,17 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
                 and not item.template.job_restriction.filter(pk=character.job_id).exists()
             ):
                 return Response({'error': 'Your job cannot equip this item.'}, status=status.HTTP_400_BAD_REQUEST)
+            # Each job uses one weapon type (no job, or a job not set up yet, uses any).
+            job_weapon_type = character.job.weapon_type if character.job_id else None
+            if (
+                item.template.item_type == 'weapon'
+                and job_weapon_type
+                and item.template.weapon_type != job_weapon_type
+            ):
+                return Response(
+                    {'error': f'Your job can only equip {character.job.get_weapon_type_display()} weapons.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if character_in_active_battle(character):
                 return Response({'error': 'Cannot change equipment while in an active battle.'}, status=status.HTTP_400_BAD_REQUEST)
             if Listing.objects.filter(item=item, is_active=True).exists():
