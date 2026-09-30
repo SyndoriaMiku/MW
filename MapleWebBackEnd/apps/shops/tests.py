@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -7,11 +10,13 @@ from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 
-from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe
+from .models import ShopCategory, ShopItem, SpecialShop, SpecialShopItem, SpecialShopItemRecipe
 from .serializers import MAX_QUANTITY_PER_REQUEST
 
 
-class SpecialShopAtomicityTests(APITestCase):
+class SpecialShopFixture:
+    """A permanent special shop whose reward costs 3 Material A + 2 Material B."""
+
     def setUp(self):
         self.character = Character.objects.create(name='ShopTester')
         self.user = GameUser.objects.create_user(
@@ -24,7 +29,8 @@ class SpecialShopAtomicityTests(APITestCase):
         self.material_a = ItemTemplate.objects.create(name='Shop Material A', item_type='etc')
         self.material_b = ItemTemplate.objects.create(name='Shop Material B', item_type='etc')
         self.reward = ItemTemplate.objects.create(name='Shop Reward', item_type='etc')
-        self.special_item = SpecialShopItem.objects.create(item=self.reward)
+        self.shop = SpecialShop.objects.create(name='Permanent Exchange')
+        self.special_item = SpecialShopItem.objects.create(shop=self.shop, item=self.reward)
         SpecialShopItemRecipe.objects.create(
             recipe=self.special_item, item=self.material_a, quantity=3
         )
@@ -33,6 +39,8 @@ class SpecialShopAtomicityTests(APITestCase):
         )
         self.url = reverse('special-shop-exchange', args=[self.special_item.id])
 
+
+class SpecialShopAtomicityTests(SpecialShopFixture, APITestCase):
     def test_missing_later_recipe_does_not_consume_earlier_material(self):
         material_a_stack = InventoryItem.objects.create(
             owner=self.character, template=self.material_a, quantity=3
@@ -71,6 +79,65 @@ class SpecialShopAtomicityTests(APITestCase):
         )
         reward_stack = InventoryItem.objects.get(owner=self.character, template=self.reward)
         self.assertEqual(reward_stack.quantity, 1)
+
+
+class SpecialShopAvailabilityTests(SpecialShopFixture, APITestCase):
+    """Permanent shops are always open; event shops only inside their window."""
+
+    def setUp(self):
+        super().setUp()
+        InventoryItem.objects.create(owner=self.character, template=self.material_a, quantity=30)
+        InventoryItem.objects.create(owner=self.character, template=self.material_b, quantity=20)
+        self.now = timezone.now()
+
+    def exchange(self):
+        return self.client.post(self.url, {'quantity': 1}, format='json')
+
+    def set_window(self, start, end):
+        SpecialShop.objects.filter(pk=self.shop.pk).update(start_time=start, end_time=end)
+
+    def listed_shops(self):
+        return [shop['name'] for shop in self.client.get(reverse('special-shop-list-shops')).data]
+
+    def test_event_shop_is_open_only_inside_its_window(self):
+        hour = timedelta(hours=1)
+        for start, end, open_ in [
+            (self.now + hour, self.now + 2 * hour, False),   # not started
+            (self.now - 2 * hour, self.now - hour, False),   # over
+            (self.now - hour, self.now + hour, True),        # running
+        ]:
+            with self.subTest(start=start, end=end):
+                self.set_window(start, end)
+                expected = status.HTTP_200_OK if open_ else status.HTTP_400_BAD_REQUEST
+                self.assertEqual(self.exchange().status_code, expected)
+                self.assertEqual(self.listed_shops(), ['Permanent Exchange'] if open_ else [])
+
+    def test_switched_off_shop_is_closed(self):
+        SpecialShop.objects.filter(pk=self.shop.pk).update(is_active=False)
+
+        self.assertEqual(self.exchange().status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.client.get(reverse('special-shop-list')).data['results'], [])
+
+    def test_shop_level_requirement(self):
+        SpecialShop.objects.filter(pk=self.shop.pk).update(required_level=10)
+
+        self.assertEqual(self.exchange().status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_open_shops_list_their_items_and_event_window(self):
+        self.set_window(self.now - timedelta(hours=1), self.now + timedelta(days=3))
+
+        shop = self.client.get(reverse('special-shop-list-shops')).data[0]
+
+        self.assertTrue(shop['is_event'])
+        self.assertIsNotNone(shop['end_time'])
+        self.assertEqual([item['id'] for item in shop['items']], [self.special_item.id])
+
+    def test_end_must_follow_start(self):
+        from django.core.exceptions import ValidationError
+
+        shop = SpecialShop(name='Broken', start_time=self.now, end_time=self.now - timedelta(hours=1))
+        with self.assertRaises(ValidationError):
+            shop.full_clean()
 
 
 class ShopPurchaseStackTests(APITestCase):

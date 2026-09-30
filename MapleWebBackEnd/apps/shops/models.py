@@ -91,11 +91,61 @@ class UserShopPurchase(models.Model):
     def __str__(self):
         return f"{self.user.username} bought {self.quantity_bought} of {self.shop_item.item_template.name}"
 
+class SpecialShop(models.Model):
+    """
+    An exchange shop (items for materials). With no start/end time it is
+    permanent; with them it is an event shop, open only in that window.
+    """
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, help_text="Switch the shop off without deleting it")
+    required_level = models.PositiveIntegerField(default=1)
+    start_time = models.DateTimeField(null=True, blank=True, help_text="Empty = open from now")
+    end_time = models.DateTimeField(null=True, blank=True, help_text="Empty = never closes")
+
+    class Meta:
+        verbose_name = "Special Shop"
+        verbose_name_plural = "Special Shops"
+        ordering = ['order', 'id']
+
+    @property
+    def is_event(self):
+        return self.start_time is not None or self.end_time is not None
+
+    def is_open(self, now=None):
+        now = now or timezone.now()
+        if not self.is_active:
+            return False
+        if self.start_time and now < self.start_time:
+            return False
+        if self.end_time and now > self.end_time:
+            return False
+        return True
+
+    def clean(self):
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValidationError({'end_time': 'Must be after the start time.'})
+
+    def __str__(self):
+        return self.name
+
+
+def open_special_shops(now=None):
+    """Special shops a player can use right now."""
+    now = now or timezone.now()
+    return SpecialShop.objects.filter(is_active=True).filter(
+        models.Q(start_time__isnull=True) | models.Q(start_time__lte=now),
+        models.Q(end_time__isnull=True) | models.Q(end_time__gte=now),
+    )
+
+
 class SpecialShopItem(models.Model):
     """
     Special item
     """
     id = models.AutoField(primary_key=True)
+    shop = models.ForeignKey('shops.SpecialShop', on_delete=models.CASCADE, related_name='items')
 
     item = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, related_name='special_shop_items', help_text="Item endgame")
     exchange = models.ManyToManyField('items.ItemTemplate', through='shops.SpecialShopItemRecipe', related_name='+' )
@@ -105,7 +155,7 @@ class SpecialShopItem(models.Model):
     class Meta:
         verbose_name = "Special Shop Item"
         verbose_name_plural = "Special Shop Items"
-        ordering = ['id']
+        ordering = ['shop', 'id']
     def __str__(self):
         return f"Special Item: {self.item.name}"
 

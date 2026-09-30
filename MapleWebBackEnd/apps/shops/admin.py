@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe
+from .models import ShopCategory, ShopItem, SpecialShop, SpecialShopItem, SpecialShopItemRecipe
 
 # ===================================================================
 # SECTION: REGULAR SHOP ADMIN
@@ -61,14 +61,39 @@ class SpecialShopItemRecipeInline(admin.TabularInline):
     fields = ('item', 'quantity')
 
 
+class SpecialShopItemInline(admin.TabularInline):
+    """Vật phẩm của shop; công thức đổi chỉnh ở trang Special Shop Item."""
+    model = SpecialShopItem
+    extra = 1
+    autocomplete_fields = ['item']
+    fields = ('item', 'is_active')
+    show_change_link = True
+
+
+@admin.register(SpecialShop)
+class SpecialShopAdmin(admin.ModelAdmin):
+    """
+    Shop đổi đồ. Để trống thời gian bắt đầu/kết thúc = shop vĩnh viễn;
+    điền thời gian = shop event, chỉ mở trong khoảng đó.
+    """
+    list_display = ('name', 'order', 'required_level', 'is_active', 'start_time', 'end_time', 'display_is_open')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
+    inlines = [SpecialShopItemInline]
+
+    @admin.display(boolean=True, description='Open now?')
+    def display_is_open(self, obj):
+        return obj.is_open()
+
+
 @admin.register(SpecialShopItem)
 class SpecialShopItemAdmin(admin.ModelAdmin):
     """
     Giao diện quản lý các vật phẩm đặc biệt có thể đổi/chế tạo.
     """
-    list_display = ('item', 'get_recipe_summary', 'is_active')
-    list_filter = ('is_active',)
-    search_fields = ('item__name',)
+    list_display = ('item', 'shop', 'get_recipe_summary', 'is_active')
+    list_filter = ('shop', 'is_active')
+    search_fields = ('item__name', 'shop__name')
     autocomplete_fields = ['item']
     
     # 'exchange' được quản lý qua inline, nên ẩn nó đi để tránh nhầm lẫn

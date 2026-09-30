@@ -5,11 +5,17 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
+from django.db.models import Prefetch
+
+from .models import (
+    ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase,
+    open_special_shops,
+)
 from .serializers import (
     ShopCategorySerializer,
     ShopItemSerializer,
     SpecialShopItemSerializer,
+    SpecialShopSerializer,
     SpecialShopExchangeSerializer,
     ShopPurchaseSerializer,
 )
@@ -125,22 +131,53 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for Special/Exchange Shop.
+    ViewSet for Special/Exchange Shops. Items of closed shops (switched off,
+    or event shops outside their window) are hidden and cannot be exchanged.
+
+    GET /api/shops/special/            -> items of every open shop (?shop=<id> to filter)
+    GET /api/shops/special/shops/      -> open shops with their items
+    POST /api/shops/special/{id}/exchange/
     """
-    queryset = SpecialShopItem.objects.filter(is_active=True).select_related(
-        'item__lumen_tier', 'item__aurora_tier'
-    ).prefetch_related(
-        'item__item_sets__effects', 'item__item_sets__items'
-    )
     serializer_class = SpecialShopItemSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = SpecialShopItem.objects.filter(
+            is_active=True, shop__in=open_special_shops(),
+        ).select_related(
+            'shop', 'item__lumen_tier', 'item__aurora_tier'
+        ).prefetch_related(
+            'item__item_sets__effects', 'item__item_sets__items'
+        )
+        shop_id = self.request.query_params.get('shop')
+        if shop_id:
+            queryset = queryset.filter(shop_id=parse_int(shop_id, 'shop'))
+        return queryset
+
+    @action(detail=False, methods=['get'], url_path='shops', url_name='list-shops')
+    def shops(self, request):
+        items = SpecialShopItem.objects.filter(is_active=True).select_related(
+            'item__lumen_tier', 'item__aurora_tier'
+        ).prefetch_related('item__item_sets__effects', 'item__item_sets__items')
+        shops = open_special_shops().prefetch_related(Prefetch('items', queryset=items))
+        return Response(SpecialShopSerializer(shops, many=True).data)
+
     @action(detail=True, methods=['post'])
     def exchange(self, request, pk=None):
-        special_item = self.get_object()
         character = getattr(request.user, 'character', None)
         if not character:
             return Response({"detail": "No character found."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            special_item = SpecialShopItem.objects.select_related('shop', 'item').get(pk=pk, is_active=True)
+        except SpecialShopItem.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not special_item.shop.is_open():
+            return Response({"detail": "This shop is closed."}, status=status.HTTP_400_BAD_REQUEST)
+        if character.level < special_item.shop.required_level:
+            return Response(
+                {"detail": f"Required level is {special_item.shop.required_level}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         input_serializer = SpecialShopExchangeSerializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
+from .models import ShopCategory, ShopItem, SpecialShop, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase
 from apps.items.serializers import ItemTemplateSerializer
 from django.utils import timezone
 
@@ -51,11 +51,24 @@ class SpecialShopItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpecialShopItem
-        fields = ['id', 'item', 'is_active', 'recipes']
+        fields = ['id', 'shop', 'item', 'is_active', 'recipes']
 
     def get_recipes(self, obj):
         qs = SpecialShopItemRecipe.objects.filter(recipe=obj)
         return SpecialShopItemRecipeSerializer(qs, many=True).data
+
+
+class SpecialShopSerializer(serializers.ModelSerializer):
+    """An open exchange shop; is_event shops close at end_time."""
+    items = SpecialShopItemSerializer(many=True, read_only=True)
+    is_event = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = SpecialShop
+        fields = [
+            'id', 'name', 'description', 'order', 'required_level',
+            'is_event', 'start_time', 'end_time', 'items',
+        ]
 
 
 # Equipment is granted one row per copy, so an unbounded quantity could create
