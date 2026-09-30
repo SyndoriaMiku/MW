@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -10,7 +11,9 @@ from apps.inventory.models import InventoryItem
 from apps.items.models import ItemTemplate
 from apps.users.models import GameUser
 
-from .models import ShopCategory, ShopItem, SpecialShop, SpecialShopItem, SpecialShopItemRecipe
+from .models import (
+    ShopCategory, ShopItem, SpecialShop, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase,
+)
 from .serializers import MAX_QUANTITY_PER_REQUEST
 
 
@@ -183,6 +186,25 @@ class ShopPurchaseStackTests(APITestCase):
         self.assertEqual(self.buy().status_code, status.HTTP_400_BAD_REQUEST)
         self.user.refresh_from_db()
         self.assertEqual(self.user.lumis, 100)
+
+    @override_settings(TIME_ZONE='UTC')
+    def test_bought_count_uses_the_same_reset_calendar_as_the_limit(self):
+        from datetime import datetime, timezone as dt_timezone
+        from unittest import mock
+
+        ShopItem.objects.filter(pk=self.shop_item.pk).update(stock=5, reset_cycle='weekly')
+        purchase = UserShopPurchase.objects.create(user=self.user, shop_item=self.shop_item, quantity_bought=3)
+        # Monday 2025-12-29 and Friday 2026-01-02 share a week (ISO week 1 of 2026).
+        UserShopPurchase.objects.filter(pk=purchase.pk).update(
+            last_purchased_at=datetime(2025, 12, 29, 10, tzinfo=dt_timezone.utc),
+        )
+
+        with mock.patch('django.utils.timezone.now', return_value=datetime(2026, 1, 2, 10, tzinfo=dt_timezone.utc)):
+            shown = self.client.get(reverse('shop-item-detail', args=[self.shop_item.id])).data
+            limited = self.buy(3)
+
+        self.assertEqual(shown['current_bought'], 3)
+        self.assertEqual(limited.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_nova_purchase_is_recorded_in_the_ledger(self):
         from apps.users.models import NovaTransaction
