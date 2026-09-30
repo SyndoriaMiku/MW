@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import InventoryItem
-from .reservations import character_in_active_battle, exclude_reserved
+from .reservations import character_in_active_battle, exclude_expired, exclude_reserved
 from apps.request_params import parse_int
 from apps.characters.models import EquippedItem, EquipmentSlotConfig, Character
 from .serializers import (
@@ -21,7 +21,8 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if not hasattr(self.request.user, 'character') or not self.request.user.character:
             return InventoryItem.objects.none()
-        return self.request.user.character.inventory_items.select_related(
+        # Expired items are out of play until purge_expired_items deletes them.
+        return exclude_expired(self.request.user.character.inventory_items).select_related(
             'template__lumen_tier', 'template__aurora_tier'
         ).prefetch_related(
             'aurora_lines',
@@ -191,6 +192,8 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             if item.is_destroyed:
                 return Response({'error': 'Destroyed items cannot be sold.'}, status=status.HTTP_400_BAD_REQUEST)
+            if item.expired_at and item.expired_at <= timezone.now():
+                return Response({'error': 'Expired items cannot be sold.'}, status=status.HTTP_400_BAD_REQUEST)
             if quantity > item.quantity or (not item.template.is_stackable and quantity != 1):
                 return Response({'error': 'Invalid quantity.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -240,7 +243,9 @@ class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):
         if not hasattr(self.request.user, 'character') or not self.request.user.character:
             from apps.characters.models import EquippedItem
             return EquippedItem.objects.none()
-        return self.request.user.character.equipped_items.select_related(
+        return self.request.user.character.equipped_items.exclude(
+            item__expired_at__lte=timezone.now(),
+        ).select_related(
             'item__template__lumen_tier', 'item__template__aurora_tier'
         ).prefetch_related(
             'item__aurora_lines',

@@ -52,7 +52,7 @@ class ItemTemplateSerializer(serializers.ModelSerializer):
             'att_boost', 'str_boost', 'agi_boost', 'int_boost',
             'all_stats_boost', 'drop_rate_boost', 'description',
             'sell_price', 'lumen_tier', 'aurora_tier', 'class_restriction',
-            'job_restriction', 'use_kind',
+            'job_restriction', 'use_kind', 'expire_after_minutes', 'expires_at',
         ]
         read_only_fields = fields
 

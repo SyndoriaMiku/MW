@@ -122,6 +122,11 @@ class SpecialShopAvailabilityTests(SpecialShopFixture, APITestCase):
         self.assertEqual(self.exchange().status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(self.client.get(reverse('special-shop-list')).data['results'], [])
 
+    def test_reward_past_its_fixed_expiry_cannot_be_exchanged(self):
+        ItemTemplate.objects.filter(pk=self.reward.pk).update(expires_at=self.now - timedelta(minutes=1))
+
+        self.assertEqual(self.exchange().status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_shop_level_requirement(self):
         SpecialShop.objects.filter(pk=self.shop.pk).update(required_level=10)
 
@@ -274,6 +279,13 @@ class ShopPurchaseStackTests(APITestCase):
 
         self.assertEqual(shown['current_bought'], 3)
         self.assertEqual(limited.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_item_past_its_fixed_expiry_is_no_longer_sold(self):
+        ItemTemplate.objects.filter(pk=self.potion.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+
+        self.assertEqual(self.buy().status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 100)
 
     def test_nova_purchase_is_recorded_in_the_ledger(self):
         from apps.users.models import NovaTransaction

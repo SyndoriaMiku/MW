@@ -81,6 +81,11 @@ class ItemTemplateAdmin(admin.ModelAdmin):
         ('Upgrade Tiers', {
             'fields': ('lumen_tier', 'aurora_tier')
         }),
+        ('Time Limit (Hạn sử dụng)', {
+            'description': "Để trống cả hai = vĩnh viễn. Item có hạn không trade/bán market được, "
+                           "hết hạn thì ẩn và bị xóa bởi lệnh purge_expired_items.",
+            'fields': (('expire_after_minutes', 'expires_at'),)
+        }),
     )
 
 

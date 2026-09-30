@@ -511,3 +511,134 @@ class EquipmentSlotAPITests(APITestCase):
                  'max_count': 4, 'allowed_item_types': ['ring'], 'order': 2},
             ],
         )
+
+
+class TimedItemTests(APITestCase):
+    """Items whose template sets a time limit expire, then vanish from play and are purged."""
+
+    def setUp(self):
+        self.character = Character.objects.create(name='Timed Tester')
+        self.user = GameUser.objects.create_user(
+            username='timed-user', email='timed@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+        self.now = timezone.now()
+
+    def template(self, name='Timed', item_type='etc', **fields):
+        return ItemTemplate.objects.create(name=name, item_type=item_type, **fields)
+
+    def test_relative_limit_starts_when_the_item_is_received(self):
+        rental = self.template(item_type='hat', expire_after_minutes=60)
+
+        [item] = grant_item(self.character, rental, 1)
+
+        self.assertAlmostEqual(
+            (item.expired_at - self.now).total_seconds(), 3600, delta=5,
+        )
+
+    def test_the_earlier_of_relative_and_fixed_limits_applies(self):
+        fixed = self.now + timedelta(minutes=10)
+        token = self.template(expire_after_minutes=60, expires_at=fixed)
+
+        [stack] = grant_item(self.character, token, 3)
+
+        self.assertEqual(stack.expired_at, fixed)
+
+    def test_fixed_limit_stacks_merge_but_relative_ones_do_not(self):
+        fixed_token = self.template('Event Coin', expires_at=self.now + timedelta(days=1))
+        rental_potion = self.template('Rental Potion', item_type='use', expire_after_minutes=60)
+
+        grant_item(self.character, fixed_token, 2)
+        grant_item(self.character, fixed_token, 3)
+        grant_item(self.character, rental_potion, 1)
+        grant_item(self.character, rental_potion, 1)
+
+        self.assertEqual(
+            list(InventoryItem.objects.filter(template=fixed_token).values_list('quantity', flat=True)), [5],
+        )
+        self.assertEqual(InventoryItem.objects.filter(template=rental_potion).count(), 2)
+
+    def test_permanent_items_never_merge_into_timed_stacks(self):
+        coin = self.template('Coin')
+        InventoryItem.objects.create(
+            owner=self.character, template=coin, quantity=4, expired_at=self.now + timedelta(days=1),
+        )
+
+        [stack] = grant_item(self.character, coin, 1)
+
+        self.assertIsNone(stack.expired_at)
+        self.assertEqual(stack.quantity, 1)
+
+    def test_expired_items_are_hidden_from_the_inventory(self):
+        kept = InventoryItem.objects.create(owner=self.character, template=self.template('Kept'))
+        InventoryItem.objects.create(
+            owner=self.character, template=self.template('Gone'),
+            expired_at=self.now - timedelta(seconds=1),
+        )
+
+        data = self.client.get(reverse('inventory-item-list')).data
+
+        self.assertEqual([row['id'] for row in data['results']], [kept.id])
+
+    def test_expired_equipment_stops_giving_stats(self):
+        slot = EquipmentSlotConfig.objects.create(slot_type='hat', display_name='Hat', allowed_item_types=['hat'])
+        hat = InventoryItem.objects.create(
+            owner=self.character, template=self.template('Hat', item_type='hat', str_boost=50),
+            expired_at=self.now + timedelta(hours=1),
+        )
+        EquippedItem.objects.create(character=self.character, slot=slot, slot_index=0, item=hat)
+        base_str = Character.objects.get(pk=self.character.pk).total_str
+
+        InventoryItem.objects.filter(pk=hat.pk).update(expired_at=self.now - timedelta(seconds=1))
+
+        self.assertEqual(Character.objects.get(pk=self.character.pk).total_str, base_str - 50)
+        equipped = self.client.get(reverse('equipped-item-list')).data
+        self.assertEqual(equipped['results'] if isinstance(equipped, dict) else equipped, [])
+
+    def test_expired_items_cannot_be_sold(self):
+        gone = InventoryItem.objects.create(
+            owner=self.character, template=self.template('Gone', sell_price=10),
+            expired_at=self.now - timedelta(seconds=1),
+        )
+
+        response = self.client.post(reverse('inventory-item-sell', args=[gone.pk]), {}, format='json')
+
+        self.assertNotEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.lumis, 0)
+
+    def test_timed_items_can_be_sold_to_the_npc_before_they_expire(self):
+        timed = InventoryItem.objects.create(
+            owner=self.character, template=self.template('Timed', sell_price=10),
+            expired_at=self.now + timedelta(hours=1),
+        )
+
+        response = self.client.post(reverse('inventory-item-sell', args=[timed.pk]), {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_purge_command_deletes_only_expired_items(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        kept = InventoryItem.objects.create(
+            owner=self.character, template=self.template('Soon'), expired_at=self.now + timedelta(hours=1),
+        )
+        permanent = InventoryItem.objects.create(owner=self.character, template=self.template('Forever'))
+        InventoryItem.objects.create(
+            owner=self.character, template=self.template('Gone'), expired_at=self.now - timedelta(seconds=1),
+        )
+
+        out = StringIO()
+        call_command('purge_expired_items', stdout=out)
+
+        self.assertEqual(set(InventoryItem.objects.values_list('pk', flat=True)), {kept.pk, permanent.pk})
+        self.assertIn('1', out.getvalue())
+
+    def test_time_limit_must_be_positive(self):
+        from django.core.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            ItemTemplate(name='Broken', item_type='etc', expire_after_minutes=0).full_clean()

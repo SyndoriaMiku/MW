@@ -31,6 +31,11 @@ def mutation_block_reason(item, *, role='Item'):
     return None
 
 
+def exclude_expired(queryset, now=None):
+    """Drop InventoryItem rows whose time limit has passed (they are out of play)."""
+    return queryset.exclude(expired_at__lte=now or timezone.now())
+
+
 def exclude_reserved(queryset):
     """
     Drop InventoryItem rows that another system currently holds.

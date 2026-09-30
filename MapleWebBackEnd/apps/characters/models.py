@@ -101,8 +101,11 @@ class Character(models.Model):
         eliminating N+1 on aurora_lines, lumen_tier, item_sets, and set effects.
         """
         if not hasattr(self, '_cached_equipment'):
+            # Expired gear stays equipped until purged but no longer counts.
             self._cached_equipment = [
-                eq.item for eq in self.equipped_items.select_related(
+                eq.item for eq in self.equipped_items.exclude(
+                    item__expired_at__lte=timezone.now(),
+                ).select_related(
                     'item__template__lumen_tier',
                     'slot'
                 ).prefetch_related(

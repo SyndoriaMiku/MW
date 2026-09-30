@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
@@ -100,9 +102,36 @@ class ItemTemplate(models.Model):
     # Sell price
     sell_price = models.IntegerField(default=1)
 
+    # Time limit. Timed items cannot be traded or listed, and are hidden then
+    # purged (manage.py purge_expired_items) once they expire.
+    expire_after_minutes = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text="Each copy expires this long after it is received (empty = no relative limit)",
+    )
+    expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Every copy expires at this moment, e.g. the end of an event (empty = no fixed limit)",
+    )
+
     @property
     def is_stackable(self):
         return self.item_type in ['use', 'etc']
+
+    def new_copy_expiry(self, now=None):
+        """When a copy received now expires: the earlier of the two limits, or None."""
+        from django.utils import timezone
+
+        limits = []
+        if self.expire_after_minutes:
+            limits.append((now or timezone.now()) + timedelta(minutes=self.expire_after_minutes))
+        if self.expires_at:
+            limits.append(self.expires_at)
+        return min(limits) if limits else None
+
+    def is_past_fixed_expiry(self, now=None):
+        from django.utils import timezone
+
+        return self.expires_at is not None and self.expires_at <= (now or timezone.now())
 
     def clean(self):
         # Jobs are limited to one weapon type, so every weapon needs one.

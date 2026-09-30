@@ -66,6 +66,8 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
         # Check Category status
         if not shop_item.category.is_active:
             return Response({"detail": "This shop category is not active."}, status=status.HTTP_400_BAD_REQUEST)
+        if shop_item.item_template.is_past_fixed_expiry():
+            return Response({"detail": "This item has expired and is no longer sold."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check Level (the category's requirement applies to every item in it)
         required_level = max(shop_item.required_level, shop_item.category.required_level)
@@ -173,6 +175,8 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         if not special_item.shop.is_open():
             return Response({"detail": "This shop is closed."}, status=status.HTTP_400_BAD_REQUEST)
+        if special_item.item.is_past_fixed_expiry():
+            return Response({"detail": "This item has expired and can no longer be exchanged."}, status=status.HTTP_400_BAD_REQUEST)
         if character.level < special_item.shop.required_level:
             return Response(
                 {"detail": f"Required level is {special_item.shop.required_level}."},

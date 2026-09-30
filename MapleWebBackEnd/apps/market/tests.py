@@ -70,20 +70,23 @@ class MarketStackPurchaseTests(MarketListingFixture, APITestCase):
             1,
         )
 
-    def test_expired_items_cannot_be_listed_or_bought(self):
-        expired_at = timezone.now() - timedelta(seconds=1)
-        stale = InventoryItem.objects.create(
-            owner=self.seller_character, template=self.potion, quantity=5, expired_at=expired_at,
+    def test_timed_items_cannot_be_listed_or_bought(self):
+        for expired_at in (timezone.now() - timedelta(seconds=1), timezone.now() + timedelta(days=1)):
+            stale = InventoryItem.objects.create(
+                owner=self.seller_character, template=self.potion, quantity=5, expired_at=expired_at,
+            )
+            self.client.force_authenticate(self.seller)
+
+            listed = self.client.post(
+                reverse('listing-list'), {'item': stale.pk, 'price': 10, 'quantity': 1}, format='json',
+            )
+
+            self.assertEqual(listed.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # A listing made before the item got its time limit is voided at purchase.
+        InventoryItem.objects.filter(pk=self.seller_stack.pk).update(
+            expired_at=timezone.now() + timedelta(days=1),
         )
-        self.client.force_authenticate(self.seller)
-
-        listed = self.client.post(
-            reverse('listing-list'), {'item': stale.pk, 'price': 10, 'quantity': 1}, format='json',
-        )
-
-        self.assertEqual(listed.status_code, status.HTTP_400_BAD_REQUEST)
-
-        InventoryItem.objects.filter(pk=self.seller_stack.pk).update(expired_at=expired_at)
         self.client.force_authenticate(self.buyer)
         bought = self.client.post(reverse('listing-buy', args=[self.listing.id]))
 
@@ -229,8 +232,8 @@ class TradeLifecycleTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_expired_item_cannot_be_offered_or_handed_over(self):
-        expired_at = timezone.now() - timedelta(seconds=1)
+    def test_timed_item_cannot_be_offered_or_handed_over(self):
+        expired_at = timezone.now() + timedelta(days=1)
         trade = self.open_trade(self.alice, self.bob)
         InventoryItem.objects.filter(pk=self.sword.pk).update(expired_at=expired_at)
 
