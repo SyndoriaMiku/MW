@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from .models import NovaTransaction
+
 User = get_user_model()
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -41,6 +43,15 @@ class PublicUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'character_id')
+        read_only_fields = fields
+
+
+class NovaTransactionSerializer(serializers.ModelSerializer):
+    """A player's own Nova history; the admin note and author stay internal."""
+
+    class Meta:
+        model = NovaTransaction
+        fields = ('id', 'kind', 'amount', 'balance_after', 'description', 'created_at')
         read_only_fields = fields
 
 

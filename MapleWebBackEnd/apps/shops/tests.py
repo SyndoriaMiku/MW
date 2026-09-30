@@ -117,6 +117,20 @@ class ShopPurchaseStackTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.lumis, 100)
 
+    def test_nova_purchase_is_recorded_in_the_ledger(self):
+        from apps.users.models import NovaTransaction
+        from apps.users.nova_service import change_nova
+
+        change_nova(self.user, 50, NovaTransaction.Kind.DONATION, reference='kofi-shop')
+        ShopCategory.objects.filter(pk=self.shop_item.category_id).update(currency_type='nova')
+
+        self.assertEqual(self.buy(2).status_code, status.HTTP_200_OK)
+
+        purchase = NovaTransaction.objects.get(kind=NovaTransaction.Kind.PURCHASE)
+        self.assertEqual((purchase.amount, purchase.balance_after), (-10, 40))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.nova, 40)
+
     def test_quantity_per_purchase_is_capped(self):
         ShopItem.objects.filter(pk=self.shop_item.pk).update(price=0)
 

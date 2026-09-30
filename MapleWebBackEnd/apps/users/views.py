@@ -10,7 +10,8 @@ from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from . import login_limits
-from .serializers import UserRegistrationSerializer, UserProfileSerializer
+from .models import NovaTransaction
+from .serializers import NovaTransactionSerializer, UserRegistrationSerializer, UserProfileSerializer
 
 User = get_user_model()
 
@@ -45,6 +46,17 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = UserRegistrationSerializer
+
+class NovaHistoryView(generics.ListAPIView):
+    """GET: the caller's Nova transactions (donations, purchases, adjustments), newest first."""
+    permission_classes = (IsAuthenticated,)
+    serializer_class = NovaTransactionSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return NovaTransaction.objects.none()
+        return NovaTransaction.objects.filter(user=self.request.user).order_by('-created_at', '-id')
+
 
 class ProfileView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)

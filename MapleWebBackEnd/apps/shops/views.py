@@ -108,8 +108,15 @@ class ShopItemViewSet(viewsets.ReadOnlyModelViewSet):
                 user_profile.lumis -= total_price
                 user_profile.save(update_fields=['lumis'])
             elif currency == 'nova':
-                user_profile.nova -= total_price
-                user_profile.save(update_fields=['nova'])
+                from apps.users.models import NovaTransaction
+                from apps.users.nova_service import change_nova
+
+                # Premium currency: every spend goes through the Nova ledger.
+                change_nova(
+                    user_profile, -total_price, NovaTransaction.Kind.PURCHASE,
+                    description=f'{quantity}x {shop_item.item_template.name}',
+                    note=f'Shop item #{shop_item.id}',
+                )
 
             grant_item(character, shop_item.item_template, quantity)
 

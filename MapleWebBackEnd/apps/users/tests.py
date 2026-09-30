@@ -12,7 +12,8 @@ from apps.characters.models import Character, RateEvent
 from apps.party.models import Party, PartyMember
 from apps.world.models import EnemyTemplate
 
-from .models import GameUser
+from .models import GameUser, NovaTransaction
+from .nova_service import NovaError, change_nova
 
 
 class CharacterDeletionTests(TestCase):
@@ -102,6 +103,95 @@ class LoginFailureLimitTests(APITestCase):
 
         with mock.patch('apps.users.login_limits.time.time', return_value=start + 901):
             self.assertEqual(self.login(password='right-pass-123').status_code, status.HTTP_200_OK)
+
+
+class NovaLedgerTests(APITestCase):
+    """Nova only changes through the ledger, which always matches the balance."""
+
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='donor', email='donor@example.com', password='test-pass-123'
+        )
+        self.admin = GameUser.objects.create_superuser(
+            username='boss', email='boss@example.com', password='test-pass-123'
+        )
+
+    def nova(self):
+        return GameUser.objects.get(pk=self.user.pk).nova
+
+    def test_donation_credits_nova_and_is_recorded(self):
+        entry = change_nova(
+            self.user, 500, NovaTransaction.Kind.DONATION,
+            reference='kofi-001', note='Thanks!', created_by=self.admin,
+        )
+
+        self.assertEqual(self.nova(), 500)
+        self.assertEqual(
+            (entry.amount, entry.balance_after, entry.reference, entry.created_by),
+            (500, 500, 'kofi-001', self.admin),
+        )
+
+    def test_a_donation_reference_is_credited_once(self):
+        change_nova(self.user, 500, NovaTransaction.Kind.DONATION, reference='kofi-001')
+
+        with self.assertRaises(NovaError):
+            change_nova(self.user, 500, NovaTransaction.Kind.DONATION, reference='kofi-001')
+        self.assertEqual(self.nova(), 500)
+
+    def test_invalid_changes_are_refused(self):
+        change_nova(self.user, 100, NovaTransaction.Kind.DONATION)
+
+        for amount, kind in [
+            (0, NovaTransaction.Kind.ADJUSTMENT),
+            (-5, NovaTransaction.Kind.DONATION),
+            (-101, NovaTransaction.Kind.ADJUSTMENT),
+        ]:
+            with self.subTest(amount=amount, kind=kind), self.assertRaises(NovaError):
+                change_nova(self.user, amount, kind)
+        self.assertEqual(self.nova(), 100)
+        self.assertEqual(NovaTransaction.objects.count(), 1)
+
+    def test_admin_adds_a_donation_through_the_ledger(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse('admin:users_novatransaction_add'), {
+            'user': self.user.pk, 'kind': 'donation', 'amount': 300,
+            'reference': 'kofi-002', 'note': '',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.nova(), 300)
+        entry = NovaTransaction.objects.get()
+        self.assertEqual((entry.balance_after, entry.created_by), (300, self.admin))
+
+    def test_admin_form_refuses_taking_more_than_the_balance(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse('admin:users_novatransaction_add'), {
+            'user': self.user.pk, 'kind': 'adjustment', 'amount': -1, 'reference': '', 'note': '',
+        })
+
+        self.assertEqual(response.status_code, 200)  # form redisplayed with an error
+        self.assertFalse(NovaTransaction.objects.exists())
+
+    def test_nova_is_read_only_on_the_user_admin_page(self):
+        from .admin import GameUserAdmin
+
+        self.assertIn('nova', GameUserAdmin.readonly_fields)
+
+    def test_player_sees_only_their_own_history_newest_first(self):
+        change_nova(self.user, 100, NovaTransaction.Kind.DONATION, reference='a')
+        change_nova(self.user, -40, NovaTransaction.Kind.ADJUSTMENT)
+        change_nova(self.admin, 999, NovaTransaction.Kind.DONATION, reference='b')
+        self.client.force_authenticate(self.user)
+
+        data = self.client.get(reverse('nova-history')).data
+
+        self.assertEqual(
+            [(row['kind'], row['amount'], row['balance_after']) for row in data['results']],
+            [('adjustment', -40, 60), ('donation', 100, 100)],
+        )
+        self.assertNotIn('created_by', data['results'][0])
 
 
 class SessionBootstrapTests(APITestCase):

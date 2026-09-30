@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
@@ -77,3 +78,49 @@ class GameUser(AbstractBaseUser):
     
     def has_admin_permissions(self):
         return self.is_admin
+
+
+class NovaTransaction(models.Model):
+    """
+    One change to a user's Nova, the premium currency players get for
+    donating. Every change goes through apps.users.nova_service, so the
+    ledger and GameUser.nova always agree.
+    """
+    class Kind(models.TextChoices):
+        DONATION = 'donation', 'Donation'
+        PURCHASE = 'purchase', 'Shop purchase'
+        ADJUSTMENT = 'adjustment', 'Admin adjustment'
+
+    user = models.ForeignKey(GameUser, on_delete=models.PROTECT, related_name='nova_transactions')
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    amount = models.IntegerField(help_text="Positive adds Nova, negative takes it away")
+    balance_after = models.PositiveIntegerField(editable=False)
+    reference = models.CharField(
+        max_length=100, null=True, blank=True, unique=True,
+        help_text="Donation/payment reference (e.g. the Ko-fi ID). Each can be credited only once.",
+    )
+    description = models.CharField(max_length=200, blank=True, help_text="Shown to the player, e.g. '2x Potion'")
+    note = models.TextField(blank=True, help_text="Internal note, not shown to the player")
+    created_by = models.ForeignKey(
+        GameUser, on_delete=models.SET_NULL, null=True, blank=True, editable=False, related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Nova Transaction'
+        verbose_name_plural = 'Nova Transactions'
+        ordering = ['-created_at', '-id']
+
+    def clean(self):
+        from .nova_service import validate_nova_change
+
+        # Blank means "no reference"; NULLs never clash with each other.
+        self.reference = (self.reference or '').strip() or None
+        if self.user_id is None or self.amount is None or not self.kind:
+            return
+        error = validate_nova_change(self.user, self.amount, self.kind)
+        if error:
+            raise ValidationError({'amount': error})
+
+    def __str__(self):
+        return f"{self.user} {self.amount:+d} Nova ({self.get_kind_display()})"
