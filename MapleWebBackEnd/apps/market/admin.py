@@ -57,13 +57,6 @@ class ListingAdmin(admin.ModelAdmin):
     list_filter = ('is_active',)
     search_fields = ('seller__username', 'item__template__name')
     autocomplete_fields = ('seller', 'item')
-    
-    # Tự động cập nhật is_active thành False khi lưu từ admin
-    def save_model(self, request, obj, form, change):
-        if not obj.is_active:
-            # logic to handle deactivation if needed
-            pass
-        super().save_model(request, obj, form, change)
 
 
 @admin.register(Transaction)

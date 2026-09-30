@@ -80,11 +80,6 @@ class SkillService:
         return changed_ids
 
     @staticmethod
-    def auto_sync_skills(character):
-        """Backward-compatible name for existing callers."""
-        return SkillService.sync_eligible_skills(character)
-
-    @staticmethod
     def manual_upgrade(character, char_skill_id):
         """Upgrade one owned skill through its next material-gated milestone."""
         try:

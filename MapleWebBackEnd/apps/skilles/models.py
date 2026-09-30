@@ -223,9 +223,9 @@ class SkillLevelConfig(models.Model):
             "e.g. 1.0 = 100%, 1.5 = 150%, 1.75 = 175%."
         )
     )
-    # Future: material-based upgrade support
-    # If empty list → auto-upgrade when char reaches required_char_level
-    # If non-empty  → player must POST to /skills/{id}/upgrade/ and consume items
+    # Empty list → auto-upgrade when the character reaches required_char_level.
+    # Non-empty  → the player upgrades via POST /api/characters/my/skills/{id}/upgrade/,
+    #              consuming the items.
     required_materials = models.JSONField(
         default=list,
         blank=True,

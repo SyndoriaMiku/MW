@@ -1244,7 +1244,7 @@ class BattleService:
             combat_instance.status = 'defeat'
             combat_instance.save(update_fields=['status'])
             result["status"] = combat_instance.status
-            # Handle death penalty here if needed in the future
+            # By design there is no death penalty: a lost battle only costs the time.
         elif not enemies_alive:
             combat_instance.status = 'victory'
             combat_instance.save(update_fields=['status'])

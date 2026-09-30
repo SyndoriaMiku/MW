@@ -246,21 +246,11 @@ class ListingViewSet(viewsets.ModelViewSet):
             if item.template.is_stackable and listing.quantity < item.quantity:
                 item.quantity -= listing.quantity
                 item.save(update_fields=['quantity'])
-                if item.expired_at is None:
-                    grant_item(
-                        buyer_character, item.template, listing.quantity,
-                        is_untrade=becomes_untradeable,
-                    )
-                else:
-                    # Keep the expiry: never merge an expiring split into a
-                    # permanent stack.
-                    InventoryItem.objects.create(
-                        template=item.template,
-                        owner=buyer_character,
-                        quantity=listing.quantity,
-                        is_untrade=becomes_untradeable,
-                        expired_at=item.expired_at,
-                    )
+                # Timed items never reach the market, so the split is permanent.
+                grant_item(
+                    buyer_character, item.template, listing.quantity,
+                    is_untrade=becomes_untradeable,
+                )
             else:
                 item.owner = buyer_character
                 if becomes_untradeable:
