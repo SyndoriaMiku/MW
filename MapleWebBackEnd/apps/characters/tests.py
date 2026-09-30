@@ -66,6 +66,55 @@ class MinimumDamageTests(TestCase):
         self.assertEqual(character.total_damage, 15)
 
 
+class CharacterNameTests(APITestCase):
+    """Character names are unique ignoring case and surrounding spaces."""
+
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='namer', email='namer@example.com', password='test-pass-123'
+        )
+        self.client.force_authenticate(self.user)
+
+    def create(self, name):
+        return self.client.post(reverse('character-create'), {'name': name}, format='json')
+
+    def test_name_is_trimmed(self):
+        response = self.create('  Hero  ')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'Hero')
+
+    def test_taken_name_is_refused_whatever_the_case(self):
+        Character.objects.create(name='Hero')
+
+        for name in ('Hero', 'hERO', ' hero '):
+            with self.subTest(name=name):
+                response = self.create(name)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('name', response.data)
+        self.assertEqual(Character.objects.count(), 1)
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.character)
+
+    def test_blank_name_is_refused(self):
+        self.assertEqual(self.create('   ').status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_database_rejects_a_duplicate_name(self):
+        from django.db import IntegrityError, transaction
+
+        Character.objects.create(name='Hero')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Character.objects.create(name='HERO')
+
+    def test_second_character_is_refused(self):
+        self.create('First')
+
+        response = self.create('Second')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Character.objects.filter(name='Second').exists())
+
+
 class GainRateTests(TestCase):
     """EXP/Lumis/drop rates: 1.0 base plus equipment, the best buff per rate, and every active event."""
 

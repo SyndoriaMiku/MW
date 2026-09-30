@@ -125,6 +125,15 @@ class CharacterSerializer(serializers.ModelSerializer):
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
         ]
 
+    def validate_name(self, value):
+        # DRF already trimmed surrounding spaces; the DB constraint backs this up.
+        taken = Character.objects.filter(name__iexact=value)
+        if self.instance is not None:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise serializers.ValidationError('This character name is already taken.')
+        return value
+
     def validate(self, attrs):
         job = attrs.get('job')
         character_class = attrs.get('character_class')

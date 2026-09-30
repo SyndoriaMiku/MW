@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.db import models, transaction
+from django.db.models.functions import Lower
 from django.utils.functional import cached_property
 from collections import defaultdict
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -24,7 +25,7 @@ class Character(models.Model):
         default=generate_hex_id,
         editable=False
     )
-    name = models.CharField(max_length=20)
+    name = models.CharField(max_length=20, help_text="Unique, ignoring case")
 
     # Location in the world
     current_location = models.ForeignKey(
@@ -58,7 +59,14 @@ class Character(models.Model):
     current_stamina = models.PositiveIntegerField(default=120, validators=[MinValueValidator(0), MaxValueValidator(120)])
     last_stamina_update = models.DateTimeField(default=timezone.now,help_text="Last time stamina was updated")
 
-    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('name'), name='unique_character_name_ci',
+                violation_error_message='This character name is already taken.',
+            ),
+        ]
+
     def __str__(self):
         return self.name
     

@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from .models import Character, CharacterSkill
 from .serializers import CharacterSerializer, CharacterSkillSerializer
@@ -26,8 +26,26 @@ class MyCharacterView(viewsets.ViewSet):
 
         serializer = CharacterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        from apps.users.models import GameUser
+
         with transaction.atomic():
-            character = serializer.save()
+            # Re-check under a row lock: two concurrent requests must not both
+            # create a character for the same account.
+            user = GameUser.objects.select_for_update().get(pk=request.user.pk)
+            if user.character_id is not None:
+                return Response(
+                    {"detail": "User already has a character."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                with transaction.atomic():
+                    character = serializer.save()
+            except IntegrityError:
+                # Another request took the same name after validation.
+                return Response(
+                    {"name": ["This character name is already taken."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             request.user.character = character
             request.user.save(update_fields=['character'])
             from .skill_service import SkillService
