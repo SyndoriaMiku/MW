@@ -4,10 +4,21 @@ from .models import CombatInstance, Combatant, ActiveEffect
 
 class ActiveEffectSerializer(serializers.ModelSerializer):
     effect_name = serializers.CharField(source='effect_template.name', read_only=True)
-    
+    effect_template_id = serializers.IntegerField(read_only=True)
+    effect_kind = serializers.CharField(source='effect_template.effect_kind', read_only=True)
+    dispellable = serializers.BooleanField(source='effect_template.dispellable', read_only=True)
+    # Special effect tag ids, e.g. 'stun', 'silence'.
+    special_effects = serializers.SerializerMethodField()
+
     class Meta:
         model = ActiveEffect
-        fields = ['id', 'effect_name', 'remaining_turns', 'current_stacks', 'remaining_shield_points']
+        fields = [
+            'id', 'effect_template_id', 'effect_name', 'effect_kind', 'dispellable',
+            'special_effects', 'remaining_turns', 'current_stacks', 'remaining_shield_points',
+        ]
+
+    def get_special_effects(self, obj):
+        return [tag.id for tag in obj.effect_template.special_effects.all()]
 
 
 class CombatantSerializer(serializers.ModelSerializer):
@@ -124,10 +135,13 @@ class CombatantSerializer(serializers.ModelSerializer):
         if hasattr(obj, '_serialized_player_skills'):
             return obj._serialized_player_skills
 
+        from .services import BattleService
+
         owned_skills = obj.entity.skills.filter(
             skill_template__availability__in=['PLAYER', 'BOTH']
         ).select_related('skill_template').prefetch_related('skill_template__level_configs')
         is_current_actor = self.get_is_current_actor(obj)
+        silenced = is_current_actor and BattleService.is_silenced(obj)
         result = []
         for owned in owned_skills:
             template = owned.skill_template
@@ -157,22 +171,19 @@ class CombatantSerializer(serializers.ModelSerializer):
                     is_current_actor
                     and obj.current_mp >= template.mp_cost
                     and cooldown_remaining <= 0
+                    and (template.is_basic_attack or not silenced)
                 ),
             })
         obj._serialized_player_skills = result
         return result
     
     def get_max_hp(self, obj):
-        entity = obj.entity
-        if obj.is_player:
-            return getattr(entity, 'total_hp', getattr(entity, 'base_hp', 0))
-        return getattr(entity, 'base_hp', 0)
-    
+        from .services import BattleService
+        return BattleService.get_max_hp(obj)
+
     def get_max_mp(self, obj):
-        entity = obj.entity
-        if obj.is_player:
-            return getattr(entity, 'total_mp', getattr(entity, 'base_mp', 0))
-        return getattr(entity, 'base_mp', 0)
+        from .services import BattleService
+        return BattleService.get_max_mp(obj)
 
 
 class CombatInstanceSerializer(serializers.ModelSerializer):

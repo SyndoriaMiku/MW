@@ -116,6 +116,9 @@ class ActiveEffect(models.Model):
     current_stacks = models.IntegerField(default=1) #Current stacks of the effect, if applicable
     remaining_shield_points = models.IntegerField(default=0) # Tracks the remaining shield points
     caster = models.ForeignKey('battles.Combatant', null=True, blank=True, on_delete=models.SET_NULL, related_name='casted_effects') #Combatant who applied the effect
+    # Set when applied during the target side's own phase, so that partial
+    # phase is not counted as one of the effect's turns.
+    skip_next_tick = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -19,7 +19,7 @@ from apps.users.models import GameUser
 from apps.world.models import (
     EnemySkill, EnemyTemplate, LootTable, NormalDungeonTemplate, NormalStageEnemy,
 )
-from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate
+from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
 
 from .models import ActiveEffect, CombatInstance
 from .serializers import PlayerActionSerializer
@@ -1175,3 +1175,211 @@ class BattleConsumableTests(BattleFixtureMixin, APITestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn('inventory_item_id', serializer.errors)
+
+
+class CombatEffectMechanicsTests(BattleFixtureMixin, APITestCase):
+    """Effect durations, stun/silence, max HP/MP, restore modifiers, cooldown reduction and dispels."""
+
+    def effect(self, name='Effect', *, tags=(), **fields):
+        fields.setdefault('duration_turns', 1)
+        effect = EffectTemplate.objects.create(name=name, **fields)
+        for tag in tags:
+            effect.special_effects.add(
+                SpecialEffectTag.objects.get_or_create(id=tag, defaults={'name': tag})[0]
+            )
+        return effect
+
+    def put(self, target, effect, turns=3):
+        return ActiveEffect.objects.create(
+            combat_instance=target.combat_instance, target=target,
+            effect_template=effect, remaining_turns=turns,
+        )
+
+    def enemy_with_skill(self, skill, *, attack=0):
+        enemy = EnemyTemplate.objects.create(
+            name='Caster', level=1, base_hp=500, base_mp=0, base_att=attack,
+            exp_reward=0, lumis_reward_min=0, lumis_reward_max=0,
+        )
+        EnemySkill.objects.create(enemy_template=enemy, skill_template=skill, priority_index=1)
+        combat = BattleService.create_combat_instance(self.party, [enemy])
+        BattleService.start_combat(combat)
+        return combat
+
+    def owned_skill(self, **fields):
+        skill = SkillTemplate.objects.create(**fields)
+        return CharacterSkill.objects.create(character=self.character, skill_template=skill, level=1)
+
+    def act(self, combat, action_type='ATTACK', **data):
+        if action_type == 'ATTACK':
+            data.setdefault('target_id', combat.combatants.get(is_player=False).id)
+        return self.client.post(
+            reverse('battles:player-action', args=[combat.id]),
+            {'action_type': action_type, **data}, format='json',
+        )
+
+    @staticmethod
+    def skips(response):
+        return [
+            (event['actor_type'], event['reason'])
+            for event in response.data['events'] if event.get('event_type') == 'turn_skipped'
+        ]
+
+    def test_monster_stun_costs_the_player_exactly_one_turn(self):
+        stun = self.effect('Stun', effect_kind='DEBUFF', tags=['stun'])
+        bash = SkillTemplate.objects.create(
+            name='Bash', availability='ENEMY', target_type='ENEMY',
+            effect_type='EFFECT', applies_effect=stun, cooldown=5,
+        )
+        combat = self.enemy_with_skill(bash)
+
+        response = self.act(combat)
+
+        self.assertEqual(self.skips(response), [('character', 'stunned')])
+        self.assertEqual(response.data['combat']['turn_phase'], 'player_phase')
+        self.assertEqual(response.data['combat']['turn_count'], 3)
+        self.assertFalse(ActiveEffect.objects.filter(effect_template=stun).exists())
+
+    def test_player_stun_skips_only_the_enemys_next_phase(self):
+        stun = self.effect('Stun', effect_kind='DEBUFF', tags=['stun'])
+        owned = self.owned_skill(
+            name='Stun Shot', target_type='ENEMY', effect_type='EFFECT', applies_effect=stun,
+        )
+        combat = self.create_battle(enemy_hp=500, enemy_attack=7)
+        player = combat.combatants.get(is_player=True)
+        hp_before = player.current_hp
+        enemy = combat.combatants.get(is_player=False)
+
+        stunned = self.act(combat, 'SKILL', character_skill_id=owned.id, target_id=enemy.id)
+        player.refresh_from_db()
+
+        self.assertEqual(self.skips(stunned), [('enemy', 'stunned')])
+        self.assertEqual(player.current_hp, hp_before)
+        self.assertFalse(ActiveEffect.objects.filter(effect_template=stun).exists())
+
+        recovered = self.act(combat)
+        player.refresh_from_db()
+
+        self.assertEqual(self.skips(recovered), [])
+        self.assertEqual(player.current_hp, hp_before - 7)
+
+    def test_self_buff_covers_the_casters_next_turn(self):
+        rage = self.effect('Rage', flat_att_change=10)
+        owned = self.owned_skill(
+            name='Rage', target_type='SELF', effect_type='EFFECT', applies_effect=rage,
+        )
+        combat = self.create_battle(enemy_hp=500)
+
+        self.act(combat, 'SKILL', character_skill_id=owned.id)
+
+        self.assertEqual(ActiveEffect.objects.get(effect_template=rage).remaining_turns, 1)
+        buffed = self.act(combat)
+        # No job: damage is the ATT total, 5 base + 10 from the buff.
+        self.assertEqual(buffed.data['action_log']['damage'], 15)
+        self.assertFalse(ActiveEffect.objects.filter(effect_template=rage).exists())
+
+    def test_silence_blocks_skills_but_not_basic_attacks(self):
+        owned = self.owned_skill(name='Fireball', target_type='ENEMY', effect_type='DAMAGE', base_power=5)
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        self.put(player, self.effect('Silence', effect_kind='DEBUFF', tags=['silence'], duration_turns=3))
+
+        snapshot = self.client.get(reverse('battles:battle-state', args=[combat.id])).data
+        me = next(c for c in snapshot['combatants'] if c['id'] == player.id)
+        fireball = next(s for s in me['skills'] if s['character_skill_id'] == owned.id)
+        self.assertFalse(fireball['can_use'])
+        self.assertEqual(me['active_effects'][0]['special_effects'], ['silence'])
+
+        self.assertFalse(
+            BattleService.execute_action(player, 'SKILL', enemy, character_skill_id=owned.id)['success']
+        )
+        self.assertTrue(BattleService.execute_action(player, 'ATTACK', enemy)['success'])
+
+    def test_silenced_monster_falls_back_to_a_basic_attack(self):
+        blast = SkillTemplate.objects.create(
+            name='Blast', availability='ENEMY', target_type='ENEMY', effect_type='DAMAGE', base_power=50,
+        )
+        combat = self.enemy_with_skill(blast, attack=3)
+        self.put(combat.combatants.get(is_player=False), self.effect('Silence', tags=['silence']))
+
+        response = self.act(combat)
+
+        monster_action = response.data['events'][1]
+        self.assertEqual((monster_action['action'], monster_action['damage']), ('ATTACK', 3))
+
+    def test_max_hp_buff_raises_the_cap_and_hp_is_clamped_when_it_ends(self):
+        combat = self.create_battle()
+        player = combat.combatants.get(is_player=True)
+        base = self.character.total_hp
+        self.put(player, self.effect('Fortify', flat_hp_change=50), turns=1)
+        player.current_hp = base + 50
+        player.save(update_fields=['current_hp'])
+
+        snapshot = self.client.get(reverse('battles:battle-state', args=[combat.id])).data
+        self.assertEqual(next(c for c in snapshot['combatants'] if c['id'] == player.id)['max_hp'], base + 50)
+
+        BattleService.process_active_effects(combat, players=True)
+
+        player.refresh_from_db()
+        self.assertEqual(player.current_hp, base)
+
+    def test_mana_received_modifier_scales_potions(self):
+        self.character.base_mp = 100
+        self.character.save(update_fields=['base_mp'])
+        combat = self.create_battle()
+        player = combat.combatants.get(is_player=True)
+        player.current_mp = 0
+        player.save(update_fields=['current_mp'])
+        self.put(player, self.effect('Clarity', mana_received_modifier=1.0))
+        ether = ItemTemplate.objects.create(name='Ether', item_type='use')
+        BattleConsumableRule.objects.create(item_template=ether, mp_restore=10)
+        stack = InventoryItem.objects.create(owner=self.character, template=ether, quantity=1)
+
+        log = BattleService.execute_action(player, 'ITEM', None, inventory_item_id=stack.id)
+
+        self.assertEqual(log['mp_restored'], 20)
+
+    def test_healing_over_time_uses_healing_modifiers(self):
+        combat = self.create_battle()
+        player = combat.combatants.get(is_player=True)
+        player.current_hp = 1
+        player.save(update_fields=['current_hp'])
+        self.put(player, self.effect('Regen', hp_change_per_turn=10))
+        self.put(player, self.effect('Blessed', health_received_modifier=0.5))
+
+        BattleService.process_active_effects(combat, players=True)
+
+        player.refresh_from_db()
+        self.assertEqual(player.current_hp, 16)
+
+    def test_cooldown_reduction_shortens_new_skill_cooldowns(self):
+        owned = self.owned_skill(name='Big Hit', target_type='ENEMY', effect_type='DAMAGE', cooldown=3)
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        self.put(player, self.effect('Haste', cooldown_reduction=2))
+
+        BattleService.execute_action(
+            player, 'SKILL', combat.combatants.get(is_player=False), character_skill_id=owned.id,
+        )
+
+        player.refresh_from_db()
+        self.assertEqual(player.skill_cooldowns[str(owned.skill_template_id)], 1)
+
+    def test_dispel_removes_dispellable_ally_debuffs_and_enemy_buffs(self):
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        enemy = combat.combatants.get(is_player=False)
+        poison = self.effect('Poison', effect_kind='DEBUFF')
+        curse = self.effect('Curse', effect_kind='DEBUFF', dispellable=False)
+        guard = self.effect('Guard', effect_kind='BUFF')
+        enrage = self.effect('Enrage', effect_kind='BUFF')
+        for target, effect in ((player, poison), (player, curse), (player, guard), (enemy, enrage)):
+            self.put(target, effect)
+        cleanse = self.effect('Cleanse', dispel_count=5, duration_turns=0)
+        purge = self.effect('Purge', dispel_count=1, duration_turns=0)
+
+        BattleService._apply_skill_effect(player, player, cleanse)
+        BattleService._apply_skill_effect(player, enemy, purge)
+
+        remaining = set(ActiveEffect.objects.values_list('effect_template__name', flat=True))
+        self.assertEqual(remaining, {'Curse', 'Guard'})

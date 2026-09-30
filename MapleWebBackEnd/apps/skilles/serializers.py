@@ -17,8 +17,11 @@ class EffectTemplateBriefSerializer(serializers.ModelSerializer):
             'hp_change_per_turn', 'mp_change_per_turn', 'damage_power_ratio_per_turn',
             'shields_points', 'final_damage_modifier',
             'damage_taken_modifier', 'damage_dealt_modifier',
+            'health_received_modifier', 'health_dealt_modifier',
+            'mana_received_modifier', 'mana_dealt_modifier',
+            'cooldown_reduction', 'special_effects',
             'exp_rate_change', 'drop_rate_change', 'lumis_rate_change',
-            'dispellable',
+            'effect_kind', 'dispellable', 'dispel_count',
         ]
 
 

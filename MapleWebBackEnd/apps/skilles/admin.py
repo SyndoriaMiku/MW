@@ -17,10 +17,10 @@ class EffectTemplateAdmin(admin.ModelAdmin):
     Bao gồm và cải tiến phần đăng ký đã có.
     """
     # Các trường hiển thị trên trang danh sách
-    list_display = ('name', 'duration_turns', 'stacking_rule', 'dispellable')
+    list_display = ('name', 'effect_kind', 'duration_turns', 'stacking_rule', 'dispellable', 'dispel_count')
 
     # Bộ lọc ở cạnh phải
-    list_filter = ('stacking_rule', 'dispellable')
+    list_filter = ('effect_kind', 'stacking_rule', 'dispellable')
 
     # Quan trọng: search_fields để autocomplete ở các app khác hoạt động
     search_fields = ('name', 'description')
@@ -31,7 +31,10 @@ class EffectTemplateAdmin(admin.ModelAdmin):
     # Nhóm các trường lại cho giao diện gọn gàng, khoa học
     fieldsets = (
         ('Core Information', {
-            'fields': ('name', 'description', ('duration_turns', 'stacking_rule', 'dispellable'), 'icon')
+            'fields': (
+                'name', 'description', ('effect_kind', 'duration_turns', 'stacking_rule'),
+                ('dispellable', 'dispel_count'), 'icon',
+            )
         }),
         ('Flat Stat Modifiers (Thay đổi dạng số)', {
             'classes': ('collapse',), # Thu gọn mặc định

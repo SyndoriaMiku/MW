@@ -84,50 +84,84 @@ class BattleService:
         return []
 
     @staticmethod
+    def _dispel(caster: Combatant, target: Combatant, count: int) -> list[str]:
+        """
+        Remove up to `count` dispellable effects, newest first: debuffs from
+        the caster's own side, buffs from the other side. Returns their names.
+        """
+        from apps.skilles.models import EffectTemplate
+
+        kind = (
+            EffectTemplate.Kind.DEBUFF if caster.is_player == target.is_player
+            else EffectTemplate.Kind.BUFF
+        )
+        removed = list(
+            target.active_effects.filter(
+                effect_template__dispellable=True, effect_template__effect_kind=kind,
+            ).select_related('effect_template').order_by('-created_at', '-id')[:count]
+        )
+        for effect in removed:
+            effect.delete()
+        if removed:
+            BattleService.clamp_to_max(target)
+        return [effect.effect_template.name for effect in removed]
+
+    @staticmethod
     def _apply_skill_effect(combatant: Combatant, target: Combatant, effect_tmpl) -> str:
         """Apply one effect template to one target and return a log suffix."""
+        messages = []
+        if effect_tmpl.dispel_count:
+            removed = BattleService._dispel(combatant, target, effect_tmpl.dispel_count)
+            messages.append(f"Dispelled {', '.join(removed)}." if removed else "Nothing to dispel.")
+        if effect_tmpl.duration_turns <= 0:
+            # Instant effect (e.g. a pure dispel): nothing stays on the target.
+            return ' '.join(messages) or f"Applied {effect_tmpl.name}."
+
+        combat = combatant.combat_instance
+        # Applied during the target side's own phase: that phase is not one of its turns.
+        skip_next_tick = target.is_player == (
+            combat.turn_phase == CombatInstance.TURN_PHASE.PLAYER_PHASE
+        )
         existing = ActiveEffect.objects.filter(
-            combat_instance=combatant.combat_instance,
+            combat_instance=combat,
             target=target,
             effect_template=effect_tmpl,
         ).first()
-
-        if not existing:
-            ActiveEffect.objects.create(
-                combat_instance=combatant.combat_instance,
-                target=target,
-                effect_template=effect_tmpl,
-                remaining_turns=effect_tmpl.duration_turns,
-                remaining_shield_points=effect_tmpl.shields_points,
-                caster=combatant,
-            )
-            return f"Applied {effect_tmpl.name}."
-
         stacking = effect_tmpl.stacking_rule
-        if stacking == 'REFRESH':
-            existing.remaining_turns = effect_tmpl.duration_turns
-            existing.remaining_shield_points = effect_tmpl.shields_points
-            existing.save(update_fields=['remaining_turns', 'remaining_shield_points'])
-            return f"Refreshed {effect_tmpl.name}."
-        if stacking == 'INDEPENDENT':
+
+        if not existing or stacking == 'INDEPENDENT':
             ActiveEffect.objects.create(
-                combat_instance=combatant.combat_instance,
+                combat_instance=combat,
                 target=target,
                 effect_template=effect_tmpl,
                 remaining_turns=effect_tmpl.duration_turns,
                 remaining_shield_points=effect_tmpl.shields_points,
                 caster=combatant,
+                skip_next_tick=skip_next_tick,
             )
-            return f"Applied additional stack of {effect_tmpl.name}."
-        if stacking == 'UPGRADE':
-            existing.current_stacks += 1
+            messages.append(
+                f"Applied additional stack of {effect_tmpl.name}." if existing
+                else f"Applied {effect_tmpl.name}."
+            )
+        elif stacking in ('REFRESH', 'UPGRADE'):
             existing.remaining_turns = effect_tmpl.duration_turns
             existing.remaining_shield_points = effect_tmpl.shields_points
+            existing.skip_next_tick = skip_next_tick
+            if stacking == 'UPGRADE':
+                existing.current_stacks += 1
             existing.save(update_fields=[
-                'current_stacks', 'remaining_turns', 'remaining_shield_points',
+                'current_stacks', 'remaining_turns', 'remaining_shield_points', 'skip_next_tick',
             ])
-            return f"Upgraded {effect_tmpl.name} to {existing.current_stacks} stacks."
-        return f"{effect_tmpl.name} is already active."
+            messages.append(
+                f"Upgraded {effect_tmpl.name} to {existing.current_stacks} stacks." if stacking == 'UPGRADE'
+                else f"Refreshed {effect_tmpl.name}."
+            )
+        else:
+            messages.append(f"{effect_tmpl.name} is already active.")
+
+        # A max HP/MP debuff can leave the target above its new maximum.
+        BattleService.clamp_to_max(target)
+        return ' '.join(messages)
 
     @staticmethod
     def _apply_skill_to_target(
@@ -173,11 +207,7 @@ class BattleService:
             heal *= 1 + attacker_mods['health_dealt_modifier']
             heal *= 1 + target_mods['health_received_modifier']
             hp_before = target.current_hp
-            max_hp = getattr(
-                target.entity,
-                'total_hp',
-                getattr(target.entity, 'base_hp', target.current_hp),
-            )
+            max_hp = BattleService.get_max_hp(target, target_mods)
             target.current_hp = min(max_hp, target.current_hp + max(0, int(heal)))
             target.save(update_fields=['current_hp'])
             target_result['heal'] = target.current_hp - hp_before
@@ -292,45 +322,33 @@ class BattleService:
 
         combat_instance.save()
 
+    # A stun lock could otherwise chain rounds forever inside one request.
+    MAX_STUN_SKIPS_PER_REQUEST = 30
+
     @staticmethod
     def end_turn(combat_instance: CombatInstance):
         """
-        Ends the current turn. 
-        If Player Phase: moves to next player or switches to Monster Phase.
-        If Monster Phase: switches to Player Phase (next round).
+        Ends the current turn.
+        If Player Phase: moves to the next player, or ends the phase and runs the Monster Phase.
+        If Monster Phase: ends it and starts the next round's Player Phase.
+        Effects tick at the end of their target side's phase.
         """
         events = []
         if combat_instance.turn_phase == CombatInstance.TURN_PHASE.PLAYER_PHASE:
-            # Find next player
-            next_player = combat_instance.combatants.filter(
-                is_player=True, 
-                position__gt=combat_instance.current_player_position,
-                current_hp__gt=0
-            ).order_by('position').first()
-
-            if next_player:
-                combat_instance.current_player_position = next_player.position
-                combat_instance.turn_started_at = timezone.now()
-                combat_instance.save()
-            else:
-                # No more players this round, switch to Monster Phase
-                combat_instance.turn_phase = CombatInstance.TURN_PHASE.MONSTER_PHASE
-                first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
-                if first_player:
-                    combat_instance.current_player_position = first_player.position
-                
-                # (M6 fix) Save before monster phase — monster phase will call end_turn again
-                # which handles its own save, avoiding double save
-                combat_instance.save()
-                
-                # Trigger Monster Actions (AI) — this calls end_turn internally
-                events.extend(BattleService.process_monster_phase(combat_instance))
+            events.extend(BattleService._advance_player_turn(
+                combat_instance, after_position=combat_instance.current_player_position,
+            ))
 
         elif combat_instance.turn_phase == CombatInstance.TURN_PHASE.MONSTER_PHASE:
+            # End of the monster phase: effects on monsters tick; a tick can end the battle.
+            events.extend(BattleService.process_active_effects(combat_instance, players=False))
+            if combat_instance.status != CombatInstance.CombatStatus.IN_PROGRESS:
+                return events
+
             # Switch back to Player Phase
             combat_instance.turn_phase = CombatInstance.TURN_PHASE.PLAYER_PHASE
             combat_instance.turn_count += 1
-            
+
             # Decrement player cooldowns at the start of a new round
             for p in combat_instance.combatants.filter(is_player=True):
                 cooldowns = p.skill_cooldowns
@@ -342,19 +360,49 @@ class BattleService:
                 if changed:
                     p.skill_cooldowns = cooldowns
                     p.save(update_fields=['skill_cooldowns'])
-            
-            # (H-1 fix) Process DOT/HOT effects BEFORE picking first_player.
-            # If DOT kills the first player, we then correctly skip them below.
-            events.extend(BattleService.process_active_effects(combat_instance))
-            
-            # (H-1 fix) Re-query alive players AFTER effects have been applied
-            first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
-            if first_player:
-                combat_instance.current_player_position = first_player.position
+
+            events.extend(BattleService._advance_player_turn(combat_instance))
+
+        return events
+
+    @staticmethod
+    def _advance_player_turn(combat_instance: CombatInstance, after_position=None):
+        """
+        Give the turn to the next living, non-stunned player after `after_position`
+        (from the first one when None). Stunned players lose their turn. With
+        nobody left, the player phase ends: effects on players tick, then the
+        monster phase runs.
+        """
+        events = []
+        players = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position')
+        if after_position is not None:
+            players = players.filter(position__gt=after_position)
+
+        for player in players:
+            skips = getattr(combat_instance, '_stun_skips', 0)
+            if skips < BattleService.MAX_STUN_SKIPS_PER_REQUEST and BattleService.is_stunned(player):
+                combat_instance._stun_skips = skips + 1
+                events.append(BattleService.stunned_turn_event(player))
+                continue
+            combat_instance.current_player_position = player.position
             combat_instance.turn_started_at = timezone.now()
-
             combat_instance.save()
+            return events
 
+        # End of the player phase: effects on players tick; a tick can end the battle.
+        events.extend(BattleService.process_active_effects(combat_instance, players=True))
+        if combat_instance.status != CombatInstance.CombatStatus.IN_PROGRESS:
+            return events
+
+        combat_instance.turn_phase = CombatInstance.TURN_PHASE.MONSTER_PHASE
+        first_player = combat_instance.combatants.filter(is_player=True, current_hp__gt=0).order_by('position').first()
+        if first_player:
+            combat_instance.current_player_position = first_player.position
+        # (M6 fix) Save before monster phase — monster phase will call end_turn again
+        combat_instance.save()
+
+        # Trigger Monster Actions (AI) — this calls end_turn internally
+        events.extend(BattleService.process_monster_phase(combat_instance))
         return events
 
 
@@ -391,10 +439,19 @@ class BattleService:
             for skill_id in list(cooldowns.keys()):
                 if cooldowns[skill_id] > 0:
                     cooldowns[skill_id] -= 1
-            
+
+            if BattleService.is_stunned(monster):
+                logs.append(BattleService.stunned_turn_event(monster))
+                monster.skill_cooldowns = cooldowns
+                monster.save(update_fields=['skill_cooldowns'])
+                continue
+
             enemy_template = monster.entity
+            monster_mods = BattleService.get_combat_modifiers(monster)
+            # Silenced monsters fall back to a basic attack.
+            enemy_skills = [] if BattleService.is_silenced(monster) else enemy_template.enemy_skills.all()
             available_skills = []
-            for es in enemy_template.enemy_skills.all():
+            for es in enemy_skills:
                 skill_id_str = str(es.skill_template.id)
                 current_cd = cooldowns.get(skill_id_str, 0)
                 if current_cd <= 0 and monster.current_mp >= es.skill_template.mp_cost:
@@ -434,7 +491,9 @@ class BattleService:
                     monster, 'SKILL', target, skill_template_id=chosen_skill.id
                 )
                 logs.append(log)
-                cooldowns[str(chosen_skill.id)] = chosen_skill.cooldown
+                cooldowns[str(chosen_skill.id)] = BattleService.skill_cooldown_after_use(
+                    chosen_skill, monster_mods
+                )
             else:
                 target = random.choice(alive_players)
                 log = BattleService.execute_action(monster, 'ATTACK', target)
@@ -477,16 +536,21 @@ class BattleService:
         return actual_hp_damage
 
     @staticmethod
-    def process_active_effects(combat_instance: CombatInstance):
+    def process_active_effects(combat_instance: CombatInstance, players=None):
         """
-        Process all active effects for the combat instance at the start of a new round.
+        Tick active effects at the end of a side's phase: effects on players
+        (players=True) or on monsters (players=False); None ticks both.
         Applies per-turn HP/MP changes (DOT/HOT), then decrements duration.
+        An effect applied during this same phase skips this one tick.
         Returns a list of effect logs.
         """
         effect_logs = []
-        effects = list(ActiveEffect.objects.filter(
+        effects = ActiveEffect.objects.filter(
             combat_instance=combat_instance
-        ).select_related('effect_template'))
+        ).select_related('effect_template')
+        if players is not None:
+            effects = effects.filter(target__is_player=players)
+        effects = list(effects)
 
         # One shared instance per combatant: effects stacked on the same target
         # must build on each other's HP/MP changes instead of each saving a
@@ -508,7 +572,12 @@ class BattleService:
             if target.current_hp <= 0:
                 effect.delete()
                 continue
-            
+
+            if effect.skip_next_tick:
+                effect.skip_next_tick = False
+                effect.save(update_fields=['skip_next_tick'])
+                continue
+
             log = {
                 "event_type": "effect_tick",
                 "effect_id": effect.id,
@@ -523,20 +592,27 @@ class BattleService:
                 "expired": False,
             }
             
+            target_mods = BattleService.get_combat_modifiers(target)
+            caster_mods = (
+                BattleService.get_combat_modifiers(effect.caster) if effect.caster else None
+            )
+
+            def restored(amount, kind):
+                # Healing/mana over time follows the same modifiers as direct restores.
+                if amount <= 0:
+                    return amount
+                amount *= 1 + target_mods[f'{kind}_received_modifier']
+                if caster_mods:
+                    amount *= 1 + caster_mods[f'{kind}_dealt_modifier']
+                return max(0, int(amount))
+
             # Apply per-turn HP change (negative = DOT, positive = HOT)
             if template.hp_change_per_turn != 0:
-                hp_change = template.hp_change_per_turn
-                target.current_hp += hp_change
-                
-                # Cap HP
-                max_hp = getattr(target.entity, 'total_hp', getattr(target.entity, 'base_hp', 9999))
-                if target.current_hp > max_hp:
-                    target.current_hp = max_hp
-                if target.current_hp < 0:
-                    target.current_hp = 0
-                
+                hp_before = target.current_hp
+                target.current_hp += restored(template.hp_change_per_turn, 'health')
+                target.current_hp = max(0, min(target.current_hp, BattleService.get_max_hp(target, target_mods)))
                 target.save(update_fields=['current_hp'])
-                log["hp_change"] = hp_change
+                log["hp_change"] = target.current_hp - hp_before
 
             # Percentage DOT scales from the caster's damage and uses the
             # normal shield/damage modifier pipeline.
@@ -545,10 +621,7 @@ class BattleService:
                 and effect.caster
                 and target.current_hp > 0
             ):
-                caster = effect.caster
-                caster_mods = BattleService.get_combat_modifiers(caster)
-                caster_damage = BattleService.get_attack_power(caster, caster_mods)
-                target_mods = BattleService.get_combat_modifiers(target)
+                caster_damage = BattleService.get_attack_power(effect.caster, caster_mods)
                 dot_damage = caster_damage * template.damage_power_ratio_per_turn
                 dot_damage *= 1 + caster_mods['final_damage_modifier']
                 dot_damage *= 1 + caster_mods['damage_dealt_modifier']
@@ -561,18 +634,12 @@ class BattleService:
             
             # Apply per-turn MP change
             if template.mp_change_per_turn != 0:
-                mp_change = template.mp_change_per_turn
-                target.current_mp += mp_change
-                
-                max_mp = getattr(target.entity, 'total_mp', getattr(target.entity, 'base_mp', 9999))
-                if target.current_mp > max_mp:
-                    target.current_mp = max_mp
-                if target.current_mp < 0:
-                    target.current_mp = 0
-                
+                mp_before = target.current_mp
+                target.current_mp += restored(template.mp_change_per_turn, 'mana')
+                target.current_mp = max(0, min(target.current_mp, BattleService.get_max_mp(target, target_mods)))
                 target.save(update_fields=['current_mp'])
-                log["mp_change"] = mp_change
-            
+                log["mp_change"] = target.current_mp - mp_before
+
             effect_logs.append(log)
 
             # Decrement remaining turns
@@ -580,6 +647,8 @@ class BattleService:
             if effect.remaining_turns <= 0:
                 effect.delete()
                 log["expired"] = True
+                # Losing a max HP/MP buff pulls current HP/MP back under the max.
+                BattleService.clamp_to_max(target)
             else:
                 effect.save(update_fields=['remaining_turns'])
 
@@ -603,6 +672,8 @@ class BattleService:
         Returns a dict of combined modifiers for use in damage/heal calculations.
         """
         mods = {
+            'flat_hp': 0, 'percent_hp': 0.0,
+            'flat_mp': 0, 'percent_mp': 0.0,
             'flat_att': 0, 'percent_att': 0.0,
             'flat_str': 0, 'percent_str': 0.0,
             'flat_agi': 0, 'percent_agi': 0.0,
@@ -612,12 +683,19 @@ class BattleService:
             'final_damage_modifier': 0.0,
             'health_received_modifier': 0.0,
             'health_dealt_modifier': 0.0,
+            'mana_received_modifier': 0.0,
+            'mana_dealt_modifier': 0.0,
+            'cooldown_reduction': 0,
         }
-        
+
         for effect in combatant.active_effects.select_related('effect_template').all():
             t = effect.effect_template
             stacks = effect.current_stacks
-            
+
+            mods['flat_hp'] += t.flat_hp_change * stacks
+            mods['percent_hp'] += t.percent_hp_change * stacks
+            mods['flat_mp'] += t.flat_mp_change * stacks
+            mods['percent_mp'] += t.percent_mp_change * stacks
             mods['flat_att'] += t.flat_att_change * stacks
             mods['percent_att'] += t.percent_att_change * stacks
             mods['flat_str'] += t.flat_str_change * stacks
@@ -631,8 +709,72 @@ class BattleService:
             mods['final_damage_modifier'] += t.final_damage_modifier * stacks
             mods['health_received_modifier'] += t.health_received_modifier * stacks
             mods['health_dealt_modifier'] += t.health_dealt_modifier * stacks
-        
+            mods['mana_received_modifier'] += t.mana_received_modifier * stacks
+            mods['mana_dealt_modifier'] += t.mana_dealt_modifier * stacks
+            mods['cooldown_reduction'] += t.cooldown_reduction * stacks
+
         return mods
+
+    @staticmethod
+    def _max_resource(combatant, resource, mods=None) -> int:
+        if mods is None:
+            mods = BattleService.get_combat_modifiers(combatant)
+        entity = combatant.entity
+        base = getattr(entity, f'total_{resource}', None) if combatant.is_player else None
+        if base is None:
+            base = getattr(entity, f'base_{resource}', 0)
+        return max(0, int((base + mods[f'flat_{resource}']) * (1 + mods[f'percent_{resource}'])))
+
+    @staticmethod
+    def get_max_hp(combatant, mods=None) -> int:
+        """Max HP with active max-HP effects applied (never below 1)."""
+        return max(1, BattleService._max_resource(combatant, 'hp', mods))
+
+    @staticmethod
+    def get_max_mp(combatant, mods=None) -> int:
+        """Max MP with active max-MP effects applied."""
+        return BattleService._max_resource(combatant, 'mp', mods)
+
+    @staticmethod
+    def clamp_to_max(combatant) -> None:
+        """Pull HP/MP back under the max after a max-raising effect ends or a lowering one lands."""
+        mods = BattleService.get_combat_modifiers(combatant)
+        max_hp = BattleService.get_max_hp(combatant, mods)
+        max_mp = BattleService.get_max_mp(combatant, mods)
+        if combatant.current_hp > max_hp or combatant.current_mp > max_mp:
+            combatant.current_hp = min(combatant.current_hp, max_hp)
+            combatant.current_mp = min(combatant.current_mp, max_mp)
+            combatant.save(update_fields=['current_hp', 'current_mp'])
+
+    @staticmethod
+    def has_special_effect(combatant, tag_id) -> bool:
+        return combatant.active_effects.filter(effect_template__special_effects__id=tag_id).exists()
+
+    @staticmethod
+    def is_stunned(combatant) -> bool:
+        from apps.skilles.models import SpecialEffectTag
+        return BattleService.has_special_effect(combatant, SpecialEffectTag.STUN)
+
+    @staticmethod
+    def is_silenced(combatant) -> bool:
+        from apps.skilles.models import SpecialEffectTag
+        return BattleService.has_special_effect(combatant, SpecialEffectTag.SILENCE)
+
+    @staticmethod
+    def skill_cooldown_after_use(template, mods) -> int:
+        return max(0, template.cooldown - mods['cooldown_reduction'])
+
+    @staticmethod
+    def stunned_turn_event(combatant) -> dict:
+        name = getattr(combatant.entity, 'name', str(combatant.entity))
+        return {
+            "event_type": "turn_skipped",
+            "actor_id": combatant.id,
+            "actor_type": "character" if combatant.is_player else "enemy",
+            "actor": name,
+            "reason": "stunned",
+            "message": f"{name} is stunned and loses the turn.",
+        }
 
     @staticmethod
     def item_cooldown_key(item_template_id) -> str:
@@ -685,12 +827,13 @@ class BattleService:
 
         entity = target.entity
         target_name = getattr(entity, 'name', str(entity))
-        max_hp = getattr(entity, 'total_hp', target.current_hp)
-        max_mp = getattr(entity, 'total_mp', target.current_mp)
         target_mods = BattleService.get_combat_modifiers(target)
+        max_hp = BattleService.get_max_hp(target, target_mods)
+        max_mp = BattleService.get_max_mp(target, target_mods)
         heal = rule.hp_restore + int(rule.hp_restore_percent * max_hp)
         heal = max(0, int(heal * (1 + target_mods['health_received_modifier'])))
         mana = rule.mp_restore + int(rule.mp_restore_percent * max_mp)
+        mana = max(0, int(mana * (1 + target_mods['mana_received_modifier'])))
         hp_before, mp_before = target.current_hp, target.current_mp
         target.current_hp = min(max_hp, target.current_hp + heal)
         target.current_mp = min(max_mp, target.current_mp + mana)
@@ -918,6 +1061,12 @@ class BattleService:
                 bonus_final_damage = 0.0
                 total_damage = BattleService.get_attack_power(combatant, attacker_mods)
 
+            # Silence blocks skills; basic attacks (also when routed through a skill) still work.
+            if not template.is_basic_attack and BattleService.is_silenced(combatant):
+                result_log["message"] = f"{result_log['actor']} is silenced and cannot use {template.name}."
+                result_log["success"] = False
+                return result_log
+
             if not BattleService._is_valid_skill_target(combatant, target, template.target_type):
                 result_log["message"] = f"{template.name} cannot target {result_log['target']}."
                 result_log["success"] = False
@@ -953,9 +1102,10 @@ class BattleService:
             combatant.current_mp -= template.mp_cost
             combatant.save(update_fields=['current_mp'])
             
-            if combatant.is_player and template.cooldown > 0:
+            cooldown = BattleService.skill_cooldown_after_use(template, attacker_mods)
+            if combatant.is_player and cooldown > 0:
                 cooldowns = combatant.skill_cooldowns
-                cooldowns[str(template.id)] = template.cooldown
+                cooldowns[str(template.id)] = cooldown
                 combatant.skill_cooldowns = cooldowns
                 combatant.save(update_fields=['skill_cooldowns'])
             
@@ -1065,6 +1215,7 @@ class BattleService:
             "actor_id": combatant.id,
             "actor_type": "character",
             "actor": name,
+            "reason": "idle",
             "message": f"{name}'s turn was skipped for inactivity.",
         }]
         events.extend(BattleService.end_turn(combat_instance))

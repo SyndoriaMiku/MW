@@ -6,8 +6,12 @@ from .validators import validate_material_requirements
 
 class SpecialEffectTag(models.Model):
     """
-    Tag for special effects that can be applied by skills
+    Tag for special effects that can be applied by skills. Combat knows these ids:
+    'stun' (the target loses its turns) and 'silence' (only basic attacks and items).
     """
+    STUN = 'stun'
+    SILENCE = 'silence'
+
     id = models.CharField(max_length=50, primary_key=True, help_text="Unique identifier for the special effect")
     name = models.CharField(max_length=100) #Name of the special effect
     description = models.TextField(blank=True) #Description of the special effect
@@ -19,9 +23,23 @@ class EffectTemplate(models.Model):
     """
     Additional effects for skills
     """
+    class Kind(models.TextChoices):
+        BUFF = 'BUFF', 'Buff'
+        DEBUFF = 'DEBUFF', 'Debuff'
+
     name = models.CharField(max_length=100) #Name of the effect
     description = models.TextField(blank=True) #Description of the effect
-    duration_turns = models.IntegerField(default=1) #Duration in turns
+    effect_kind = models.CharField(
+        max_length=10, choices=Kind.choices, default=Kind.BUFF,
+        help_text="Dispels remove debuffs from allies and buffs from enemies",
+    )
+    duration_turns = models.IntegerField(
+        default=1,
+        help_text=(
+            "Turns of the target it lasts: it ticks at the end of each of the target side's "
+            "phases, skipping the phase it was applied in. 0 = instant (e.g. a pure dispel)."
+        ),
+    )
     icon = models.ImageField(upload_to='images/icons/effects', null=True, blank=True) #Icon for the effect
     #Stacking
     class StackingRule(models.TextChoices):
@@ -31,10 +49,10 @@ class EffectTemplate(models.Model):
         NO_STACK = 'NO_STACK', 'No Stacking'
     stacking_rule = models.CharField(max_length=15, choices=StackingRule.choices, default=StackingRule.REFRESH)
     # Modifiers
-    flat_hp_change = models.IntegerField(default=0) #Flat HP change, positive for buff, negative for debuff
-    percent_hp_change = models.FloatField(default=0) #Percentage HP change, positive for buff, negative for debuff
-    flat_mp_change = models.IntegerField(default=0) #Flat MP change, positive for buff, negative for debuff
-    percent_mp_change = models.FloatField(default=0) #Percentage MP change, positive for buff, negative for debuff
+    flat_hp_change = models.IntegerField(default=0, help_text="Max HP change while active, positive for buff, negative for debuff")
+    percent_hp_change = models.FloatField(default=0, help_text="Max HP change as a fraction (0.2 = +20%) while active")
+    flat_mp_change = models.IntegerField(default=0, help_text="Max MP change while active, positive for buff, negative for debuff")
+    percent_mp_change = models.FloatField(default=0, help_text="Max MP change as a fraction (0.2 = +20%) while active")
     flat_att_change = models.IntegerField(default=0) #Attack change, positive for buff, negative for debuff
     percent_att_change = models.FloatField(default=0) #Percentage attack change, positive for buff, negative for debuff
     flat_str_change = models.IntegerField(default=0) #Strength change, positive for buff, negative for debuff
@@ -49,7 +67,7 @@ class EffectTemplate(models.Model):
     final_damage_modifier = models.FloatField(default=0, help_text="Final damage percent modifier, positive for buff, negative for debuff")
 
     shields_points = models.IntegerField(default=0, help_text="Amount of damage the shield can absorb") #Amount of damage the shield can absorb
-    cooldown_reduction = models.IntegerField(default=0, help_text="Reduction in skill cooldown in turns") #Reduction in skill cooldown in turns
+    cooldown_reduction = models.IntegerField(default=0, help_text="While active, skills the target uses go on cooldown this many turns shorter")
 
     # Per turn effects
     hp_change_per_turn = models.IntegerField(default=0) #Flat HP change per turn, positive for buff, negative for debuff
@@ -72,7 +90,11 @@ class EffectTemplate(models.Model):
     mana_dealt_modifier = models.FloatField(default=0, help_text="Modifier to mana dealt by caster, positive to increase mana dealt, negative to reduce mana dealt")
 
     special_effects = models.ManyToManyField(SpecialEffectTag, blank=True, related_name='effects')
-    dispellable = models.BooleanField(default=True) #If the effect can be dispelled
+    dispellable = models.BooleanField(default=True, help_text="Whether a dispel can remove this effect")
+    dispel_count = models.PositiveIntegerField(
+        default=0,
+        help_text="When applied, removes up to this many dispellable effects: debuffs from an ally, buffs from an enemy",
+    )
 
 
     def __str__(self):
