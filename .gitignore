@@ -164,3 +164,4 @@ cython_debug/
 
 # Local Codex notes and plans (not part of the repository)
 **/CODEX*.md
+/MapleWebBackEnd/docs
