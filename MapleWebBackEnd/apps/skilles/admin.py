@@ -85,7 +85,7 @@ class SkillLevelConfigInline(admin.TabularInline):
     """
     model = SkillLevelConfig
     extra = 1
-    fields = ('skill_level', 'required_char_level', 'damage_multiplier', 'required_materials')
+    fields = ('skill_level', 'required_char_level', 'damage_multiplier', 'final_damage_bonus', 'required_materials')
     ordering = ('skill_level',)
 
 
@@ -98,6 +98,7 @@ class SkillTemplateAdmin(admin.ModelAdmin):
     list_filter = ('availability', 'job', 'effect_type', 'target_type')
     search_fields = ('name', 'description')
     autocomplete_fields = ['job', 'applies_effect']
+    filter_horizontal = ('boosted_skills',)
     readonly_fields = ('id',)
     inlines = [SkillLevelConfigInline]
 
@@ -118,5 +119,11 @@ class SkillTemplateAdmin(admin.ModelAdmin):
                 ('base_power', 'power_ratio'),
                 'applies_effect'
             )
+        }),
+        ('Passive (effect type = Passive)', {
+            'description': "Passive luôn có tác dụng khi nhân vật sở hữu, không dùng trong trận. "
+                           "Mỗi cấp đặt 'final damage bonus' ở bảng cấp bên dưới (0.2 = +20%). "
+                           "Để trống danh sách = tăng mọi skill gây sát thương.",
+            'fields': ('boosted_skills',)
         }),
     )

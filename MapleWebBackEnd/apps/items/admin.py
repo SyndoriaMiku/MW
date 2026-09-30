@@ -223,7 +223,7 @@ class LumenModifierRuleAdmin(admin.ModelAdmin):
 
 @admin.register(TimedBuffRule)
 class TimedBuffRuleAdmin(admin.ModelAdmin):
-    list_display = ('item_template', 'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'duration_minutes', 'max_duration_minutes')
+    list_display = ('item_template', 'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'final_damage_bonus', 'duration_minutes', 'max_duration_minutes')
     search_fields = ('item_template__name',)
 
 @admin.register(AuroraLumisCostRule)

@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.db import transaction
 from django.db.models import Q
 
@@ -78,6 +80,40 @@ class SkillService:
                 changed_ids.append(owned.id)
 
         return changed_ids
+
+    @staticmethod
+    def passive_final_damage(character):
+        """
+        Final damage the character's passive skills give, as fractions:
+        {skill_template_id: bonus}, plus key None for passives that boost every
+        damage skill. Each passive gives its current level's final_damage_bonus;
+        several passives on one skill add up.
+        """
+        owned_passives = CharacterSkill.objects.filter(
+            character=character, skill_template__effect_type=SkillTemplate.EffectType.PASSIVE,
+        ).select_related('skill_template').prefetch_related(
+            'skill_template__level_configs', 'skill_template__boosted_skills',
+        )
+        bonuses = defaultdict(float)
+        for owned in owned_passives:
+            config = next(
+                (c for c in owned.skill_template.level_configs.all() if c.skill_level == owned.level), None,
+            )
+            if config is None or not config.final_damage_bonus:
+                continue
+            targets = [skill.id for skill in owned.skill_template.boosted_skills.all()] or [None]
+            for target in targets:
+                bonuses[target] += config.final_damage_bonus
+        return dict(bonuses)
+
+    @staticmethod
+    def skill_final_damage(character, skill_template, bonuses=None):
+        """Passive final damage on one skill (0 for skills that deal no damage)."""
+        if skill_template.effect_type != SkillTemplate.EffectType.DAMAGE:
+            return 0.0
+        if bonuses is None:
+            bonuses = SkillService.passive_final_damage(character)
+        return bonuses.get(None, 0.0) + bonuses.get(skill_template.id, 0.0)
 
     @staticmethod
     def manual_upgrade(character, char_skill_id):

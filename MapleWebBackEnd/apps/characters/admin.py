@@ -34,7 +34,7 @@ class CharacterBuffInline(admin.TabularInline):
     autocomplete_fields = ['source_template']
     fields = (
         'source_template', 'exp_rate_bonus', 'lumis_rate_bonus',
-        'drop_rate_bonus', 'epic_drop_rate_bonus', 'started_at', 'expires_at',
+        'drop_rate_bonus', 'epic_drop_rate_bonus', 'final_damage_bonus', 'started_at', 'expires_at',
     )
 
 

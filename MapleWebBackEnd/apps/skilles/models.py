@@ -118,6 +118,9 @@ class SkillTemplate(models.Model):
         DAMAGE = 'DAMAGE', 'Deal Damage'
         HEAL = 'HEAL', 'Healing'
         EFFECT = 'EFFECT', 'Apply Effect'
+        # Always on while owned; never used in battle. Raises the final damage
+        # of boosted_skills by its level config's final_damage_bonus.
+        PASSIVE = 'PASSIVE', 'Passive (always on)'
 
     class Availability(models.TextChoices):
         PLAYER = 'PLAYER', 'Player'
@@ -160,8 +163,17 @@ class SkillTemplate(models.Model):
     power_ratio = models.FloatField(default=0) #Power ratio based on character's damage
 
     applies_effect = models.ForeignKey(EffectTemplate, on_delete=models.SET_NULL, null=True, blank=True, help_text="Effect applied by the skill")
+    boosted_skills = models.ManyToManyField(
+        'self', symmetrical=False, blank=True, related_name='boosted_by',
+        help_text="Passive only: skills whose final damage it raises. Empty = every damage skill.",
+    )
+
     class Meta:
         ordering = ['name']
+
+    @property
+    def is_passive(self):
+        return self.effect_type == self.EffectType.PASSIVE
 
     @property
     def formatted_description(self):
@@ -185,6 +197,10 @@ class SkillTemplate(models.Model):
         super().clean()
         if self.availability == self.Availability.ENEMY and self.job_id:
             raise ValidationError({'job': 'Enemy-only skills cannot be assigned to a player job.'})
+        if self.is_passive and self.is_basic_attack:
+            raise ValidationError({'is_basic_attack': 'A passive skill cannot be the basic attack.'})
+        if self.is_passive and self.availability == self.Availability.ENEMY:
+            raise ValidationError({'effect_type': 'Passive skills are for players.'})
         if self.is_basic_attack:
             duplicate = SkillTemplate.objects.filter(
                 job=self.job,
@@ -224,6 +240,10 @@ class SkillLevelConfig(models.Model):
             "Damage multiplier at this skill level applied to the base skill damage formula. "
             "e.g. 1.0 = 100%, 1.5 = 150%, 1.75 = 175%."
         )
+    )
+    final_damage_bonus = models.FloatField(
+        default=0.0, validators=[MinValueValidator(0)],
+        help_text="Passive skills only: final damage added to the boosted skills at this level (0.2 = +20%).",
     )
     # Empty list → auto-upgrade when the character reaches required_char_level.
     # Non-empty  → the player upgrades via POST /api/characters/my/skills/{id}/upgrade/,

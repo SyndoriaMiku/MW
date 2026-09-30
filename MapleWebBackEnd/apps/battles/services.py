@@ -171,10 +171,15 @@ class BattleService:
         template,
         total_damage,
         attacker_mods,
-        bonus_final_damage,
+        total_final_damage,
+        skill_final_damage,
         level_damage_multiplier,
     ) -> dict:
-        """Apply one cast to one resolved target without charging cast resources."""
+        """
+        Apply one cast to one resolved target without charging cast resources.
+        Damage is multiplied by (1 + total_final_damage) and, separately, by
+        (1 + skill_final_damage) from passives; heals use neither.
+        """
         target_name = (
             str(target.entity.name)
             if hasattr(target.entity, 'name')
@@ -197,7 +202,8 @@ class BattleService:
             # total_damage already includes the attacker's stat/ATT effects.
             skill_damage = (total_damage * template.power_ratio) + template.base_power
             skill_damage *= level_damage_multiplier
-            skill_damage *= 1 + bonus_final_damage + attacker_mods['final_damage_modifier']
+            skill_damage *= 1 + total_final_damage
+            skill_damage *= 1 + skill_final_damage
             skill_damage *= 1 + attacker_mods['damage_dealt_modifier']
             skill_damage *= 1 + target_mods['damage_taken_modifier']
             raw_damage = max(0, int(skill_damage))
@@ -453,6 +459,8 @@ class BattleService:
             enemy_skills = [] if BattleService.is_silenced(monster) else enemy_template.enemy_skills.all()
             available_skills = []
             for es in enemy_skills:
+                if es.skill_template.is_passive:
+                    continue
                 skill_id_str = str(es.skill_template.id)
                 current_cd = cooldowns.get(skill_id_str, 0)
                 if current_cd <= 0 and monster.current_mp >= es.skill_template.mp_cost:
@@ -624,7 +632,7 @@ class BattleService:
             ):
                 caster_damage = BattleService.get_attack_power(effect.caster, caster_mods)
                 dot_damage = caster_damage * template.damage_power_ratio_per_turn
-                dot_damage *= 1 + caster_mods['final_damage_modifier']
+                dot_damage *= 1 + BattleService.get_total_final_damage(effect.caster, caster_mods)
                 dot_damage *= 1 + caster_mods['damage_dealt_modifier']
                 dot_damage *= 1 + target_mods['damage_taken_modifier']
                 raw_damage = max(0, int(dot_damage))
@@ -723,6 +731,18 @@ class BattleService:
             mods['drop_rate'] += t.drop_rate_change / 100.0 * stacks
 
         return mods
+
+    @staticmethod
+    def get_total_final_damage(combatant, mods=None) -> float:
+        """
+        Final damage as a fraction (0.2 = every hit deals 120%): a player's
+        timed buffs plus final damage effects active in this battle. It applies
+        to all damage dealt (attacks, skills, DOT), never to heals.
+        """
+        if mods is None:
+            mods = BattleService.get_combat_modifiers(combatant)
+        base = combatant.entity.total_final_damage if combatant.is_player else 0.0
+        return base + mods['final_damage_modifier']
 
     @staticmethod
     def _max_resource(combatant, resource, mods=None) -> int:
@@ -994,9 +1014,10 @@ class BattleService:
             damage = BattleService.get_attack_power(combatant, attacker_mods)
             skill_name = "Đánh thường"
 
-            # Apply active effect modifiers to basic attack
+            # Final damage and active effect modifiers apply to basic attacks too.
             target_mods = BattleService.get_combat_modifiers(target)
-            damage = int(damage * (1 + attacker_mods['damage_dealt_modifier'])
+            damage = int(damage * (1 + BattleService.get_total_final_damage(combatant, attacker_mods))
+                               * (1 + attacker_mods['damage_dealt_modifier'])
                                * (1 + target_mods['damage_taken_modifier']))
             if damage < 0:
                 damage = 0
@@ -1041,7 +1062,12 @@ class BattleService:
                     result_log["message"] = "This skill cannot be used by players."
                     result_log["success"] = False
                     return result_log
-                bonus_final_damage = char_skill.bonus_final_damage
+                if template.is_passive:
+                    result_log["message"] = f"{template.name} is a passive skill and is always active."
+                    result_log["success"] = False
+                    return result_log
+                from apps.characters.skill_service import SkillService
+                skill_final_damage = SkillService.skill_final_damage(attacker_entity, template)
                 total_damage = BattleService.get_attack_power(combatant, attacker_mods)
                 
                 # Check player cooldown
@@ -1063,11 +1089,11 @@ class BattleService:
                     result_log["message"] = "Skill not found."
                     result_log["success"] = False
                     return result_log
-                if template.availability not in ('ENEMY', 'BOTH'):
+                if template.availability not in ('ENEMY', 'BOTH') or template.is_passive:
                     result_log["message"] = "This skill cannot be used by enemies."
                     result_log["success"] = False
                     return result_log
-                bonus_final_damage = 0.0
+                skill_final_damage = 0.0
                 total_damage = BattleService.get_attack_power(combatant, attacker_mods)
 
             # Silence blocks skills; basic attacks (also when routed through a skill) still work.
@@ -1133,6 +1159,7 @@ class BattleService:
                 if level_config:
                     level_damage_multiplier = level_config.damage_multiplier
 
+            total_final_damage = BattleService.get_total_final_damage(combatant, attacker_mods)
             target_results = [
                 BattleService._apply_skill_to_target(
                     combatant=combatant,
@@ -1140,7 +1167,8 @@ class BattleService:
                     template=template,
                     total_damage=total_damage,
                     attacker_mods=attacker_mods,
-                    bonus_final_damage=bonus_final_damage,
+                    total_final_damage=total_final_damage,
+                    skill_final_damage=skill_final_damage,
                     level_damage_multiplier=level_damage_multiplier,
                 )
                 for resolved_target in resolved_targets

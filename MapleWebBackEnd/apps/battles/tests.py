@@ -1306,6 +1306,145 @@ class FallenPlayerRewardTests(BattleFixtureMixin, APITestCase):
         )
 
 
+class FinalDamageTests(BattleFixtureMixin, APITestCase):
+    """
+    Final damage = timed buffs + in-battle effects, on every hit but never on heals.
+    Passives add final damage to chosen skills, multiplied separately.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # STR 10 x ATT 100 / 100 = 10 damage before final damage.
+        warrior = CharacterClass.objects.create(name='Warrior', main_stat='str')
+        self.character.character_class = warrior
+        self.character.job = Job.objects.create(name='Fighter', character_class=warrior)
+        self.character.base_str = 10
+        self.character.base_att = 100
+        self.character.save()
+        self.combat = self.create_battle(enemy_hp=5000, enemy_attack=10)
+        self.player = self.combat.combatants.get(is_player=True)
+        self.enemy = self.combat.combatants.get(is_player=False)
+
+    def effect_on(self, combatant, **fields):
+        effect = EffectTemplate.objects.create(name='Final', duration_turns=3, **fields)
+        ActiveEffect.objects.create(
+            combat_instance=self.combat, target=combatant, effect_template=effect, remaining_turns=3,
+        )
+
+    def timed_buff(self, final_damage_bonus):
+        now = timezone.now()
+        CharacterBuff.objects.create(
+            character=self.character, final_damage_bonus=final_damage_bonus,
+            source_template=ItemTemplate.objects.create(name='Might Charm', item_type='use'),
+            started_at=now, expires_at=now + timedelta(minutes=30),
+        )
+
+    def owned(self, name, **fields):
+        fields.setdefault('target_type', 'ENEMY')
+        skill = SkillTemplate.objects.create(name=name, **fields)
+        return CharacterSkill.objects.create(character=self.character, skill_template=skill)
+
+    def passive(self, name, bonuses, *, level=1, boosts=()):
+        skill = SkillTemplate.objects.create(name=name, effect_type='PASSIVE', target_type='SELF')
+        for skill_level, bonus in enumerate(bonuses, start=1):
+            SkillLevelConfig.objects.create(
+                skill=skill, skill_level=skill_level, required_char_level=1, final_damage_bonus=bonus,
+            )
+        skill.boosted_skills.set([owned.skill_template for owned in boosts])
+        return CharacterSkill.objects.create(character=self.character, skill_template=skill, level=level)
+
+    def attack(self):
+        return BattleService.execute_action(self.player, 'ATTACK', self.enemy)['damage']
+
+    def cast(self, owned):
+        return BattleService.execute_action(self.player, 'SKILL', self.enemy, character_skill_id=owned.id)
+
+    def test_in_battle_final_damage_raises_basic_attacks(self):
+        self.effect_on(self.player, final_damage_modifier=0.2)
+
+        self.assertEqual(self.attack(), 12)
+
+    def test_timed_buff_final_damage_raises_hits_but_not_the_damage_stat(self):
+        self.timed_buff(20)
+        character = Character.objects.get(pk=self.character.pk)
+
+        self.assertAlmostEqual(character.total_final_damage, 0.2)
+        self.assertEqual(character.total_damage, 10)
+        self.assertEqual(self.attack(), 12)
+
+    def test_buff_and_effect_final_damage_add_up(self):
+        self.timed_buff(20)
+        self.effect_on(self.player, final_damage_modifier=0.3)
+
+        self.assertEqual(self.attack(), 15)
+
+    def test_monsters_final_damage_raises_their_attacks(self):
+        self.effect_on(self.enemy, final_damage_modifier=0.5)
+
+        log = BattleService.execute_action(self.enemy, 'ATTACK', self.player)
+
+        self.assertEqual(log['damage'], 15)
+
+    def test_passive_multiplies_separately_from_total_final_damage(self):
+        strike = self.owned('Strike', power_ratio=10)  # 100 damage
+        self.passive('Strike Mastery', [0.5], boosts=[strike])
+        self.effect_on(self.player, final_damage_modifier=0.2)
+
+        self.assertEqual(self.cast(strike)['damage'], 180)  # 100 x 1.2 x 1.5
+
+    def test_passives_add_up_and_an_empty_list_boosts_every_damage_skill(self):
+        strike = self.owned('Strike', power_ratio=10)
+        self.passive('Warrior Spirit', [0.2])
+        self.passive('Strike Mastery', [0.3], boosts=[strike])
+
+        self.assertEqual(self.cast(strike)['damage'], 150)
+
+    def test_passive_only_boosts_its_listed_skills(self):
+        strike = self.owned('Strike', power_ratio=10)
+        other = self.owned('Bash', power_ratio=10)
+        self.passive('Strike Mastery', [0.5], boosts=[strike])
+
+        self.assertEqual(self.cast(other)['damage'], 100)
+
+    def test_passive_bonus_follows_its_level(self):
+        strike = self.owned('Strike', power_ratio=10)
+        self.passive('Strike Mastery', [0.1, 0.4], level=2, boosts=[strike])
+
+        self.assertEqual(self.cast(strike)['damage'], 140)
+
+    def test_final_damage_never_amplifies_heals(self):
+        self.timed_buff(50)
+        self.effect_on(self.player, final_damage_modifier=0.5)
+        heal = self.owned('First Aid', effect_type='HEAL', target_type='SELF', power_ratio=1)
+        self.passive('Healer', [0.5])
+        self.player.current_hp = 1
+        self.player.save(update_fields=['current_hp'])
+
+        log = BattleService.execute_action(self.player, 'SKILL', None, character_skill_id=heal.id)
+
+        self.assertEqual(log['heal'], 10)
+
+    def test_passive_cannot_be_used_in_battle(self):
+        mastery = self.passive('Strike Mastery', [0.5])
+
+        self.assertFalse(self.cast(mastery)['success'])
+        snapshot = self.client.get(reverse('battles:battle-state', args=[self.combat.id])).data
+        me = next(c for c in snapshot['combatants'] if c['id'] == self.player.id)
+        entry = next(s for s in me['skills'] if s['character_skill_id'] == mastery.id)
+        self.assertTrue(entry['is_passive'])
+        self.assertFalse(entry['can_use'])
+
+    def test_skill_api_shows_the_passive_final_damage(self):
+        from apps.characters.serializers import CharacterSkillSerializer
+
+        strike = self.owned('Strike', power_ratio=10)
+        self.passive('Strike Mastery', [0.3], boosts=[strike])
+
+        data = CharacterSkillSerializer(strike).data
+
+        self.assertAlmostEqual(data['bonus_final_damage'], 0.3)
+
+
 class CombatEffectMechanicsTests(BattleFixtureMixin, APITestCase):
     """Effect durations, stun/silence, max HP/MP, restore modifiers, cooldown reduction and dispels."""
 

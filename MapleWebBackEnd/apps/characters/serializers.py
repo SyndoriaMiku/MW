@@ -14,7 +14,7 @@ class CharacterBuffSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item_template_id', 'name', 'icon_key',
             'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus',
-            'started_at', 'expires_at',
+            'final_damage_bonus', 'started_at', 'expires_at',
         ]
 
 
@@ -45,6 +45,9 @@ class CharacterSkillSerializer(serializers.ModelSerializer):
     icon_key = serializers.CharField(source='skill_template.icon_key', read_only=True)
     visual_key = serializers.CharField(source='skill_template.visual_key', read_only=True)
     damage_multiplier = serializers.SerializerMethodField()
+    # Final damage this skill gets from the character's passives (0.2 = +20%).
+    bonus_final_damage = serializers.SerializerMethodField()
+    is_passive = serializers.BooleanField(source='skill_template.is_passive', read_only=True)
     next_upgrade = serializers.SerializerMethodField()
 
     class Meta:
@@ -52,7 +55,7 @@ class CharacterSkillSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'character_skill_id', 'skill_template_id', 'skill_id',
             'skill_name', 'description',
-            'level', 'damage_multiplier', 'bonus_final_damage',
+            'level', 'damage_multiplier', 'bonus_final_damage', 'is_passive',
             'mp_cost', 'cooldown', 'target_type', 'effect_type', 'is_basic_attack',
             'icon_key', 'visual_key',
             'next_upgrade',
@@ -68,6 +71,15 @@ class CharacterSkillSerializer(serializers.ModelSerializer):
             None,
         )
         return config.damage_multiplier if config else 1.0
+
+    def get_bonus_final_damage(self, obj):
+        from .skill_service import SkillService
+
+        # Work out the character's passives once per response, not per skill.
+        cache = self.context.setdefault('_passive_final_damage', {})
+        if obj.character_id not in cache:
+            cache[obj.character_id] = SkillService.passive_final_damage(obj.character)
+        return SkillService.skill_final_damage(obj.character, obj.skill_template, cache[obj.character_id])
 
     def get_next_upgrade(self, obj):
         """Return info about the next upgrade, or None if already maxed."""

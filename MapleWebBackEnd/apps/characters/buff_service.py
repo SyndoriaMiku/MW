@@ -6,6 +6,8 @@ from django.utils import timezone
 from apps.inventory.reservations import mutation_block_reason
 
 RATE_KEYS = ('exp_rate', 'lumis_rate', 'drop_rate', 'epic_drop_rate')
+# Timed buffs also carry final damage; rate events do not.
+BUFF_KEYS = RATE_KEYS + ('final_damage',)
 
 
 class BuffError(Exception):
@@ -14,16 +16,16 @@ class BuffError(Exception):
 
 def rate_bonuses(character, now=None):
     """
-    Fractions (1.0 = +100%) added to each gain rate. Buffs from different
-    items do not stack: each rate takes the best running buff. Every running
-    RateEvent adds on top of that.
+    Fractions (1.0 = +100%) added to each gain rate, plus 'final_damage'.
+    Buffs from different items do not stack: each rate takes the best running
+    buff. Every running RateEvent adds on top of that.
     """
     from .models import CharacterBuff, RateEvent
 
     now = now or timezone.now()
-    bonuses = dict.fromkeys(RATE_KEYS, 0.0)
+    bonuses = dict.fromkeys(BUFF_KEYS, 0.0)
     for buff in CharacterBuff.objects.filter(character_id=character.pk, expires_at__gt=now):
-        for key in RATE_KEYS:
+        for key in BUFF_KEYS:
             bonuses[key] = max(bonuses[key], getattr(buff, f'{key}_bonus') / 100.0)
     for event in RateEvent.objects.running(now):
         for key in RATE_KEYS:

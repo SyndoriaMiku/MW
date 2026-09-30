@@ -33,7 +33,7 @@ class SkillLevelConfigSerializer(serializers.ModelSerializer):
         model = SkillLevelConfig
         fields = [
             'skill_level', 'required_char_level',
-            'damage_multiplier', 'required_materials', 'requires_materials',
+            'damage_multiplier', 'final_damage_bonus', 'required_materials', 'requires_materials',
         ]
 
 
@@ -53,7 +53,7 @@ class SkillTemplateSerializer(serializers.ModelSerializer):
             'mp_cost', 'cooldown',
             'target_type', 'effect_type', 'is_basic_attack',
             'base_power', 'power_ratio',
-            'applies_effect', 'level_configs',
+            'applies_effect', 'boosted_skills', 'level_configs',
         ]
 
     def get_job_name(self, obj):

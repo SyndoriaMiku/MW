@@ -500,10 +500,13 @@ class TimedBuffRule(models.Model):
     lumis_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Lumis gain bonus in % (100 = x2)")
     drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Common drop rate bonus in % (100 = x2)")
     epic_drop_rate_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Epic drop rate bonus in % (100 = x2). Legendary drops are never boosted")
+    final_damage_bonus = models.FloatField(default=0, validators=[MinValueValidator(0.0)], help_text="Final damage bonus in % (20 = all damage dealt x1.2); heals are not affected")
     duration_minutes = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Buff time added by one use")
     max_duration_minutes = models.PositiveIntegerField(null=True, blank=True, help_text="Most time the buff may have left after a use; empty means no limit")
 
-    BONUS_FIELDS = ('exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus')
+    BONUS_FIELDS = (
+        'exp_rate_bonus', 'lumis_rate_bonus', 'drop_rate_bonus', 'epic_drop_rate_bonus', 'final_damage_bonus',
+    )
 
     class Meta:
         verbose_name = "Timed Buff Rule"

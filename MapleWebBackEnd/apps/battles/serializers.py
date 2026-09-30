@@ -167,8 +167,10 @@ class CombatantSerializer(serializers.ModelSerializer):
                 'cooldown': template.cooldown,
                 'cooldown_remaining': cooldown_remaining,
                 'damage_multiplier': level_config.damage_multiplier if level_config else 1.0,
+                'is_passive': template.is_passive,
                 'can_use': (
                     is_current_actor
+                    and not template.is_passive
                     and obj.current_mp >= template.mp_cost
                     and cooldown_remaining <= 0
                     and (template.is_basic_attack or not silenced)
