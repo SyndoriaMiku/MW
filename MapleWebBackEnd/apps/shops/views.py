@@ -9,7 +9,7 @@ from django.db.models import Prefetch
 
 from .models import (
     ShopCategory, ShopItem, SpecialShopItem, SpecialShopItemRecipe, UserShopPurchase,
-    open_special_shops,
+    UserSpecialShopExchange, open_special_shops,
 )
 from .serializers import (
     ShopCategorySerializer,
@@ -160,7 +160,7 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
             'item__lumen_tier', 'item__aurora_tier'
         ).prefetch_related('item__item_sets__effects', 'item__item_sets__items')
         shops = open_special_shops().prefetch_related(Prefetch('items', queryset=items))
-        return Response(SpecialShopSerializer(shops, many=True).data)
+        return Response(SpecialShopSerializer(shops, many=True, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=['post'])
     def exchange(self, request, pk=None):
@@ -202,10 +202,27 @@ class SpecialShopViewSet(viewsets.ReadOnlyModelViewSet):
 
         try:
             with transaction.atomic():
+                if special_item.exchange_limit:
+                    # Lock the account's counter so concurrent exchanges queue up.
+                    record, _ = UserSpecialShopExchange.objects.select_for_update().get_or_create(
+                        user=request.user, special_item=special_item,
+                    )
+                    exchanged = special_item.exchanged_by(request.user, record=record)
+                    if exchanged + quantity > special_item.exchange_limit:
+                        left = special_item.exchange_limit - exchanged
+                        return Response(
+                            {"detail": f"Exchange limit reached. You can exchange {left} more."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                 consume_materials(character, requirements)
 
                 # Give the target item only after every material is secured.
                 grant_item(character, special_item.item, quantity)
+
+                if special_item.exchange_limit:
+                    record.quantity_exchanged = exchanged + quantity
+                    record.save()
         except MaterialConsumptionError as exc:
             return Response(
                 {"detail": exc.message, "code": exc.code},

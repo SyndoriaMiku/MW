@@ -39,10 +39,18 @@ class SpecialShopItemRecipeSerializer(serializers.ModelSerializer):
 class SpecialShopItemSerializer(serializers.ModelSerializer):
     item = ItemTemplateSerializer(read_only=True)
     recipes = serializers.SerializerMethodField()
+    # How many the caller exchanged in the current period (0 when unlimited).
+    exchanged = serializers.SerializerMethodField()
 
     class Meta:
         model = SpecialShopItem
-        fields = ['id', 'shop', 'item', 'is_active', 'recipes']
+        fields = ['id', 'shop', 'item', 'is_active', 'recipes', 'exchange_limit', 'reset_cycle', 'exchanged']
+
+    def get_exchanged(self, obj):
+        request = self.context.get('request')
+        if not obj.exchange_limit or request is None or not request.user.is_authenticated:
+            return 0
+        return obj.exchanged_by(request.user)
 
     def get_recipes(self, obj):
         qs = SpecialShopItemRecipe.objects.filter(recipe=obj)

@@ -146,6 +146,11 @@ class SpecialShopItem(models.Model):
     """
     id = models.AutoField(primary_key=True)
     shop = models.ForeignKey('shops.SpecialShop', on_delete=models.CASCADE, related_name='items')
+    exchange_limit = models.PositiveIntegerField(default=0, help_text="Exchanges per account per period; 0 = unlimited")
+    reset_cycle = models.CharField(
+        max_length=10, choices=ShopItem.ResetCycle.choices, default=ShopItem.ResetCycle.NONE,
+        help_text="When the count resets. For an event shop it also resets when a new run starts.",
+    )
 
     item = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE, related_name='special_shop_items', help_text="Item endgame")
     exchange = models.ManyToManyField('items.ItemTemplate', through='shops.SpecialShopItemRecipe', related_name='+' )
@@ -156,8 +161,49 @@ class SpecialShopItem(models.Model):
         verbose_name = "Special Shop Item"
         verbose_name_plural = "Special Shop Items"
         ordering = ['shop', 'id']
+    def period_start(self, now=None):
+        """
+        Start of the period the exchange limit counts in, or None for "ever":
+        the later of the reset cycle's start and the event run's start_time.
+        """
+        from apps.reset_cycles import period_start
+
+        starts = []
+        if self.reset_cycle != ShopItem.ResetCycle.NONE:
+            starts.append(period_start(self.reset_cycle, now))
+        if self.shop.start_time:
+            starts.append(self.shop.start_time)
+        return max(starts) if starts else None
+
+    def exchanged_by(self, user, now=None, record=None):
+        """How many of this item `user` exchanged in the current period."""
+        if record is None:
+            record = UserSpecialShopExchange.objects.filter(user=user, special_item=self).first()
+        if record is None:
+            return 0
+        start = self.period_start(now)
+        if start is not None and record.last_exchanged_at < start:
+            return 0
+        return record.quantity_exchanged
+
     def __str__(self):
         return f"Special Item: {self.item.name}"
+
+
+class UserSpecialShopExchange(models.Model):
+    """How many of a special shop item an account exchanged in its current period."""
+    user = models.ForeignKey('users.GameUser', on_delete=models.CASCADE, related_name='special_shop_exchanges')
+    special_item = models.ForeignKey('shops.SpecialShopItem', on_delete=models.CASCADE, related_name='exchanges')
+    quantity_exchanged = models.PositiveIntegerField(default=0)
+    last_exchanged_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Special Shop Exchange"
+        verbose_name_plural = "User Special Shop Exchanges"
+        unique_together = ('user', 'special_item')
+
+    def __str__(self):
+        return f"{self.user.username} exchanged {self.quantity_exchanged} of {self.special_item}"
 
 class SpecialShopItemRecipe(models.Model):
     """

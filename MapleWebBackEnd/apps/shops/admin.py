@@ -66,7 +66,7 @@ class SpecialShopItemInline(admin.TabularInline):
     model = SpecialShopItem
     extra = 1
     autocomplete_fields = ['item']
-    fields = ('item', 'is_active')
+    fields = ('item', 'is_active', 'exchange_limit', 'reset_cycle')
     show_change_link = True
 
 
@@ -91,7 +91,7 @@ class SpecialShopItemAdmin(admin.ModelAdmin):
     """
     Giao diện quản lý các vật phẩm đặc biệt có thể đổi/chế tạo.
     """
-    list_display = ('item', 'shop', 'get_recipe_summary', 'is_active')
+    list_display = ('item', 'shop', 'get_recipe_summary', 'exchange_limit', 'reset_cycle', 'is_active')
     list_filter = ('shop', 'is_active')
     search_fields = ('item__name', 'shop__name')
     autocomplete_fields = ['item']

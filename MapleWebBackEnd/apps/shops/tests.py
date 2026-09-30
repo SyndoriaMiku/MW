@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from unittest import mock
 
 from django.test import override_settings
 from django.urls import reverse
@@ -141,6 +142,74 @@ class SpecialShopAvailabilityTests(SpecialShopFixture, APITestCase):
         shop = SpecialShop(name='Broken', start_time=self.now, end_time=self.now - timedelta(hours=1))
         with self.assertRaises(ValidationError):
             shop.full_clean()
+
+
+class SpecialShopExchangeLimitTests(SpecialShopFixture, APITestCase):
+    """Per-account exchange limits per item, reset by cycle and by a new event run."""
+
+    def setUp(self):
+        super().setUp()
+        InventoryItem.objects.create(owner=self.character, template=self.material_a, quantity=300)
+        InventoryItem.objects.create(owner=self.character, template=self.material_b, quantity=200)
+        SpecialShopItem.objects.filter(pk=self.special_item.pk).update(exchange_limit=3)
+
+    def exchange(self, quantity=1):
+        return self.client.post(self.url, {'quantity': quantity}, format='json')
+
+    def at(self, moment):
+        return mock.patch('django.utils.timezone.now', return_value=moment)
+
+    def test_limit_counts_every_exchange_of_the_item(self):
+        self.assertEqual(self.exchange(2).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.exchange(2).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.exchange(1).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.exchange(1).status_code, status.HTTP_400_BAD_REQUEST)
+
+        reward = InventoryItem.objects.get(owner=self.character, template=self.reward)
+        self.assertEqual(reward.quantity, 3)
+
+    def test_zero_means_unlimited(self):
+        SpecialShopItem.objects.filter(pk=self.special_item.pk).update(exchange_limit=0)
+
+        self.assertEqual(self.exchange(10).status_code, status.HTTP_200_OK)
+
+    @override_settings(TIME_ZONE='UTC')
+    def test_daily_limit_resets_the_next_day(self):
+        SpecialShopItem.objects.filter(pk=self.special_item.pk).update(reset_cycle='daily')
+        monday = datetime(2026, 3, 2, 10, tzinfo=dt_timezone.utc)
+
+        with self.at(monday):
+            self.exchange(3)
+            self.assertEqual(self.exchange(1).status_code, status.HTTP_400_BAD_REQUEST)
+        with self.at(monday + timedelta(days=1)):
+            self.assertEqual(self.exchange(1).status_code, status.HTTP_200_OK)
+
+    def test_a_new_run_of_an_event_shop_resets_the_count(self):
+        first_run = datetime(2026, 3, 1, tzinfo=dt_timezone.utc)
+        SpecialShop.objects.filter(pk=self.shop.pk).update(
+            start_time=first_run, end_time=first_run + timedelta(days=7),
+        )
+        with self.at(first_run + timedelta(days=1)):
+            self.exchange(3)
+            self.assertEqual(self.exchange(1).status_code, status.HTTP_400_BAD_REQUEST)
+
+        second_run = datetime(2026, 6, 1, tzinfo=dt_timezone.utc)
+        SpecialShop.objects.filter(pk=self.shop.pk).update(
+            start_time=second_run, end_time=second_run + timedelta(days=7),
+        )
+        with self.at(second_run + timedelta(days=1)):
+            self.assertEqual(self.exchange(3).status_code, status.HTTP_200_OK)
+
+    def test_items_show_the_limit_and_what_was_exchanged(self):
+        self.exchange(2)
+
+        item = self.client.get(reverse('special-shop-list')).data['results'][0]
+        shop_item = self.client.get(reverse('special-shop-list-shops')).data[0]['items'][0]
+
+        for data in (item, shop_item):
+            self.assertEqual(
+                (data['exchange_limit'], data['reset_cycle'], data['exchanged']), (3, 'none', 2),
+            )
 
 
 class ShopPurchaseStackTests(APITestCase):
