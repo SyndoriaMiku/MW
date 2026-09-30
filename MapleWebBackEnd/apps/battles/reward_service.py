@@ -119,10 +119,8 @@ class RewardService:
                             qty = random.randint(loot.min_quantity, loot.max_quantity)
                             if qty > 0:
                                 grant_item(player, loot.item_template, qty)
+                            # COLLECT_ITEM quests read the inventory, so no progress update here.
 
-                            # Trigger Quest Progress for item collection
-                            QuestService.update_progress(player, 'COLLECT_ITEM', item_id=loot.item_template.id, count=qty)
-                            
                             logs[player.name]["items_dropped"].append({"name": loot.item_template.name, "qty": qty})
 
         # Add Dungeon specific rewards and logs

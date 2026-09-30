@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 class QuestTemplate(models.Model):
@@ -44,6 +45,38 @@ class QuestObjective(models.Model):
 
     boss_dungeon_to_clear = models.ForeignKey('world.BossDungeonTemplate', null=True, blank=True, on_delete=models.CASCADE)
     boss_clear_count = models.IntegerField(default=0)
+
+    # (objective type, count field, target field). An empty target means "any",
+    # except for collecting, which needs an item.
+    KINDS = (
+        ('DEFEAT_ENEMY', 'defeat_count', 'enemy_to_defeat'),
+        ('COLLECT_ITEM', 'collect_count', 'item_to_collect'),
+        ('CLEAR_NORMAL_DUNGEON', 'clear_count', 'dungeon_to_clear'),
+        ('CLEAR_BOSS_DUNGEON', 'boss_clear_count', 'boss_dungeon_to_clear'),
+    )
+
+    @property
+    def objective_type(self):
+        for kind, count_field, _ in self.KINDS:
+            if getattr(self, count_field) > 0:
+                return kind
+        return None
+
+    def clean(self):
+        used = [
+            (kind, count_field, target_field) for kind, count_field, target_field in self.KINDS
+            if getattr(self, count_field) or getattr(self, f'{target_field}_id')
+        ]
+        if len(used) != 1:
+            raise ValidationError(
+                'An objective needs exactly one type: defeat enemies, collect an item, '
+                'clear a dungeon or clear a boss dungeon. Use separate objectives for more.'
+            )
+        kind, count_field, target_field = used[0]
+        if getattr(self, count_field) <= 0:
+            raise ValidationError({count_field: 'Must be at least 1.'})
+        if kind == 'COLLECT_ITEM' and not self.item_to_collect_id:
+            raise ValidationError({target_field: 'Choose the item to collect.'})
 
     def __str__(self):
         return f"Objective for {self.quest.name}"

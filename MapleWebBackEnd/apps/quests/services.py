@@ -1,6 +1,8 @@
+from collections import defaultdict
+
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Sum
 from apps.reset_cycles import is_current_period
 
 from .models import QuestTemplate, QuestReward, CharacterQuest, CharacterQuestObjective
@@ -53,8 +55,8 @@ class QuestService:
 
             objectives = template.objectives.all()
             if objectives:
-                # Ensure objectives exist
-                if not cq.objective_progress.exists():
+                # Ensure every objective has a progress row, including ones added later.
+                if cq.objective_progress.count() < len(objectives):
                     QuestService.initialize_objectives(cq)
             elif cq.status == CharacterQuest.Status.IN_PROGRESS:
                 # Nothing to do (e.g. a story hand-off): ready to claim.
@@ -62,7 +64,58 @@ class QuestService:
                 cq.completed_at = now
                 cq.save(update_fields=['status', 'completed_at'])
 
+        QuestService.refresh_collect_progress(character)
         return CharacterQuest.objects.filter(character=character).order_by('-started_at')
+
+    @staticmethod
+    def held_quantities(character, template_ids):
+        """How many of each item the character could hand in: free, whole, unexpired stacks."""
+        from apps.inventory.models import InventoryItem
+        from apps.inventory.reservations import exclude_reserved
+
+        rows = exclude_reserved(
+            InventoryItem.objects.filter(owner=character, template_id__in=template_ids, is_destroyed=False)
+        ).exclude(expired_at__lte=timezone.now()).values('template_id').annotate(total=Sum('quantity'))
+        return {row['template_id']: row['total'] for row in rows}
+
+    @staticmethod
+    def refresh_collect_progress(character, character_quests=None):
+        """
+        COLLECT_ITEM progress is what the character holds right now, whatever
+        the source, so it can also go down. Re-reads it for open quests and
+        moves each between IN_PROGRESS and COMPLETED to match.
+        """
+        progresses = CharacterQuestObjective.objects.filter(
+            character_quest__character=character,
+            character_quest__status__in=[CharacterQuest.Status.IN_PROGRESS, CharacterQuest.Status.COMPLETED],
+            objective__collect_count__gt=0,
+            objective__item_to_collect__isnull=False,
+        ).select_related('objective', 'character_quest')
+        if character_quests is not None:
+            progresses = progresses.filter(character_quest__in=character_quests)
+        progresses = list(progresses)
+        if not progresses:
+            return
+
+        held = QuestService.held_quantities(
+            character, {p.objective.item_to_collect_id for p in progresses}
+        )
+        changed_quests = {}
+        for progress in progresses:
+            target = progress.objective.collect_count
+            count = min(held.get(progress.objective.item_to_collect_id, 0), target)
+            if (progress.current_count, progress.is_completed) != (count, count >= target):
+                progress.current_count = count
+                progress.is_completed = count >= target
+                progress.save(update_fields=['current_count', 'is_completed'])
+                changed_quests[progress.character_quest_id] = progress.character_quest
+
+        for cq in changed_quests.values():
+            if not QuestService.check_quest_completion(cq) and cq.status == CharacterQuest.Status.COMPLETED:
+                if cq.objective_progress.filter(is_completed=False).exists():
+                    cq.status = CharacterQuest.Status.IN_PROGRESS
+                    cq.completed_at = None
+                    cq.save(update_fields=['status', 'completed_at'])
 
     @staticmethod
     def initialize_objectives(character_quest):
@@ -97,7 +150,8 @@ class QuestService:
     def update_progress(character, action_type, **kwargs):
         """
         Updates quest progress based on an action.
-        action_type can be: 'DEFEAT_ENEMY', 'COLLECT_ITEM', 'CLEAR_NORMAL_DUNGEON', 'CLEAR_BOSS_DUNGEON'
+        action_type can be: 'DEFEAT_ENEMY', 'CLEAR_NORMAL_DUNGEON', 'CLEAR_BOSS_DUNGEON'.
+        COLLECT_ITEM progress is read from the inventory instead (refresh_collect_progress).
         """
         # (S2 fix) get_active_quests is now called explicitly before battles, not per-action here.
         active_quests = CharacterQuest.objects.filter(
@@ -123,14 +177,6 @@ class QuestService:
                             target_count = obj.defeat_count
                             obj_updated = True
                 
-                elif action_type == 'COLLECT_ITEM':
-                    item_id = kwargs.get('item_id')
-                    count = kwargs.get('count', 1)
-                    if obj.collect_count > 0 and obj.item_to_collect and obj.item_to_collect.id == item_id:
-                        p.current_count += count
-                        target_count = obj.collect_count
-                        obj_updated = True
-                        
                 elif action_type == 'CLEAR_NORMAL_DUNGEON':
                     dungeon_id = kwargs.get('dungeon_id')
                     if obj.clear_count > 0:
@@ -174,12 +220,30 @@ class QuestService:
         except CharacterQuest.DoesNotExist:
             return {"success": False, "message": "Quest not found for this character."}
 
+        # Items to hand in may have been sold or used since the quest completed.
+        QuestService.refresh_collect_progress(character, [cq])
+        cq.refresh_from_db(fields=['status', 'completed_at'])
         if cq.status != CharacterQuest.Status.COMPLETED:
             if cq.status == CharacterQuest.Status.CLAIMED:
                 return {"success": False, "message": "Rewards already claimed."}
             return {"success": False, "message": "Quest is not yet completed."}
 
         template = cq.quest
+
+        # Hand in the collected items before granting anything.
+        hand_in = defaultdict(int)
+        for objective in template.objectives.filter(collect_count__gt=0, item_to_collect__isnull=False):
+            hand_in[objective.item_to_collect_id] += objective.collect_count
+        if hand_in:
+            from apps.inventory.consumption_service import MaterialConsumptionError, consume_materials
+            try:
+                consume_materials(character, [
+                    {'item_template_id': template_id, 'quantity': quantity}
+                    for template_id, quantity in hand_in.items()
+                ])
+            except MaterialConsumptionError:
+                return {"success": False, "message": "You no longer have the items this quest needs."}
+
         rewards_log = {"exp": 0, "lumis": 0, "items": []}
 
         # Grant EXP
@@ -188,9 +252,10 @@ class QuestService:
             rewards_log["exp"] = template.exp_reward
 
         # Grant Lumis (RC-4 fix: atomic F() increment)
-        if template.lumis_reward > 0:
+        game_user = getattr(character, 'user', None)
+        if template.lumis_reward > 0 and game_user is not None:
             from apps.users.models import GameUser
-            GameUser.objects.filter(pk=character.user.pk).update(
+            GameUser.objects.filter(pk=game_user.pk).update(
                 lumis=F('lumis') + template.lumis_reward
             )
             rewards_log["lumis"] = template.lumis_reward

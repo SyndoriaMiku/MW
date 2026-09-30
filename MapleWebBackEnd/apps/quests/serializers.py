@@ -7,11 +7,13 @@ class QuestObjectiveSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item_to_collect.name', read_only=True, default=None)
     dungeon_name = serializers.CharField(source='dungeon_to_clear.name', read_only=True, default=None)
     boss_dungeon_name = serializers.CharField(source='boss_dungeon_to_clear.name', read_only=True, default=None)
-    
+    # DEFEAT_ENEMY, COLLECT_ITEM, CLEAR_NORMAL_DUNGEON or CLEAR_BOSS_DUNGEON.
+    objective_type = serializers.CharField(read_only=True)
+
     class Meta:
         model = QuestObjective
         fields = [
-            'id', 'enemy_to_defeat', 'enemy_name', 'defeat_count',
+            'id', 'objective_type', 'enemy_to_defeat', 'enemy_name', 'defeat_count',
             'item_to_collect', 'item_name', 'collect_count',
             'dungeon_to_clear', 'dungeon_name', 'clear_count',
             'boss_dungeon_to_clear', 'boss_dungeon_name', 'boss_clear_count',
