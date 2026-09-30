@@ -204,6 +204,58 @@ class SkillLifecycleTests(TestCase):
         self.assertEqual(owned.level, 3)
 
 
+class UpcomingSkillTests(APITestCase):
+    """GET /api/skills/learnable/ lists skills the character will unlock, soonest first."""
+
+    def setUp(self):
+        archer = CharacterClass.objects.create(name='Archer', main_stat='agi')
+        self.bowman = Job.objects.create(name='Bowman', character_class=archer)
+        mage = CharacterClass.objects.create(name='Mage', main_stat='int')
+        wizard = Job.objects.create(name='Wizard', character_class=mage)
+        self.character = Character.objects.create(
+            name='Upcoming', character_class=archer, job=self.bowman, level=5,
+        )
+        self.user = GameUser.objects.create_user(
+            username='upcoming', email='upcoming@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+
+        def skill(name, *, job=None, unlock=None, required_level=1, availability='PLAYER'):
+            template = SkillTemplate.objects.create(
+                name=name, job=job, required_level=required_level, availability=availability,
+            )
+            if unlock is not None:
+                SkillLevelConfig.objects.create(skill=template, skill_level=1, required_char_level=unlock)
+            return template
+
+        owned = skill('Owned Shot', job=self.bowman, unlock=1)
+        CharacterSkill.objects.create(character=self.character, skill_template=owned)
+        skill('Arrow Rain', job=self.bowman, unlock=30)
+        skill('Double Shot', job=self.bowman, unlock=10)
+        skill('Global Dash', required_level=15)            # no level configs
+        skill('Late Gate', job=self.bowman, unlock=8, required_level=20)
+        skill('Fireball', job=wizard, unlock=10)           # another job
+        skill('Slime Spit', availability='ENEMY', required_level=12)
+
+    def test_lists_unowned_skills_of_the_job_and_global_ones_by_unlock_level(self):
+        data = self.client.get(reverse('skill-learnable')).data
+
+        self.assertEqual(
+            [(row['name'], row['unlock_level']) for row in data],
+            [('Double Shot', 10), ('Global Dash', 15), ('Late Gate', 20), ('Arrow Rain', 30)],
+        )
+
+    def test_character_without_a_job_sees_only_global_skills(self):
+        self.character.job = None
+        self.character.save(update_fields=['job'])
+
+        data = self.client.get(reverse('skill-learnable')).data
+
+        self.assertEqual([row['name'] for row in data], ['Global Dash'])
+
+
 class CharacterSkillAPITests(APITestCase):
     def setUp(self):
         self.archer = CharacterClass.objects.create(name='Archer', main_stat='agi')

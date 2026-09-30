@@ -16,7 +16,7 @@ class SkillTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     GET /api/skills/{id}/               -> detail with level configs + effect
     GET /api/skills/?job={job_id}       -> filter by job
     GET /api/skills/?job=null           -> global skills (no job restriction)
-    GET /api/skills/?learnable=true     -> skills the current user's character can learn
+    GET /api/skills/learnable/          -> skills the current character will unlock, with unlock_level
     """
     permission_classes = [AllowAny]
     queryset = SkillTemplate.objects.all().select_related('job', 'applies_effect').prefetch_related('level_configs')
@@ -42,37 +42,42 @@ class SkillTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     def learnable(self, request):
         """
         GET /api/skills/learnable/
-        Returns skills the current character can unlock at their next level-up
-        (or that they are missing but already qualify for).
+        Skills of the character's job (and global ones) it does not own yet,
+        soonest first, each with the character level that unlocks it. Skills
+        unlock automatically on reaching that level.
         """
         character = getattr(request.user, 'character', None)
         if not character:
             return Response({'detail': 'No character found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        from .models import SkillLevelConfig
+        from django.db.models import Q
         from apps.characters.models import CharacterSkill
 
-        # All skills relevant to this character's job or global
-        eligible_templates = SkillTemplate.objects.filter(
-            job=character.job,
+        ownership = Q(job__isnull=True)
+        if character.job_id:
+            ownership |= Q(job_id=character.job_id)
+        owned_ids = CharacterSkill.objects.filter(character=character).values('skill_template_id')
+        templates = SkillTemplate.objects.filter(
+            ownership,
             availability__in=[SkillTemplate.Availability.PLAYER, SkillTemplate.Availability.BOTH],
-        ) | SkillTemplate.objects.filter(
-            job__isnull=True,
-            availability__in=[SkillTemplate.Availability.PLAYER, SkillTemplate.Availability.BOTH],
-        )
+        ).exclude(id__in=owned_ids).select_related('job').prefetch_related('level_configs')
 
-        # Skills already owned
-        owned_ids = set(
-            CharacterSkill.objects.filter(character=character)
-            .values_list('skill_template_id', flat=True)
-        )
+        upcoming = []
+        for template in templates:
+            first_level = next(
+                (config for config in template.level_configs.all() if config.skill_level == 1), None,
+            )
+            # Same gate as SkillService.sync_eligible_skills: template level and level-1 config.
+            unlock_level = max(
+                template.required_level,
+                first_level.required_char_level if first_level else template.required_level,
+            )
+            upcoming.append((unlock_level, template))
+        upcoming.sort(key=lambda pair: (pair[0], pair[1].name))
 
-        # Skills that have a level-1 config with required_char_level <= character.level
-        # AND are not yet owned
-        learnable = eligible_templates.filter(
-            level_configs__skill_level=1,
-            level_configs__required_char_level__lte=character.level,
-        ).exclude(id__in=owned_ids).distinct()
-
-        serializer = SkillTemplateListSerializer(learnable, many=True)
-        return Response(serializer.data)
+        data = []
+        for unlock_level, template in upcoming:
+            row = SkillTemplateListSerializer(template).data
+            row['unlock_level'] = unlock_level
+            data.append(row)
+        return Response(data)
