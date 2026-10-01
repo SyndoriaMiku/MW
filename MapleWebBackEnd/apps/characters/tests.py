@@ -139,6 +139,63 @@ class CharacterNameTests(APITestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             Character.objects.create(name='HERO')
 
+    def test_maplestory_style_names_are_accepted(self):
+        # Latin and Vietnamese letters count 1, Korean/Chinese/Japanese count 2; 4-12 in total.
+        for name in ('abcd', 'a' * 12, 'Hero123', 'BảoNgọc', 'ĐứcAnh', 'Trường', '메이플', '메이플스토리',
+                     '勇者', 'ゆうしゃ', 'メイプル', 'ルーキー', 'Kim김'):
+            with self.subTest(name=name):
+                Character.objects.all().delete()
+                self.user.refresh_from_db()
+                response = self.create(name)
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+                self.assertEqual(response.data['name'], name)
+
+    def test_names_outside_the_rules_are_refused(self):
+        for name in (
+            'abc', 'a' * 13, '메이플스토리용', 'Bảo',  # too short / too long
+            'Has Space', 'under_score', 'dash-name', 'dot.name', 'emoji😀x',
+            'Hеro1',  # Cyrillic "е" looks like Latin "e"
+            'ɑbcd',  # IPA alpha looks like "a"
+            'ＡＢＣＤ',  # full-width letters
+            'ㄱㄴㄷㄹ',  # loose Korean letters, not syllables
+            'abc​d',  # zero-width space
+        ):
+            with self.subTest(name=name):
+                response = self.create(name)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('name', response.data)
+        self.assertFalse(Character.objects.exists())
+
+    def test_decomposed_accents_are_stored_composed(self):
+        response = self.create('Nguyễn')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'Nguyễn')
+
+    def test_accented_names_are_unique_whatever_the_case(self):
+        Character.objects.create(name='ĐứcAnh')
+
+        for name in ('đứcanh', 'ĐỨCANH', 'ĐứcAnh'):  # the last one with decomposed accents
+            with self.subTest(name=name):
+                response = self.create(name)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('name', response.data)
+
+        from django.db import IntegrityError, transaction
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Character.objects.create(name='đứcanh')
+
+    def test_admin_form_refuses_a_taken_name(self):
+        from django.core.exceptions import ValidationError
+
+        job = {'job': self.job, 'character_class': self.job.character_class}
+        existing = Character.objects.create(name='ĐứcAnh', **job)
+
+        with self.assertRaises(ValidationError) as caught:
+            Character(name='đứcanh', **job).full_clean()
+        self.assertEqual(list(caught.exception.message_dict), ['name'])
+        existing.full_clean()  # keeping its own name is fine
+
     def test_second_character_is_refused(self):
         self.create('First')
 

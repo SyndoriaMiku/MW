@@ -274,7 +274,7 @@ class CharacterSkillAPITests(APITestCase):
     def test_character_creation_infers_class_and_grants_initial_skill(self):
         response = self.client.post(
             reverse('character-create'),
-            {'name': 'New Bowman', 'job': self.bowman.id},
+            {'name': 'NewBowman', 'job': self.bowman.id},
             format='json',
         )
 
@@ -309,7 +309,7 @@ class CharacterSkillAPITests(APITestCase):
         response = self.client.post(
             reverse('character-create'),
             {
-                'name': 'Invalid Bowman',
+                'name': 'BadBowman',
                 'character_class': magician.id,
                 'job': self.bowman.id,
             },

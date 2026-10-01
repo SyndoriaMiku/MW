@@ -1,11 +1,13 @@
 from datetime import timedelta
 
 from django.db import models, transaction
-from django.db.models.functions import Lower
 from django.utils.functional import cached_property
 from collections import defaultdict
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+
+from .names import name_key, validate_character_name
 
 #Create UUID
 import uuid
@@ -25,7 +27,9 @@ class Character(models.Model):
         default=generate_hex_id,
         editable=False
     )
-    name = models.CharField(max_length=20, help_text="Unique, ignoring case")
+    name = models.CharField(max_length=20, validators=[validate_character_name], help_text="See apps/characters/names.py")
+    # name_key(name), kept by save(): unique, so names differing only in case are one name.
+    name_key = models.CharField(max_length=40, unique=True, editable=False)
 
     #stats
     
@@ -52,16 +56,21 @@ class Character(models.Model):
     current_stamina = models.PositiveIntegerField(default=120, validators=[MinValueValidator(0), MaxValueValidator(120)])
     last_stamina_update = models.DateTimeField(default=timezone.now,help_text="Last time stamina was updated")
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                Lower('name'), name='unique_character_name_ci',
-                violation_error_message='This character name is already taken.',
-            ),
-        ]
-
     def __str__(self):
         return self.name
+
+    def clean(self):
+        # name_key is not on forms, so model forms (admin) would not check it themselves.
+        taken = Character.objects.filter(name_key=name_key(self.name)).exclude(pk=self.pk)
+        if self.name and taken.exists():
+            raise ValidationError({'name': 'This character name is already taken.'})
+
+    def save(self, *args, **kwargs):
+        self.name_key = name_key(self.name)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'name' in update_fields:
+            kwargs['update_fields'] = {*update_fields, 'name_key'}
+        super().save(*args, **kwargs)
     
     #Stamina regeneration logic
     STAMINA_REGEN_RATE = 180 #Regenerate 1 stamina every interval in seconds

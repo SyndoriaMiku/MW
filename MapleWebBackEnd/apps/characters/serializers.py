@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 from .models import Character, CharacterBuff, CharacterSkill, RateEvent
+from .names import name_key, normalize as normalize_name
 
 
 class CharacterBuffSerializer(serializers.ModelSerializer):
@@ -141,8 +142,9 @@ class CharacterSerializer(serializers.ModelSerializer):
         extra_kwargs = {'job': {'required': True, 'allow_null': False}}
 
     def validate_name(self, value):
-        # DRF already trimmed surrounding spaces; the DB constraint backs this up.
-        taken = Character.objects.filter(name__iexact=value)
+        # The model's validate_character_name has run; the unique name_key backs this up.
+        value = normalize_name(value)
+        taken = Character.objects.filter(name_key=name_key(value))
         if self.instance is not None:
             taken = taken.exclude(pk=self.instance.pk)
         if taken.exists():
