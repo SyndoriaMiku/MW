@@ -287,6 +287,7 @@ class DefaultPermissionTests(APITestCase):
         self.assertEqual(self.client.get('/api/inventory/').status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_public_catalog_and_registration_stay_anonymous(self):
+        cache.clear()  # registrations are throttled per IP
         self.assertEqual(self.client.get('/api/classes/').status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get('/api/skills/').status_code, status.HTTP_200_OK)
         response = self.client.post(
@@ -297,7 +298,40 @@ class DefaultPermissionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 
+@override_settings(REST_FRAMEWORK={
+    **settings.REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_RATES': {**settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'], 'register': '2/hour'},
+})
+class RegistrationThrottleTests(APITestCase):
+    """Sign-ups are limited per IP so bots cannot mass-create accounts."""
+
+    def setUp(self):
+        cache.clear()
+
+    def register(self, username, ip='10.0.0.1', password='Sturdy-pass-4821'):
+        return self.client.post(
+            reverse('register'),
+            {'username': username, 'email': f'{username}@example.com', 'password': password},
+            format='json', REMOTE_ADDR=ip,
+        )
+
+    def test_too_many_sign_ups_from_one_ip_are_refused(self):
+        self.assertEqual(self.register('first').status_code, status.HTTP_201_CREATED)
+        # Failed attempts count too.
+        self.assertEqual(self.register('second', password='1').status_code, status.HTTP_400_BAD_REQUEST)
+
+        blocked = self.register('third')
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('Retry-After', blocked)
+        self.assertFalse(GameUser.objects.filter(username='third').exists())
+        self.assertEqual(self.register('third', ip='10.0.0.2').status_code, status.HTTP_201_CREATED)
+
+
 class RegistrationPasswordTests(APITestCase):
+    def setUp(self):
+        cache.clear()  # registrations are throttled per IP
+
     def register(self, password, username='new-player'):
         return self.client.post(
             reverse('register'),

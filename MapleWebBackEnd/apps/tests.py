@@ -3,6 +3,7 @@ import inspect
 import warnings
 
 from django.apps import apps as django_apps
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from django.urls import reverse
 from rest_framework import serializers
@@ -62,6 +63,7 @@ class ErrorEnvelopeTests(APITestCase):
         self.assertEqual(body['detail'], 'Battle not found.')
 
     def test_field_validation_errors(self):
+        cache.clear()  # registrations are throttled per IP
         response = self.client.post(
             reverse('register'),
             {'username': 'envelope2', 'email': 'e2@example.com', 'password': '1'},

@@ -1,7 +1,8 @@
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.throttling import BaseThrottle
+from rest_framework.settings import api_settings
+from rest_framework.throttling import BaseThrottle, SimpleRateThrottle
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.conf import settings
@@ -42,9 +43,22 @@ class LoginView(TokenObtainPairView):
         return response
 
 
+class RegisterThrottle(SimpleRateThrottle):
+    """Sign-up attempts per IP, successful or not (rate: DEFAULT_THROTTLE_RATES['register'])."""
+    scope = 'register'
+
+    def get_rate(self):
+        # SimpleRateThrottle copies the rates at import; read them per request instead.
+        return api_settings.DEFAULT_THROTTLE_RATES[self.scope]
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
+    throttle_classes = (RegisterThrottle,)
     serializer_class = UserRegistrationSerializer
 
 class NovaHistoryView(generics.ListAPIView):

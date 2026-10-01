@@ -186,6 +186,11 @@ REST_FRAMEWORK = {
     # ignored. Behind one proxy (e.g. nginx) set 1: the last address the proxy
     # appended is used. Login limits and throttles count by this IP.
     'NUM_PROXIES': config('NUM_PROXIES', default=0, cast=int),
+    # Throttle counters use the cache, like the login limits.
+    'DEFAULT_THROTTLE_RATES': {
+        # Sign-up attempts per IP (apps.users.views.RegisterThrottle).
+        'register': config('REGISTER_THROTTLE_RATE', default='10/hour'),
+    },
 }
 
 # SimpleJWT Settings
