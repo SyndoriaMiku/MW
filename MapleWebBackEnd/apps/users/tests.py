@@ -1,3 +1,4 @@
+import time
 from unittest import mock
 
 from django.conf import settings
@@ -122,6 +123,17 @@ class LoginFailureLimitTests(APITestCase):
 
         self.assertEqual(other_client.status_code, status.HTTP_200_OK)
 
+    def test_a_flood_of_failures_does_not_evict_other_counters(self):
+        from . import login_limits
+
+        # A full cache evicts entries; an attacker could flood it with guesses
+        # (from many IPs) to wipe a victim account's counter.
+        for index in range(400):
+            login_limits.record_failure(f'guess-{index}', f'10.1.{index // 200}.{index % 200}')
+
+        lost = [index for index in range(400) if cache.get(f'login-failures:user:guess-{index}') is None]
+        self.assertEqual(lost, [])
+
     def test_login_records_last_login(self):
         self.assertIsNone(GameUser.objects.get(username='victim').last_login)
 
@@ -130,15 +142,17 @@ class LoginFailureLimitTests(APITestCase):
         self.assertIsNotNone(GameUser.objects.get(username='victim').last_login)
 
     def test_lock_ends_when_the_window_passes(self):
-        start = 1_000_000.0
-        with mock.patch('apps.users.login_limits.time.time', return_value=start):
+        # Only the login limits' clock moves; the cache keeps entries by real time.
+        start = time.time()
+        with mock.patch('apps.users.login_limits.time') as clock:
+            clock.time.return_value = start
             for _ in range(3):
                 self.login()
             self.assertEqual(
                 self.login(password='right-pass-123').status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        with mock.patch('apps.users.login_limits.time.time', return_value=start + 901):
+            clock.time.return_value = start + 901
             self.assertEqual(self.login(password='right-pass-123').status_code, status.HTTP_200_OK)
 
 

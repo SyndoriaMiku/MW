@@ -264,6 +264,21 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
+# Login limits and throttles keep their counters in the cache. A table in the
+# main database is shared by every server process (a per-process memory cache
+# would give each worker its own counters) and needs no Redis. Create it with
+# `manage.py createcachetable` after migrating.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+        # A full cache evicts live entries; with the default 300, a flood of
+        # failed logins on other names would wipe a victim account's counter.
+        # Expired counters (15 min) are removed first.
+        'OPTIONS': {'MAX_ENTRIES': 100_000},
+    }
+}
+
 # Game settings
 # Seconds a player may hold their battle turn before party members can skip it.
 BATTLE_TURN_TIMEOUT_SECONDS = config('BATTLE_TURN_TIMEOUT_SECONDS', default=60, cast=int)
