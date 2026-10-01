@@ -1,0 +1,250 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/features/inventory/presentation/inventory_screen.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.06, 0.09, 0.14, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.3, 0.44, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 22.0
+content_margin_top = 20.0
+content_margin_right = 22.0
+content_margin_bottom = 20.0
+
+[sub_resource type="StyleBoxFlat" id="StyleIcon"]
+bg_color = Color(0.04, 0.065, 0.105, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.32, 0.46, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleAction"]
+bg_color = Color(0.12, 0.48, 0.68, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="InventoryScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 26
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "← ADVENTURE BOARD"
+
+[node name="Title" type="Label" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "INVENTORY"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ItemCount" type="Label" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.75, 0.85, 1)
+text = "0 ITEMS"
+vertical_alignment = 1
+
+[node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REFRESH"
+
+[node name="EnhancementButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ENHANCE"
+
+[node name="Toolbar" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SearchInput" type="LineEdit" parent="Margin/Root/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(330, 42)
+layout_mode = 2
+placeholder_text = "Search items..."
+
+[node name="CategoryFilter" type="OptionButton" parent="Margin/Root/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 42)
+layout_mode = 2
+
+[node name="Hint" type="Label" parent="Margin/Root/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.48, 0.6, 0.73, 1)
+text = "Select an item to view its details"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 18
+
+[node name="InventoryPanel" type="PanelContainer" parent="Margin/Root/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/InventoryPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SectionTitle" type="Label" parent="Margin/Root/Content/InventoryPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+text = "ITEM SLOTS"
+
+[node name="InventoryScroll" type="ScrollContainer" parent="Margin/Root/Content/InventoryPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ItemGrid" type="GridContainer" parent="Margin/Root/Content/InventoryPanel/Box/InventoryScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+columns = 6
+
+[node name="EmptyLabel" type="Label" parent="Margin/Root/Content/InventoryPanel/Box"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.55, 0.65, 0.76, 1)
+text = "No items match this filter."
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DetailsPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="DetailBox" type="VBoxContainer" parent="Margin/Root/Content/DetailsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SectionTitle" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "ITEM DETAILS"
+
+[node name="DetailName" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.34, 1)
+theme_override_font_sizes/font_size = 23
+text = "Select an item"
+autowrap_mode = 2
+
+[node name="DetailType" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.73, 0.86, 1)
+text = "—"
+
+[node name="IconPanel" type="PanelContainer" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+custom_minimum_size = Vector2(0, 205)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleIcon")
+
+[node name="DetailIcon" type="TextureRect" parent="Margin/Root/Content/DetailsPanel/DetailBox/IconPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+
+[node name="DetailState" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.43, 0.88, 0.66, 1)
+text = ""
+
+[node name="DetailStats" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.87, 0.93, 1)
+text = "Choose an inventory slot to inspect its stats."
+autowrap_mode = 2
+
+[node name="DetailDescription" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.62, 0.7, 0.8, 1)
+text = ""
+autowrap_mode = 2
+
+[node name="ActionButton" type="Button" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleAction")
+disabled = true
+text = "SELECT AN ITEM"
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.76, 0.9, 1)
+text = "Loading inventory..."

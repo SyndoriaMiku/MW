@@ -1,0 +1,139 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/features/auth/presentation/login_screen.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleCard"]
+bg_color = Color(0.065, 0.095, 0.145, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.35, 0.5, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+content_margin_left = 38.0
+content_margin_top = 34.0
+content_margin_right = 38.0
+content_margin_bottom = 34.0
+
+[sub_resource type="StyleBoxFlat" id="StyleButton"]
+bg_color = Color(0.14, 0.45, 0.72, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="LoginScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleCard")
+
+[node name="Form" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Eyebrow" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "MAPLE WORLD ONLINE"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 34
+text = "Welcome, Adventurer"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.58, 0.67, 0.77, 1)
+text = "Sign in to continue to the Training Ground"
+horizontal_alignment = 1
+
+[node name="Gap" type="Control" parent="Center/Card/Form"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+text = "USERNAME"
+
+[node name="UsernameInput" type="LineEdit" parent="Center/Card/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+placeholder_text = "Your account name"
+clear_button_enabled = true
+
+[node name="PasswordLabel" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+text = "PASSWORD"
+
+[node name="PasswordInput" type="LineEdit" parent="Center/Card/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+placeholder_text = "Your password"
+secret = true
+secret_character = "•"
+
+[node name="ErrorLabel" type="Label" parent="Center/Card/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+autowrap_mode = 2
+
+[node name="LoginButton" type="Button" parent="Center/Card/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = SubResource("StyleButton")
+text = "ENTER WORLD"
+
+[node name="LoadingLabel" type="Label" parent="Center/Card/Form"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "Connecting to server..."
+horizontal_alignment = 1
+
+[node name="Server" type="Label" parent="Center/Card/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.36, 0.43, 0.52, 1)
+theme_override_font_sizes/font_size = 12
+text = "127.0.0.1:8000  •  Development server"
+horizontal_alignment = 1
+

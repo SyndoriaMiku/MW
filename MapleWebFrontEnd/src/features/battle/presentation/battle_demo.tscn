@@ -1,0 +1,333 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/features/battle/presentation/battle_demo.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleCard"]
+bg_color = Color(0.075, 0.105, 0.16, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.27, 0.39, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+content_margin_left = 24.0
+content_margin_top = 22.0
+content_margin_right = 24.0
+content_margin_bottom = 22.0
+
+[sub_resource type="StyleBoxFlat" id="StyleVisualPlayer"]
+bg_color = Color(0.12, 0.37, 0.62, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+
+[sub_resource type="StyleBoxFlat" id="StyleVisualEnemy"]
+bg_color = Color(0.48, 0.18, 0.23, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+
+[sub_resource type="StyleBoxFlat" id="StyleBottom"]
+bg_color = Color(0.05, 0.075, 0.115, 0.98)
+border_width_top = 1
+border_color = Color(0.19, 0.29, 0.42, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 20.0
+content_margin_top = 16.0
+content_margin_right = 20.0
+content_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxFlat" id="StyleButton"]
+bg_color = Color(0.16, 0.43, 0.72, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="StyleButtonHover"]
+bg_color = Color(0.22, 0.54, 0.86, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 22.0
+content_margin_top = 12.0
+content_margin_right = 22.0
+content_margin_bottom = 12.0
+
+[node name="BattleDemo" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.035, 0.055, 0.09, 1)
+mouse_filter = 2
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 28
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TopBar" type="HBoxContainer" parent="SafeArea/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="SafeArea/VBox/TopBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.88, 0.93, 1, 1)
+theme_override_font_sizes/font_size = 26
+text = "TRAINING GROUND"
+
+[node name="Spacer" type="Control" parent="SafeArea/VBox/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "BACK TO BOARD"
+
+[node name="ConnectionStatus" type="Label" parent="SafeArea/VBox/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 14
+text = "LOADING"
+
+[node name="Arena" type="HBoxContainer" parent="SafeArea/VBox"]
+custom_minimum_size = Vector2(0, 370)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 26
+
+[node name="PlayerCard" type="PanelContainer" parent="SafeArea/VBox/Arena"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleCard")
+
+[node name="PlayerBox" type="VBoxContainer" parent="SafeArea/VBox/Arena/PlayerCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SideLabel" type="Label" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "YOUR PARTY"
+
+[node name="PlayerName" type="Label" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "Adventurer"
+
+[node name="PlayerVisual" type="PanelContainer" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleVisualPlayer")
+
+[node name="Placeholder" type="Label" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox/PlayerVisual"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.93, 1, 1)
+theme_override_font_sizes/font_size = 32
+text = "PLAYER"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PlayerHPLabel" type="Label" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HP  100 / 100"
+
+[node name="PlayerHP" type="ProgressBar" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="PlayerMPLabel" type="Label" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MP  20 / 20"
+
+[node name="PlayerMP" type="ProgressBar" parent="SafeArea/VBox/Arena/PlayerCard/PlayerBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+value = 20.0
+show_percentage = false
+
+[node name="CenterInfo" type="VBoxContainer" parent="SafeArea/VBox/Arena"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="TurnLabel" type="Label" parent="SafeArea/VBox/Arena/CenterInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 28
+text = "TURN 01"
+horizontal_alignment = 1
+
+[node name="PhaseLabel" type="Label" parent="SafeArea/VBox/Arena/CenterInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.72, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+text = "PLAYER PHASE"
+horizontal_alignment = 1
+
+[node name="Versus" type="Label" parent="SafeArea/VBox/Arena/CenterInfo"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.43, 0.55, 1)
+theme_override_font_sizes/font_size = 22
+text = "VS"
+horizontal_alignment = 1
+
+[node name="EnemyCard" type="PanelContainer" parent="SafeArea/VBox/Arena"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleCard")
+
+[node name="EnemyBox" type="VBoxContainer" parent="SafeArea/VBox/Arena/EnemyCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SideLabel" type="Label" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 13
+text = "ENEMY"
+horizontal_alignment = 2
+
+[node name="EnemyName" type="Label" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "Little Wolf"
+horizontal_alignment = 2
+
+[node name="EnemyVisual" type="PanelContainer" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleVisualEnemy")
+
+[node name="Placeholder" type="Label" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox/EnemyVisual"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.86, 1)
+theme_override_font_sizes/font_size = 32
+text = "LITTLE WOLF"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EnemyHPLabel" type="Label" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HP  70 / 70"
+horizontal_alignment = 2
+
+[node name="EnemyHP" type="ProgressBar" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+value = 70.0
+show_percentage = false
+
+[node name="EnemySpacer" type="Control" parent="SafeArea/VBox/Arena/EnemyCard/EnemyBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="BottomPanel" type="PanelContainer" parent="SafeArea/VBox"]
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBottom")
+
+[node name="BottomBox" type="VBoxContainer" parent="SafeArea/VBox/BottomPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CombatLog" type="RichTextLabel" parent="SafeArea/VBox/BottomPanel/BottomBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 15
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+
+[node name="Actions" type="HBoxContainer" parent="SafeArea/VBox/BottomPanel/BottomBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AttackButton" type="Button" parent="SafeArea/VBox/BottomPanel/BottomBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleButton")
+theme_override_styles/hover = SubResource("StyleButtonHover")
+text = "ATTACK"
+
+[node name="SkillButton" type="Button" parent="SafeArea/VBox/BottomPanel/BottomBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 48)
+layout_mode = 2
+disabled = true
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleButton")
+theme_override_styles/hover = SubResource("StyleButtonHover")
+text = "SKILL"
+
+[node name="ActionSpacer" type="Control" parent="SafeArea/VBox/BottomPanel/BottomBox/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RetryButton" type="Button" parent="SafeArea/VBox/BottomPanel/BottomBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 48)
+layout_mode = 2
+visible = false
+text = "RETRY"

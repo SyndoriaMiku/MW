@@ -1,0 +1,434 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/features/character/presentation/character_profile.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.06, 0.09, 0.14, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.3, 0.44, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 24.0
+content_margin_top = 22.0
+content_margin_right = 24.0
+content_margin_bottom = 22.0
+
+[sub_resource type="StyleBoxFlat" id="StylePortrait"]
+bg_color = Color(0.1, 0.31, 0.5, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[node name="CharacterProfile" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 42
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 42
+theme_override_constants/margin_bottom = 28
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "← ADVENTURE BOARD"
+
+[node name="Title" type="Label" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "CHARACTER PROFILE"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REFRESH"
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 18
+
+[node name="IdentityPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(265, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/IdentityPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AccountName" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "ACCOUNT"
+
+[node name="CharacterName" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "Adventurer"
+
+[node name="ClassJobLabel" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.74, 0.84, 1)
+text = "Class • Job"
+
+[node name="Portrait" type="PanelContainer" parent="Margin/Root/Content/IdentityPanel/Box"]
+custom_minimum_size = Vector2(0, 245)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StylePortrait")
+
+[node name="Placeholder" type="Label" parent="Margin/Root/Content/IdentityPanel/Box/Portrait"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.77, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 28
+text = "PIXEL HERO"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LevelLabel" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 22
+text = "LEVEL 1"
+
+[node name="ExpLabel" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "EXP  0 / —"
+
+[node name="ExpProgress" type="ProgressBar" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+max_value = 1.0
+show_percentage = false
+
+[node name="CurrencyLabel" type="Label" parent="Margin/Root/Content/IdentityPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.71, 0.82, 0.91, 1)
+text = "LUMIS 0     NOVA 0"
+
+[node name="StaminaRow" type="HBoxContainer" parent="Margin/Root/Content/IdentityPanel/Box"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Margin/Root/Content/IdentityPanel/Box/StaminaRow"]
+layout_mode = 2
+text = "STAMINA"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Content/IdentityPanel/Box/StaminaRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StaminaLabel" type="Label" parent="Margin/Root/Content/IdentityPanel/Box/StaminaRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.88, 0.66, 1)
+text = "0 / 0"
+
+[node name="EquipmentPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(440, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/EquipmentPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleRow" type="HBoxContainer" parent="Margin/Root/Content/EquipmentPanel/Box"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/TitleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+text = "EQUIPMENT"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Content/EquipmentPanel/Box/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Hint" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/TitleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.55, 0.65, 1)
+theme_override_font_sizes/font_size = 12
+text = "Hover for details"
+
+[node name="Board" type="HBoxContainer" parent="Margin/Root/Content/EquipmentPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="Accessories" type="VBoxContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Accessories"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.68, 0.94, 1)
+theme_override_font_sizes/font_size = 12
+text = "ACCESSORY"
+horizontal_alignment = 1
+
+[node name="AccessoryGrid" type="GridContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Accessories"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="Center" type="VBoxContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Showcase" type="PanelContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Center"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StylePortrait")
+
+[node name="Label" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Center/Showcase"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.66, 0.82, 0.94, 1)
+theme_override_font_sizes/font_size = 14
+text = "EQUIPPED\nLOADOUT"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="WeaponLabel" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Center"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 12
+text = "WEAPON"
+horizontal_alignment = 1
+
+[node name="WeaponSlotHost" type="CenterContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+
+[node name="Armor" type="VBoxContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Armor"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.88, 0.66, 1)
+theme_override_font_sizes/font_size = 12
+text = "ARMOR"
+horizontal_alignment = 1
+
+[node name="ArmorGrid" type="GridContainer" parent="Margin/Root/Content/EquipmentPanel/Box/Board/Armor"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="Details" type="VBoxContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(385, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 18
+
+[node name="StatsPanel" type="PanelContainer" parent="Margin/Root/Content/Details"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/Details/StatsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+text = "COMBAT STATS"
+
+[node name="Grid" type="GridContainer" parent="Margin/Root/Content/Details/StatsPanel/Box"]
+layout_mode = 2
+theme_override_constants/h_separation = 22
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="HPLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "HP"
+[node name="HPValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="MPLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "MP"
+[node name="MPValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="AttackLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "ATTACK"
+[node name="AttackValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="DamageLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "DAMAGE"
+[node name="DamageValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="StrengthLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "STR"
+[node name="StrengthValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="AgilityLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "AGI"
+[node name="AgilityValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="IntelligenceLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "INT"
+[node name="IntelligenceValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="DropRateLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "BASE DROP"
+[node name="DropRateValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="FinalDamageLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+text = "FINAL DMG"
+[node name="FinalDamageValue" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+[node name="GridSpacer" type="Control" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+[node name="GridSpacer2" type="Control" parent="Margin/Root/Content/Details/StatsPanel/Box/Grid"]
+layout_mode = 2
+
+[node name="BaseStatsLabel" type="Label" parent="Margin/Root/Content/Details/StatsPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.53, 0.62, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "BASE STATS"
+autowrap_mode = 2
+
+[node name="SkillsPanel" type="PanelContainer" parent="Margin/Root/Content/Details"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/Details/SkillsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Margin/Root/Content/Details/SkillsPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+text = "LEARNED SKILLS"
+
+[node name="SkillContent" type="HBoxContainer" parent="Margin/Root/Content/Details/SkillsPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="SkillList" type="ItemList" parent="Margin/Root/Content/Details/SkillsPanel/Box/SkillContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(175, 160)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SkillInfo" type="VBoxContainer" parent="Margin/Root/Content/Details/SkillsPanel/Box/SkillContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="SkillName" type="Label" parent="Margin/Root/Content/Details/SkillsPanel/Box/SkillContent/SkillInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 20
+text = "Select a skill"
+
+[node name="SkillDetails" type="Label" parent="Margin/Root/Content/Details/SkillsPanel/Box/SkillContent/SkillInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.7, 0.82, 1)
+text = ""
+autowrap_mode = 2
+
+[node name="SkillDescription" type="Label" parent="Margin/Root/Content/Details/SkillsPanel/Box/SkillContent/SkillInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "Skill details appear here."
+autowrap_mode = 2
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.76, 0.9, 1)
+text = "Loading..."

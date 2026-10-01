@@ -1,0 +1,18 @@
+# Godot 4 generated files
+.godot/
+
+# Exported builds
+builds/
+exports/
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

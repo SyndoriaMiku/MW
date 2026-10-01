@@ -1,0 +1,495 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/features/enhancement/presentation/enhancement_screen.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.075, 0.105, 0.135, 0.97)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.29, 0.4, 0.48, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxFlat" id="StyleShowcase"]
+bg_color = Color(0.09, 0.15, 0.19, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.49, 0.58, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 18.0
+content_margin_top = 14.0
+content_margin_right = 18.0
+content_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxFlat" id="StyleAction"]
+bg_color = Color(0.13, 0.35, 0.48, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.58, 0.69, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[node name="EnhancementScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.065, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 34
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 34
+theme_override_constants/margin_bottom = 22
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="BackButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "← ADVENTURE BOARD"
+
+[node name="InventoryButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "INVENTORY"
+
+[node name="Title" type="Label" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 25
+text = "EQUIPMENT ENHANCEMENT"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REFRESH"
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="MenuPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(205, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Menu" type="VBoxContainer" parent="Margin/Root/Content/MenuPanel"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Title" type="Label" parent="Margin/Root/Content/MenuPanel/Menu"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.96, 0.25, 1)
+theme_override_font_sizes/font_size = 14
+text = "ENHANCE"
+
+[node name="LumenMenuButton" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleAction")
+text = "✦  Lumen Ascend"
+
+[node name="AuroraMenuButton" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+text = "◆  Aurora Blessing"
+
+[node name="FutureMenuButton" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+text = "◇  Future System"
+
+[node name="FuturePlaceholder1" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+disabled = true
+text = "Coming Soon"
+
+[node name="FuturePlaceholder2" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+disabled = true
+text = "Coming Soon"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Content/MenuPanel/Menu"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CurrencyLabel" type="Label" parent="Margin/Root/Content/MenuPanel/Menu"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+text = "LUMIS —"
+horizontal_alignment = 1
+
+[node name="MainPanel" type="PanelContainer" parent="Margin/Root/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Main" type="VBoxContainer" parent="Margin/Root/Content/MainPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TargetRow" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SectionTitle" type="Label" parent="Margin/Root/Content/MainPanel/Main/TargetRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.96, 0.25, 1)
+text = "TARGET ITEM"
+vertical_alignment = 1
+
+[node name="TargetSelect" type="OptionButton" parent="Margin/Root/Content/MainPanel/Main/TargetRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ItemShowcase" type="PanelContainer" parent="Margin/Root/Content/MainPanel/Main"]
+custom_minimum_size = Vector2(0, 210)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleShowcase")
+
+[node name="Showcase" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/ItemShowcase"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="TargetIcon" type="TextureRect" parent="Margin/Root/Content/MainPanel/Main/ItemShowcase/Showcase"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+
+[node name="TargetName" type="Label" parent="Margin/Root/Content/MainPanel/Main/ItemShowcase/Showcase"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 19
+text = "Select equipment"
+horizontal_alignment = 1
+
+[node name="TargetState" type="Label" parent="Margin/Root/Content/MainPanel/Main/ItemShowcase/Showcase"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.74, 0.83, 1)
+text = ""
+horizontal_alignment = 1
+
+[node name="SystemPages" type="TabContainer" parent="Margin/Root/Content/MainPanel/Main"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+tabs_visible = false
+
+[node name="Lumen" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.84, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+text = "LUMEN ASCEND"
+
+[node name="LumenLevel" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "0  >>>  1"
+horizontal_alignment = 1
+
+[node name="LumenBreakdown" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.82, 0.9, 1)
+text = "Select equipment to inspect its Lumen bonuses."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="LumenPreview" type="PanelContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleShowcase")
+
+[node name="Preview" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen/LumenPreview"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="LumenRates" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen/LumenPreview/Preview"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.92, 0.98, 1)
+theme_override_font_sizes/font_size = 16
+text = "Loading current rates..."
+horizontal_alignment = 1
+
+[node name="LumenCost" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen/LumenPreview/Preview"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+text = ""
+horizontal_alignment = 1
+
+[node name="LumenEventInfo" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen/LumenPreview/Preview"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.75, 0.86, 1)
+text = ""
+horizontal_alignment = 1
+
+[node name="LumenWarning" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.58, 0.4, 1)
+text = "Rates and cost are calculated by the server."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="LumenButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/normal = SubResource("StyleAction")
+text = "ENHANCE"
+
+[node name="Aurora" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.77, 0.55, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "AURORA BLESSING"
+
+[node name="AuroraLevel" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.77, 0.55, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "AURORA 0"
+horizontal_alignment = 1
+
+[node name="AuroraLines" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.84, 0.7, 1, 1)
+text = "No Aurora lines"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="EssenceRow" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/EssenceRow"]
+layout_mode = 2
+text = "ESSENCE"
+vertical_alignment = 1
+
+[node name="EssenceSelect" type="OptionButton" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/EssenceRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ActionRow" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="RevealButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 48)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleAction")
+text = "REVEAL AURORA"
+
+[node name="RerollButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 48)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleAction")
+text = "USE ESSENCE"
+
+[node name="PendingPanel" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.34, 1)
+text = "NEW AURORA ROLL"
+horizontal_alignment = 1
+
+[node name="PendingLines" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+horizontal_alignment = 1
+
+[node name="Actions" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="KeepOldButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "KEEP OLD"
+
+[node name="TakeNewButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TAKE NEW"
+
+[node name="Future" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
+layout_mode = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Future"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.76, 1)
+theme_override_font_sizes/font_size = 22
+text = "FUTURE ENHANCEMENT SYSTEM"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Future"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.43, 0.52, 0.62, 1)
+text = "Reserved for future equipment upgrade mechanics."
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.76, 0.9, 1)
+text = "Loading enhancement data..."
+
+[node name="ResultEffectLayer" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 50
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ResultBackdrop" type="ColorRect" parent="ResultEffectLayer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.03, 0.06, 0.09, 0)
+
+[node name="ResultCard" type="PanelContainer" parent="ResultEffectLayer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -145.0
+offset_right = 250.0
+offset_bottom = 145.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Content" type="VBoxContainer" parent="ResultEffectLayer/ResultCard"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="ResultSymbol" type="Label" parent="ResultEffectLayer/ResultCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "✦"
+horizontal_alignment = 1
+
+[node name="ResultTitle" type="Label" parent="ResultEffectLayer/ResultCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 25
+text = "LUMEN ASCEND SUCCESS"
+horizontal_alignment = 1
+
+[node name="ResultSubtitle" type="Label" parent="ResultEffectLayer/ResultCard/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.88, 0.94, 1)
+theme_override_font_sizes/font_size = 15
+text = "Upgrade result"
+horizontal_alignment = 1
+autowrap_mode = 2

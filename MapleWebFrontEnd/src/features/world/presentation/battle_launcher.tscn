@@ -1,0 +1,222 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/features/world/presentation/battle_launcher.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.065, 0.095, 0.145, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.19, 0.3, 0.44, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+content_margin_left = 26.0
+content_margin_top = 24.0
+content_margin_right = 26.0
+content_margin_bottom = 24.0
+
+[sub_resource type="StyleBoxFlat" id="StyleEnter"]
+bg_color = Color(0.14, 0.45, 0.72, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="BattleLauncher" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 52
+theme_override_constants/margin_top = 38
+theme_override_constants/margin_right = 52
+theme_override_constants/margin_bottom = 38
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 22
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "ADVENTURE BOARD"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REFRESH"
+
+[node name="CharacterButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "CHARACTER"
+
+[node name="InventoryButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "INVENTORY"
+
+[node name="EnhancementButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ENHANCE"
+
+[node name="LogoutButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "LOG OUT"
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 22
+
+[node name="CharacterPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(390, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/CharacterPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Label" type="Label" parent="Margin/Root/Content/CharacterPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "ACTIVE CHARACTER"
+
+[node name="PlayerName" type="Label" parent="Margin/Root/Content/CharacterPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Loading..."
+
+[node name="PlayerDetails" type="Label" parent="Margin/Root/Content/CharacterPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.73, 0.82, 1)
+text = "Level —"
+autowrap_mode = 2
+
+[node name="Portrait" type="ColorRect" parent="Margin/Root/Content/CharacterPanel/Box"]
+custom_minimum_size = Vector2(0, 250)
+layout_mode = 2
+size_flags_vertical = 3
+color = Color(0.11, 0.31, 0.52, 1)
+
+[node name="StaminaLabel" type="Label" parent="Margin/Root/Content/CharacterPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 17
+text = "STAMINA —"
+
+[node name="DungeonPanel" type="PanelContainer" parent="Margin/Root/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/DungeonPanel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="Margin/Root/Content/DungeonPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "SELECT DUNGEON"
+
+[node name="ActiveBattlePanel" type="PanelContainer" parent="Margin/Root/Content/DungeonPanel/Box"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root/Content/DungeonPanel/Box/ActiveBattlePanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Info" type="VBoxContainer" parent="Margin/Root/Content/DungeonPanel/Box/ActiveBattlePanel/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Title" type="Label" parent="Margin/Root/Content/DungeonPanel/Box/ActiveBattlePanel/Content/Info"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.78, 0.36, 1)
+theme_override_font_sizes/font_size = 16
+text = "BATTLE IN PROGRESS"
+
+[node name="ActiveBattleDetails" type="Label" parent="Margin/Root/Content/DungeonPanel/Box/ActiveBattlePanel/Content/Info"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.69, 0.77, 0.86, 1)
+text = "Loading battle state..."
+
+[node name="ResumeButton" type="Button" parent="Margin/Root/Content/DungeonPanel/Box/ActiveBattlePanel/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 48)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleEnter")
+text = "RESUME BATTLE"
+
+[node name="DungeonPicker" type="OptionButton" parent="Margin/Root/Content/DungeonPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="DungeonDescription" type="Label" parent="Margin/Root/Content/DungeonPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.69, 0.77, 0.86, 1)
+theme_override_font_sizes/font_size = 16
+text = "Loading dungeon data..."
+autowrap_mode = 2
+
+[node name="Preview" type="ColorRect" parent="Margin/Root/Content/DungeonPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+color = Color(0.19, 0.12, 0.2, 1)
+
+[node name="EnterButton" type="Button" parent="Margin/Root/Content/DungeonPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleEnter")
+text = "ENTER DUNGEON"
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.76, 0.9, 1)
+text = "Connecting..."
