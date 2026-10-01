@@ -66,6 +66,37 @@ class MinimumDamageTests(TestCase):
         self.assertEqual(character.total_damage, 15)
 
 
+class CharacterJobTests(APITestCase):
+    """A new character must pick a job; its class follows from the job."""
+
+    def setUp(self):
+        self.user = GameUser.objects.create_user(
+            username='chooser', email='chooser@example.com', password='test-pass-123'
+        )
+        self.client.force_authenticate(self.user)
+        self.warrior = CharacterClass.objects.create(name='Warrior', main_stat='str')
+        self.fighter = Job.objects.create(name='Fighter', character_class=self.warrior)
+
+    def test_job_is_required(self):
+        for payload in ({'name': 'NoJob'}, {'name': 'NoJob', 'job': None},
+                        {'name': 'NoJob', 'character_class': self.warrior.id}):
+            with self.subTest(payload=payload):
+                response = self.client.post(reverse('character-create'), payload, format='json')
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('job', response.data)
+        self.assertFalse(Character.objects.exists())
+
+    def test_class_follows_the_job(self):
+        response = self.client.post(
+            reverse('character-create'), {'name': 'Picked', 'job': self.fighter.id}, format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            (response.data['job'], response.data['character_class']), (self.fighter.id, self.warrior.id),
+        )
+
+
 class CharacterNameTests(APITestCase):
     """Character names are unique ignoring case and surrounding spaces."""
 
@@ -74,9 +105,11 @@ class CharacterNameTests(APITestCase):
             username='namer', email='namer@example.com', password='test-pass-123'
         )
         self.client.force_authenticate(self.user)
+        warrior = CharacterClass.objects.create(name='Warrior', main_stat='str')
+        self.job = Job.objects.create(name='Fighter', character_class=warrior)
 
     def create(self, name):
-        return self.client.post(reverse('character-create'), {'name': name}, format='json')
+        return self.client.post(reverse('character-create'), {'name': name, 'job': self.job.id}, format='json')
 
     def test_name_is_trimmed(self):
         response = self.create('  Hero  ')

@@ -136,6 +136,9 @@ class CharacterSerializer(serializers.ModelSerializer):
             'base_str', 'base_agi', 'base_int', 'drop_rate',
             'level', 'current_exp', 'max_stamina', 'current_stamina', 'last_stamina_update',
         ]
+        # There is no job change, so a new character picks its job up front;
+        # the class follows from it.
+        extra_kwargs = {'job': {'required': True, 'allow_null': False}}
 
     def validate_name(self, value):
         # DRF already trimmed surrounding spaces; the DB constraint backs this up.
