@@ -15,6 +15,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'password': {'write_only': True}
         }
 
+    # The model's username format validator runs too; the DB constraints back these up.
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError('This username is already taken.')
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('This email is already registered.')
+        return value
+
     def validate(self, attrs):
         # Run AUTH_PASSWORD_VALIDATORS, including similarity to the username/email.
         candidate = User(username=attrs.get('username'), email=attrs.get('email'))

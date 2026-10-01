@@ -1,9 +1,15 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models.functions import Lower
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 
-# Create your models here.
+# ASCII only, so look-alike letters cannot impersonate another player.
+username_validator = RegexValidator(
+    r'\A[A-Za-z0-9_-]{3,20}\Z',
+    'Username must be 3-20 characters: letters, digits, _ and -.',
+)
 
 class UserManager(BaseUserManager):
     """
@@ -22,7 +28,11 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
         return user
-    
+
+    def get_by_natural_key(self, username):
+        # Usernames are unique regardless of case, so "hero" logs in as "Hero".
+        return self.get(username__iexact=username)
+
     def create_superuser(self, username, email, password=None):
         user = self.create_user(username, email, password)
         user.is_admin = True
@@ -35,8 +45,11 @@ class GameUser(AbstractBaseUser):
     """
     Custom user model
     """
-    username = models.CharField(max_length=255, unique=True)
-    email = models.EmailField(max_length=255, unique=True)
+    username = models.CharField(
+        max_length=255, unique=True, validators=[username_validator],
+        help_text='3-20 characters: letters, digits, _ and -. Unique regardless of case.',
+    )
+    email = models.EmailField(max_length=255, unique=True, help_text='Unique regardless of case.')
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
@@ -64,6 +77,16 @@ class GameUser(AbstractBaseUser):
         app_label = 'users'
         verbose_name = 'Game User'
         verbose_name_plural = 'Game Users'
+        constraints = [
+            models.UniqueConstraint(
+                Lower('username'), name='unique_username_ci',
+                violation_error_message='This username is already taken.',
+            ),
+            models.UniqueConstraint(
+                Lower('email'), name='unique_email_ci',
+                violation_error_message='This email is already registered.',
+            ),
+        ]
     
     def __str__(self):
         return self.username

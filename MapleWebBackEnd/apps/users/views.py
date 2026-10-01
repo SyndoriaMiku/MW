@@ -7,6 +7,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -60,6 +61,19 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
     throttle_classes = (RegisterThrottle,)
     serializer_class = UserRegistrationSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            # Another request took the username or email after validation.
+            username = request.data.get('username', '')
+            if User.objects.filter(username__iexact=username).exists():
+                errors = {"username": ["This username is already taken."]}
+            else:
+                errors = {"email": ["This email is already registered."]}
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
 class NovaHistoryView(generics.ListAPIView):
     """GET: the caller's Nova transactions (donations, purchases, adjustments), newest first."""

@@ -328,6 +328,70 @@ class RegistrationThrottleTests(APITestCase):
         self.assertEqual(self.register('third', ip='10.0.0.2').status_code, status.HTTP_201_CREATED)
 
 
+class AccountIdentityTests(APITestCase):
+    """Usernames and emails are unique regardless of case; usernames have a fixed format."""
+
+    def setUp(self):
+        cache.clear()  # registrations and logins are limited per IP
+        GameUser.objects.create_user(username='Hero', email='Hero@Example.com', password='right-pass-123')
+
+    def register(self, username='newbie', email='newbie@example.com'):
+        return self.client.post(
+            reverse('register'),
+            {'username': username, 'email': email, 'password': 'Sturdy-pass-4821'},
+            format='json',
+        )
+
+    def test_username_taken_in_another_case_is_refused(self):
+        response = self.register(username='hERO')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+
+    def test_email_taken_in_another_case_is_refused(self):
+        response = self.register(email='hero@example.COM')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+
+    def test_database_rejects_case_variants(self):
+        from django.db import IntegrityError, transaction
+
+        for username, email in (('HERO', 'other@example.com'), ('other', 'HERO@example.com')):
+            with self.subTest(username=username), self.assertRaises(IntegrityError), transaction.atomic():
+                GameUser.objects.create_user(username=username, email=email, password='right-pass-123')
+
+    def test_race_past_validation_still_answers_400(self):
+        from .serializers import UserRegistrationSerializer
+
+        # As if another request registered "Hero" between validation and save.
+        with mock.patch.object(UserRegistrationSerializer, 'validate_username', lambda self, value: value):
+            response = self.register(username='HERO')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+        self.assertEqual(GameUser.objects.count(), 1)
+
+    def test_username_format(self):
+        for username in ('ab', 'a' * 21, 'has space', 'tên', 'semi;colon', 'emoji😀'):
+            with self.subTest(username=username):
+                response = self.register(username=username)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('username', response.data)
+        for username in ('abc', 'a' * 20, 'Player_01', 'dash-name'):
+            with self.subTest(username=username):
+                cache.clear()
+                response = self.register(username=username, email=f'{username}@example.com')
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_login_ignores_username_case(self):
+        response = self.client.post(
+            reverse('token_obtain_pair'), {'username': 'hero', 'password': 'right-pass-123'}, format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
 class RegistrationPasswordTests(APITestCase):
     def setUp(self):
         cache.clear()  # registrations are throttled per IP
