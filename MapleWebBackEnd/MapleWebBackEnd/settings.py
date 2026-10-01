@@ -15,6 +15,7 @@ import os
 import sys
 from datetime import timedelta
 from decouple import config, Csv
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -98,17 +99,28 @@ WSGI_APPLICATION = 'MapleWebBackEnd.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# Connection credentials are optional so a SQLite dev setup only needs ENGINE/NAME.
-DATABASES = {
-    'default': {
-        'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
-        'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
-        'USER': config('DATABASE_USER', default=''),
-        'PASSWORD': config('DATABASE_PASSWORD', default=''),
-        'HOST': config('DATABASE_HOST', default=''),
-        'PORT': config('DATABASE_PORT', default=''),
+# DATABASE_URL (as hosts like Neon/Render hand it out) wins, e.g.
+# postgresql://user:password@host/dbname?sslmode=require. Without it the
+# DATABASE_* settings are used; credentials are optional so a SQLite dev
+# setup only needs ENGINE/NAME.
+DATABASE_URL = config('DATABASE_URL', default='')
+if DATABASE_URL:
+    DATABASES = {
+        # Reuse connections between requests, checking them first: hosted
+        # databases that sleep when idle drop open connections.
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, conn_health_checks=True),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
+            'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+            'USER': config('DATABASE_USER', default=''),
+            'PASSWORD': config('DATABASE_PASSWORD', default=''),
+            'HOST': config('DATABASE_HOST', default=''),
+            'PORT': config('DATABASE_PORT', default=''),
+        }
+    }
 
 if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     # SQLite ignores select_for_update(). IMMEDIATE transactions take the write
