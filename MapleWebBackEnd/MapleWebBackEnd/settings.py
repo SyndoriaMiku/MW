@@ -201,6 +201,8 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
+    # Record GameUser.last_login on each password login (not on token refresh).
+    'UPDATE_LAST_LOGIN': True,
 }
 
 # CORS Settings

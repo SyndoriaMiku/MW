@@ -10,7 +10,7 @@ class GameUserAdmin(UserAdmin):
     Kế thừa từ UserAdmin để có các tính năng quản lý mật khẩu và quyền hạn.
     """
     # Các cột hiển thị trên trang danh sách
-    list_display = ('username', 'email', 'lumis', 'nova', 'is_staff', 'is_active')
+    list_display = ('username', 'email', 'lumis', 'nova', 'is_staff', 'is_active', 'last_login')
     
     # Bộ lọc ở cạnh phải
     list_filter = ('is_staff', 'is_superuser', 'is_active')
@@ -22,13 +22,13 @@ class GameUserAdmin(UserAdmin):
     ordering = ('username',)
 
     # Nova là tiền premium: chỉ đổi qua sổ giao dịch Nova (Nova Transactions).
-    readonly_fields = ('nova',)
+    readonly_fields = ('nova', 'last_login')
 
     # Tùy chỉnh các trường hiển thị trong trang chi tiết.
     # Chúng ta định nghĩa lại 'fieldsets' để khớp với model GameUser.
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        ('Personal Info', {'fields': ('email',)}),
+        ('Personal Info', {'fields': ('email', 'last_login')}),
         ('Game Data', {'fields': ('character', 'lumis', 'nova')}),
         ('Permissions', {
             'fields': ('is_active', 'is_staff', 'is_admin', 'is_superuser'),

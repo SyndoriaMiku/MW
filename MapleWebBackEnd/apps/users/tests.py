@@ -122,6 +122,13 @@ class LoginFailureLimitTests(APITestCase):
 
         self.assertEqual(other_client.status_code, status.HTTP_200_OK)
 
+    def test_login_records_last_login(self):
+        self.assertIsNone(GameUser.objects.get(username='victim').last_login)
+
+        self.login(password='right-pass-123')
+
+        self.assertIsNotNone(GameUser.objects.get(username='victim').last_login)
+
     def test_lock_ends_when_the_window_passes(self):
         start = 1_000_000.0
         with mock.patch('apps.users.login_limits.time.time', return_value=start):
