@@ -181,6 +181,11 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    # Reverse proxies in front of the app. 0 = clients connect directly, so the
+    # client IP is REMOTE_ADDR and X-Forwarded-For (typed by the client) is
+    # ignored. Behind one proxy (e.g. nginx) set 1: the last address the proxy
+    # appended is used. Login limits and throttles count by this IP.
+    'NUM_PROXIES': config('NUM_PROXIES', default=0, cast=int),
 }
 
 # SimpleJWT Settings

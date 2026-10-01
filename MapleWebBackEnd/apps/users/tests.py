@@ -92,6 +92,36 @@ class LoginFailureLimitTests(APITestCase):
             self.login('other', 'right-pass-123', ip='10.0.0.2').status_code, status.HTTP_200_OK,
         )
 
+    def test_forged_forwarded_for_header_does_not_dodge_the_ip_limit(self):
+        # Without a trusted proxy, X-Forwarded-For is whatever the client typed.
+        for index in range(5):
+            self.client.post(
+                reverse('token_obtain_pair'), {'username': f'guess-{index}', 'password': 'wrong-pass'},
+                format='json', REMOTE_ADDR='10.0.0.1', HTTP_X_FORWARDED_FOR=f'1.2.3.{index}',
+            )
+
+        blocked = self.client.post(
+            reverse('token_obtain_pair'), {'username': 'other', 'password': 'right-pass-123'},
+            format='json', REMOTE_ADDR='10.0.0.1', HTTP_X_FORWARDED_FOR='9.9.9.9',
+        )
+
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1})
+    def test_behind_a_proxy_the_forwarded_client_ip_is_used(self):
+        for index in range(5):
+            self.client.post(
+                reverse('token_obtain_pair'), {'username': f'guess-{index}', 'password': 'wrong-pass'},
+                format='json', REMOTE_ADDR='10.0.0.1', HTTP_X_FORWARDED_FOR='1.2.3.4',
+            )
+
+        other_client = self.client.post(
+            reverse('token_obtain_pair'), {'username': 'other', 'password': 'right-pass-123'},
+            format='json', REMOTE_ADDR='10.0.0.1', HTTP_X_FORWARDED_FOR='5.6.7.8',
+        )
+
+        self.assertEqual(other_client.status_code, status.HTTP_200_OK)
+
     def test_lock_ends_when_the_window_passes(self):
         start = 1_000_000.0
         with mock.patch('apps.users.login_limits.time.time', return_value=start):
