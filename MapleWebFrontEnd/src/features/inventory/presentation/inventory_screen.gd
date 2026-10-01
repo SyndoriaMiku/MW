@@ -52,7 +52,7 @@ func _load_inventory() -> void:
 	if _is_loading:
 		return
 	_set_loading(true, "Loading inventory...")
-	var selected_id := str(_selected_item.get("id", ""))
+	var selected_id := ApiClient.id_string(_selected_item.get("id"))
 	var inventory_response: Dictionary = await ApiClient.get_json("inventory/")
 	if not _accept_response(inventory_response):
 		return
@@ -65,7 +65,7 @@ func _load_inventory() -> void:
 	_equipped_slot_indices_by_type.clear()
 	for equipped in ApiClient.unwrap_list(equipped_response.get("data", [])):
 		var equipped_item: Dictionary = equipped.get("item", {})
-		_equipped_item_ids[str(equipped_item.get("id", ""))] = true
+		_equipped_item_ids[ApiClient.id_string(equipped_item.get("id"))] = true
 		var equipped_type := str(equipped_item.get("template", {}).get("item_type", ""))
 		if not _equipped_slot_indices_by_type.has(equipped_type):
 			_equipped_slot_indices_by_type[equipped_type] = {}
@@ -91,8 +91,8 @@ func _render_inventory() -> void:
 
 func _create_item_card(item: Dictionary) -> Control:
 	var template: Dictionary = item.get("template", {})
-	var item_id := str(item.get("id", ""))
-	var is_selected := item_id == str(_selected_item.get("id", ""))
+	var item_id := ApiClient.id_string(item.get("id"))
+	var is_selected := item_id == ApiClient.id_string(_selected_item.get("id"))
 	var is_equipped := _equipped_item_ids.has(item_id)
 
 	var card := PanelContainer.new()
@@ -170,7 +170,7 @@ func _render_details() -> void:
 	var template: Dictionary = _selected_item.get("template", {})
 	var item_type := str(template.get("item_type", "etc"))
 	var is_equipment := ItemTypes.is_equipment(item_type)
-	var is_equipped := _equipped_item_ids.has(str(_selected_item.get("id", "")))
+	var is_equipped := _equipped_item_ids.has(ApiClient.id_string(_selected_item.get("id")))
 	detail_name.text = str(template.get("name", "Unknown Item"))
 	detail_type.text = "%s  •  Required level %d" % [item_type.replace("_", " ").capitalize(), int(template.get("minimum_level", 1))]
 	detail_icon.texture = ItemIcons.for_template(template)
@@ -243,7 +243,7 @@ func _on_item_selected(item: Dictionary) -> void:
 func _on_action_pressed() -> void:
 	if _selected_item.is_empty() or _is_loading:
 		return
-	var item_id := str(_selected_item.get("id", ""))
+	var item_id := ApiClient.id_string(_selected_item.get("id"))
 	var is_equipped := _equipped_item_ids.has(item_id)
 	_set_loading(true, "Updating equipment...")
 	var response: Dictionary
@@ -288,8 +288,8 @@ func _apply_equipment_response(payload: Dictionary, item_id: String, was_equippe
 		if returned_item is Dictionary and not returned_item.is_empty():
 			_selected_item = returned_item
 		return
-	var replaced_item_id := str(payload.get("replaced_item_id", ""))
-	if not replaced_item_id.is_empty() and replaced_item_id != "<null>":
+	var replaced_item_id := ApiClient.id_string(payload.get("replaced_item_id"))
+	if not replaced_item_id.is_empty():
 		_equipped_item_ids.erase(replaced_item_id)
 	_equipped_item_ids[item_id] = true
 	var equipped: Variant = payload.get("equipped", {})
@@ -316,7 +316,7 @@ func _find_item_by_id(item_id: String) -> Dictionary:
 	if item_id.is_empty():
 		return {}
 	for item in _items:
-		if str(item.get("id", "")) == item_id:
+		if ApiClient.id_string(item.get("id")) == item_id:
 			return item
 	return {}
 

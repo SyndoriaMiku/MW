@@ -1,6 +1,6 @@
 # Maple World Frontend — Roadmap
 
-Cập nhật: 2026-10-01. Đánh dấu `[x]` khi xong từng mục.
+Cập nhật: 2026-10-01 (chiều). Đánh dấu `[x]` khi xong từng mục.
 
 ## Giai đoạn 0 — Dọn nền ✅
 
@@ -26,9 +26,14 @@ Cập nhật: 2026-10-01. Đánh dấu `[x]` khi xong từng mục.
 
 ## Giai đoạn 2 — Onboarding đầy đủ
 
-- [ ] Màn đăng ký (`users/register/`)
-- [ ] Màn tạo nhân vật khi `characters/my/` báo chưa có nhân vật (chọn class từ `classes/`)
+- [x] Màn đăng ký (`users/register/`): kiểm tra form ở client, lỗi server hiện dưới từng ô, đăng ký xong vào thẳng màn tạo nhân vật
+- [x] Màn tạo nhân vật: chọn job (class suy ra từ job), xem chỉ số và skill của job, luật tên giống backend (`CharacterNameRules`); launcher tự chuyển tới đây khi `characters/my/` trả 404
 - [ ] Dùng `session/bootstrap/` để launcher tải dữ liệu một lần thay vì gọi tuần tự
+
+Sửa kèm khi làm Giai đoạn 2:
+
+- [x] ID số từ JSON là float (`5` → `"5.0"`), làm URL `inventory/5.0/equip/` trả 404 — nút Equip/Unequip trước đây hỏng với backend thật. Dùng `ApiClient.id_string()` cho mọi ID
+- [x] `ApiClient` đọc định dạng lỗi chung của backend (`code`, `message`, `fields`)
 
 ## Giai đoạn 3 — Battle hoàn chỉnh
 

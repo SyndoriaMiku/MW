@@ -1,0 +1,202 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/features/character/presentation/character_create_screen.gd" id="1_script"]
+
+[node name="CharacterCreateScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 20
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Titles" type="VBoxContainer" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="Margin/Root/Header/Titles"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "CREATE YOUR CHARACTER"
+
+[node name="Subtitle" type="Label" parent="Margin/Root/Header/Titles"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+text = "Pick a job and a name. Jobs cannot be changed later, so choose carefully."
+
+[node name="RetryButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+text = "RETRY"
+
+[node name="LogoutButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+text = "LOG OUT"
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="JobPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/JobPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SectionTitle" type="Label" parent="Margin/Root/Content/JobPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "CHOOSE YOUR JOB"
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/Root/Content/JobPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="JobList" type="VBoxContainer" parent="Margin/Root/Content/JobPanel/Box/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="DetailPanel" type="PanelContainer" parent="Margin/Root/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/DetailPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="JobName" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_override_font_sizes/font_size = 28
+text = "Choose a job"
+
+[node name="ClassLine" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "—"
+
+[node name="JobStats" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.89, 0.95, 1)
+
+[node name="SkillsSeparator" type="HSeparator" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+
+[node name="SkillsTitle" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "JOB SKILLS"
+
+[node name="SkillScroll" type="ScrollContainer" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SkillList" type="Label" parent="Margin/Root/Content/DetailPanel/Box/SkillScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.84, 0.89, 0.95, 1)
+autowrap_mode = 3
+
+[node name="NameSeparator" type="HSeparator" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+
+[node name="NameTitle" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "CHARACTER NAME"
+
+[node name="NameRow" type="HBoxContainer" parent="Margin/Root/Content/DetailPanel/Box"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NameInput" type="LineEdit" parent="Margin/Root/Content/DetailPanel/Box/NameRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+placeholder_text = "Your adventurer's name"
+clear_button_enabled = true
+
+[node name="NameWidth" type="Label" parent="Margin/Root/Content/DetailPanel/Box/NameRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+text = "0 / 12"
+horizontal_alignment = 2
+
+[node name="NameFeedback" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+
+[node name="FormError" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+autowrap_mode = 3
+
+[node name="CreateButton" type="Button" parent="Margin/Root/Content/DetailPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+theme_override_font_sizes/font_size = 17
+text = "CREATE CHARACTER"
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "Loading..."

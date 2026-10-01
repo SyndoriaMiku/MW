@@ -381,12 +381,12 @@ func _equipped_set_piece_count(set_data: Dictionary) -> int:
 	if members is Array:
 		for member_value in members:
 			if member_value is Dictionary:
-				member_ids[str(member_value.get("id", ""))] = true
+				member_ids[ApiClient.id_string(member_value.get("id"))] = true
 	var equipped_member_ids := {}
 	for equipped in _equipped_items:
 		var equipped_item: Dictionary = equipped.get("item", {})
 		var equipped_template: Dictionary = equipped_item.get("template", {})
-		var template_id := str(equipped_template.get("id", ""))
+		var template_id := ApiClient.id_string(equipped_template.get("id"))
 		if member_ids.has(template_id):
 			equipped_member_ids[template_id] = true
 	return equipped_member_ids.size()
@@ -597,7 +597,7 @@ func _lookup_name(items: Array, target_id: Variant) -> String:
 	if target_id == null:
 		return "Unassigned"
 	for item in items:
-		if str(item.get("id", "")) == str(target_id):
+		if ApiClient.id_string(item.get("id")) == str(target_id):
 			return str(item.get("name", "Unknown"))
 	return "Unknown"
 

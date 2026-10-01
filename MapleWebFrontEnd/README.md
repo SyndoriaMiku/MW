@@ -4,6 +4,7 @@ Godot 4 client for the Maple World turn-based RPG backend (`../MapleWebBackEnd`)
 
 ## Current features
 
+- Account sign-up, then character creation: pick a job (the class follows) and a name checked against the backend's rules.
 - Sign in with JWT; the access token is refreshed automatically and logout blacklists the refresh token.
 - Adventure board: character summary, stamina, normal dungeons, and resuming an active battle (`/api/battles/active/`).
 - Turn-based battle with attack, skills (cooldown and MP aware), and an event-driven combat log.
@@ -33,9 +34,10 @@ godot --path . -- --api-url=http://127.0.0.1:8765/api
 ## Project layout
 
 - `src/app/scene_router.gd` — autoload `SceneRouter`: scene paths, navigation, redirect to login when the session expires.
-- `src/network/api_client.gd` — autoload `ApiClient`: JSON requests, JWT refresh, list/error helpers.
+- `src/network/api_client.gd` — autoload `ApiClient`: JSON requests, JWT refresh, list/error helpers. JSON numbers arrive as floats, so build URLs and lookup keys from IDs with `ApiClient.id_string()`.
 - `src/session/session_store.gd` — autoload `SessionStore`: signed-in player state.
 - `src/shared/items/` — `ItemIcons` (template name → icon) and `ItemTypes`.
+- `tests/support/fake_http_server.gd` — `FakeHttpServer`, an in-process HTTP server for tests that need the API.
 - `src/shared/ui/main_theme.tres` — project-wide theme. Use the `PrimaryButton`, `CompactPanel`, `HPBar`, `MPBar`, `EnemyHPBar` and `EXPBar` type variations instead of per-scene style overrides.
 - `src/features/<feature>/` — one folder per screen, split into `data`, `domain` and `presentation` where needed.
 

@@ -123,6 +123,12 @@ theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
 text = "Connecting to server..."
 horizontal_alignment = 1
 
+[node name="CreateAccountButton" type="Button" parent="Center/Card/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New here? Create an account"
+flat = true
+
 [node name="ServerLabel" type="Label" parent="Center/Card/Form"]
 unique_name_in_owner = true
 layout_mode = 2

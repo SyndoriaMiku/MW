@@ -78,6 +78,16 @@ static func unwrap_list(payload: Variant) -> Array:
 	return []
 
 
+## JSON numbers arrive as floats, so an ID of 5 would print as "5.0". IDs used in
+## URLs or as lookup keys must go through this to read "5".
+static func id_string(value: Variant) -> String:
+	if value == null:
+		return ""
+	if value is float and is_equal_approx(value, roundf(value)):
+		return str(int(value))
+	return str(value)
+
+
 static func error_message(response: Dictionary, fallback: String) -> String:
 	var error: Variant = response.get("error", {})
 	if error is Dictionary:
@@ -197,11 +207,49 @@ func _send(path: String, method: int, payload: Dictionary, token: String) -> Dic
 	}
 
 
+## Field errors from a DRF validation response ({"name": ["Taken."], ...}),
+## keyed by field, or empty when the request did not fail validation.
+static func field_errors(response: Dictionary) -> Dictionary:
+	var error: Variant = response.get("error", {})
+	if error is Dictionary and error.get("fields") is Dictionary:
+		return error.fields
+	return {}
+
+
+## Reads the backend's error envelope ({"code", "message", "fields"}, see
+## MapleWebBackEnd/apps/api_errors.py) and the older bare shapes it wraps.
 func _normalize_error(payload: Variant) -> Dictionary:
-	if payload is Dictionary:
-		if payload.has("error") and payload.error is Dictionary:
-			return payload.error
-		for key in ["detail", "message", "error"]:
-			if payload.has(key) and payload[key] is String:
-				return {"code": "API_ERROR", "message": payload[key]}
-	return {"code": "API_ERROR", "message": "The server rejected the request."}
+	if not payload is Dictionary:
+		return {"code": "API_ERROR", "message": "The server rejected the request."}
+	if payload.get("error") is Dictionary:
+		return payload.error
+
+	var message := ""
+	for key in ["message", "detail", "error"]:
+		if payload.get(key) is String:
+			message = payload[key]
+			break
+	var fields := _join_field_messages(payload.get("fields")) if payload.get("fields") is Dictionary else {}
+	if fields.is_empty() and message.is_empty():
+		fields = _join_field_messages(payload)
+	if message.is_empty():
+		message = str(fields.values()[0]) if not fields.is_empty() else "The server rejected the request."
+
+	var error := {"code": str(payload.get("code", "API_ERROR")), "message": message}
+	if not fields.is_empty():
+		error["fields"] = fields
+	return error
+
+
+## {"name": ["Taken.", "Too long."]} -> {"name": "Taken. Too long."}
+static func _join_field_messages(raw_fields: Dictionary) -> Dictionary:
+	var fields := {}
+	for key in raw_fields:
+		if key == "code":
+			continue
+		var messages := PackedStringArray()
+		var value: Variant = raw_fields[key]
+		for message in (value if value is Array else [value]):
+			messages.append(str(message))
+		fields[str(key)] = " ".join(messages)
+	return fields

@@ -4,6 +4,8 @@ extends Node
 ## ApiClient reports that the session can no longer be refreshed.
 
 const LOGIN := "res://src/features/auth/presentation/login_screen.tscn"
+const REGISTER := "res://src/features/auth/presentation/register_screen.tscn"
+const CHARACTER_CREATE := "res://src/features/character/presentation/character_create_screen.tscn"
 const LAUNCHER := "res://src/features/world/presentation/battle_launcher.tscn"
 const BATTLE := "res://src/features/battle/presentation/battle_demo.tscn"
 const CHARACTER := "res://src/features/character/presentation/character_profile.tscn"

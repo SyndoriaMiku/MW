@@ -11,7 +11,7 @@ var combatants: Array[CombatantState] = []
 
 static func from_dict(data: Dictionary) -> BattleState:
 	var battle := BattleState.new()
-	battle.id = str(data.get("id", ""))
+	battle.id = ApiClient.id_string(data.get("id"))
 	battle.status = str(data.get("status", "in_progress"))
 	battle.turn_phase = str(data.get("turn_phase", "player_phase"))
 	battle.turn_count = int(data.get("turn_count", 1))

@@ -6,11 +6,13 @@ extends Control
 @onready var error_label: Label = %ErrorLabel
 @onready var loading_label: Label = %LoadingLabel
 @onready var server_label: Label = %ServerLabel
+@onready var create_account_button: Button = %CreateAccountButton
 
 
 func _ready() -> void:
 	server_label.text = ApiClient.server_host()
 	login_button.pressed.connect(_on_login_pressed)
+	create_account_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.REGISTER))
 	username_input.text_submitted.connect(_focus_password)
 	password_input.text_submitted.connect(_submit_from_password)
 	username_input.grab_focus()
@@ -55,6 +57,7 @@ func _on_login_pressed() -> void:
 
 func _set_loading(is_loading: bool) -> void:
 	login_button.disabled = is_loading
+	create_account_button.disabled = is_loading
 	username_input.editable = not is_loading
 	password_input.editable = not is_loading
 	loading_label.visible = is_loading

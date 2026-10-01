@@ -79,7 +79,7 @@ func _load_data() -> void:
 	if _is_loading:
 		return
 	_set_loading(true, "Loading enhancement data...")
-	var selected_id := str(_selected_item.get("id", ""))
+	var selected_id := ApiClient.id_string(_selected_item.get("id"))
 	var selected_essence_id := _selected_option_id(essence_select)
 	var profile_response: Dictionary = await ApiClient.get_json("users/profile/")
 	if not _accept_http(profile_response):
@@ -122,8 +122,8 @@ func _populate_target_select(preferred_id: String) -> void:
 			int(item.get("aurora_level", 0)),
 		]
 		target_select.add_item(label)
-		target_select.set_item_metadata(target_select.item_count - 1, str(item.get("id", "")))
-		if str(item.get("id", "")) == preferred_id:
+		target_select.set_item_metadata(target_select.item_count - 1, ApiClient.id_string(item.get("id")))
+		if ApiClient.id_string(item.get("id")) == preferred_id:
 			selected_index = target_select.item_count - 1
 	if target_select.item_count == 0:
 		_selected_item = {}
@@ -140,8 +140,8 @@ func _populate_essence_select(preferred_id: String) -> void:
 	for essence in _essences:
 		var template: Dictionary = essence.get("template", {})
 		essence_select.add_item("%s  ×%d" % [template.get("name", "Essence"), int(essence.get("quantity", 1))])
-		essence_select.set_item_metadata(essence_select.item_count - 1, str(essence.get("id", "")))
-		if str(essence.get("id", "")) == preferred_id:
+		essence_select.set_item_metadata(essence_select.item_count - 1, ApiClient.id_string(essence.get("id")))
+		if ApiClient.id_string(essence.get("id")) == preferred_id:
 			selected_index = essence_select.item_count - 1
 	if essence_select.item_count > 0:
 		essence_select.select(maxi(0, selected_index))
@@ -204,7 +204,7 @@ func _load_lumen_preview() -> void:
 	if _selected_item.is_empty():
 		_render_selected_item()
 		return
-	var requested_item_id := str(_selected_item.get("id", ""))
+	var requested_item_id := ApiClient.id_string(_selected_item.get("id"))
 	var template: Dictionary = _selected_item.get("template", {})
 	var current_level := int(_selected_item.get("lumen_ascend_level", 0))
 	var max_level := _max_lumen_level(_selected_item)
@@ -227,7 +227,7 @@ func _load_lumen_preview() -> void:
 	var response: Dictionary = await ApiClient.get_json(
 		"items/lumen/preview/?inventory_item_id=%s" % requested_item_id.uri_encode()
 	)
-	if requested_item_id != str(_selected_item.get("id", "")):
+	if requested_item_id != ApiClient.id_string(_selected_item.get("id")):
 		return
 	if response.get("ok", false):
 		var data: Variant = response.get("data", {})
@@ -286,7 +286,7 @@ func _set_action_availability(can_lumen: bool, can_reveal: bool, can_reroll: boo
 
 
 func _render_pending_roll() -> void:
-	var is_for_target := not _pending_roll.is_empty() and _pending_target_id == str(_selected_item.get("id", ""))
+	var is_for_target := not _pending_roll.is_empty() and _pending_target_id == ApiClient.id_string(_selected_item.get("id"))
 	pending_panel.visible = is_for_target
 	if not is_for_target:
 		return
@@ -447,7 +447,7 @@ func _on_reroll_pressed() -> void:
 	var data: Dictionary = response.get("data", {})
 	if bool(data.get("pending", false)):
 		_pending_roll = data
-		_pending_target_id = str(_selected_item.get("id", ""))
+		_pending_target_id = ApiClient.id_string(_selected_item.get("id"))
 	var message := str(data.get("message", "Aurora reroll completed."))
 	_is_loading = false
 	await _load_data()
@@ -564,7 +564,7 @@ func _format_integer(value: int) -> String:
 
 func _find_item(item_id: String) -> Dictionary:
 	for item in _items:
-		if str(item.get("id", "")) == item_id:
+		if ApiClient.id_string(item.get("id")) == item_id:
 			return item
 	return {}
 

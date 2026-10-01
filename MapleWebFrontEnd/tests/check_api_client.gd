@@ -6,8 +6,7 @@ extends Node
 
 const PORT := 18765
 
-var _server := TCPServer.new()
-var _peers: Array = []
+var _server := FakeHttpServer.new()
 var _refresh_calls := 0
 var _logout_tokens: Array = []
 var _expired_count := 0
@@ -17,10 +16,12 @@ func _ready() -> void:
 	# The router would replace this test scene with the login screen.
 	ApiClient.session_expired.disconnect(SceneRouter.go_to_login)
 	ApiClient.session_expired.connect(func(): _expired_count += 1)
-	if _server.listen(PORT, "127.0.0.1") != OK:
+	_server.handler = _handle
+	add_child(_server)
+	if _server.listen(PORT) != OK:
 		_fail("FAKE_SERVER_LISTEN_FAILED")
 		return
-	ApiClient.base_url = "http://127.0.0.1:%d/api/" % PORT
+	ApiClient.base_url = _server.base_url(PORT)
 
 	if not _check_helpers():
 		return
@@ -104,54 +105,14 @@ func _fail(code: String) -> bool:
 	return false
 
 
-func _process(_delta: float) -> void:
-	while _server.is_connection_available():
-		_peers.append({"peer": _server.take_connection(), "data": PackedByteArray()})
-	for entry in _peers.duplicate():
-		var peer: StreamPeerTCP = entry.peer
-		peer.poll()
-		var available := peer.get_available_bytes()
-		if available > 0:
-			var chunk: Array = peer.get_data(available)
-			var data: PackedByteArray = entry.data
-			data.append_array(chunk[1])
-			entry.data = data
-		var text: String = entry.data.get_string_from_utf8()
-		var header_end := text.find("\r\n\r\n")
-		if header_end < 0:
-			continue
-		var head := text.substr(0, header_end)
-		var content_length := 0
-		for line in head.split("\r\n"):
-			if line.to_lower().begins_with("content-length:"):
-				content_length = int(line.get_slice(":", 1).strip_edges())
-		var body := text.substr(header_end + 4)
-		if body.to_utf8_buffer().size() < content_length:
-			continue
-		_peers.erase(entry)
-		_respond(peer, head, body)
-
-
-func _respond(peer: StreamPeerTCP, head: String, body: String) -> void:
-	var path := head.get_slice("\r\n", 0).get_slice(" ", 1)
-	var payload: Variant = JSON.parse_string(body) if not body.is_empty() else {}
-	var status := 401
-	var reply: Dictionary = {"detail": "Token is invalid or expired"}
+func _handle(path: String, head: String, payload: Variant) -> Array:
 	if path == "/api/users/token/refresh/":
 		_refresh_calls += 1
 		if payload is Dictionary and payload.get("refresh") == "refresh-1":
-			status = 200
-			reply = {"access": "access-2", "refresh": "refresh-2"}
+			return [200, {"access": "access-2", "refresh": "refresh-2"}]
 	elif path == "/api/users/logout/":
 		_logout_tokens.append(payload.get("refresh") if payload is Dictionary else null)
-		status = 200
-		reply = {}
+		return [200, {}]
 	elif head.contains("Authorization: Bearer access-2"):
-		status = 200
-		reply = {"name": "Tester"}
-	var json := JSON.stringify(reply)
-	var response := "HTTP/1.1 %d X\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [
-		status, json.to_utf8_buffer().size(), json,
-	]
-	peer.put_data(response.to_utf8_buffer())
-	peer.disconnect_from_host()
+		return [200, {"name": "Tester"}]
+	return [401, {"detail": "Token is invalid or expired"}]

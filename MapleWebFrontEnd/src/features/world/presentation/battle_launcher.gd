@@ -37,6 +37,9 @@ func _ready() -> void:
 func _load_screen_data() -> void:
 	_set_loading(true, "Loading character and dungeons...")
 	var character_response: Dictionary = await ApiClient.get_json("characters/my/")
+	if int(character_response.get("status", 0)) == 404:
+		SceneRouter.go_to(SceneRouter.CHARACTER_CREATE)
+		return
 	if not character_response.get("ok", false):
 		_handle_api_error(character_response)
 		return
@@ -63,7 +66,7 @@ func _load_active_battle() -> void:
 		return
 
 	var battle: Dictionary = response.get("data", {})
-	var combat_id := str(battle.get("id", ""))
+	var combat_id := ApiClient.id_string(battle.get("id"))
 	_has_active_battle = not combat_id.is_empty() and str(battle.get("status", "")) == "in_progress"
 	active_battle_panel.visible = _has_active_battle
 	if not _has_active_battle:
@@ -130,7 +133,7 @@ func _on_enter_pressed() -> void:
 		_handle_api_error(response)
 		return
 
-	SessionStore.active_battle_id = str(response.get("data", {}).get("combat_instance_id", ""))
+	SessionStore.active_battle_id = ApiClient.id_string(response.get("data", {}).get("combat_instance_id"))
 	if SessionStore.active_battle_id.is_empty():
 		_set_loading(false, "Server did not return a combat instance ID.")
 		return
