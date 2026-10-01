@@ -120,9 +120,12 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
 
     def create(self, request, *args, **kwargs):
+        """Register and log in: the response carries refresh/access tokens like /login/."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
-                return super().create(request, *args, **kwargs)
+                user = serializer.save()
         except IntegrityError:
             # Another request took the username or email after validation.
             username = request.data.get('username', '')
@@ -131,6 +134,7 @@ class RegisterView(generics.CreateAPIView):
             else:
                 errors = {"email": ["This email is already registered."]}
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({**serializer.data, **tokens_for(user)}, status=status.HTTP_201_CREATED)
 
 class NovaHistoryView(generics.ListAPIView):
     """GET: the caller's Nova transactions (donations, purchases, adjustments), newest first."""

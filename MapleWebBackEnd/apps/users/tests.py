@@ -538,6 +538,16 @@ class RegistrationPasswordTests(APITestCase):
                 self.assertIn('password', response.data)
         self.assertFalse(GameUser.objects.filter(username='new-player').exists())
 
+    def test_registration_logs_the_player_in(self):
+        response = self.register('Sturdy-pass-4821')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['username'], 'new-player')
+        profile = self.client.get(reverse('profile'), HTTP_AUTHORIZATION=f'Bearer {response.data["access"]}')
+        self.assertEqual(profile.data['username'], 'new-player')
+        refreshed = self.client.post(reverse('token_refresh'), {'refresh': response.data['refresh']}, format='json')
+        self.assertEqual(refreshed.status_code, status.HTTP_200_OK)
+
     def test_password_is_hashed_and_never_returned(self):
         response = self.register('Sturdy-pass-4821')
 
