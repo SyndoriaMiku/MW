@@ -167,7 +167,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #Custom settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # JWT that is refused once its session has ended (apps/users/sessions.py).
+        'apps.users.sessions.SessionJWTAuthentication',
     ],
     # Views that must be public (register/login, catalogs, API docs) declare
     # AllowAny explicitly; everything else requires a logged-in user.

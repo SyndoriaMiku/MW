@@ -328,6 +328,126 @@ class RegistrationThrottleTests(APITestCase):
         self.assertEqual(self.register('third', ip='10.0.0.2').status_code, status.HTTP_201_CREATED)
 
 
+@override_settings(LOGIN_FAILURE_LIMIT_PER_USER=3)
+class SessionTests(APITestCase):
+    """Changing the password or logging out everywhere ends every session at once."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = GameUser.objects.create_user(
+            username='player', email='player@example.com', password='Old-pass-4821'
+        )
+
+    def login(self, password='Old-pass-4821'):
+        return self.client.post(
+            reverse('token_obtain_pair'), {'username': 'player', 'password': password}, format='json',
+        )
+
+    def get_profile(self, access):
+        return self.client.get(reverse('profile'), HTTP_AUTHORIZATION=f'Bearer {access}')
+
+    def refresh(self, refresh):
+        return self.client.post(reverse('token_refresh'), {'refresh': refresh}, format='json')
+
+    def change_password(self, access, old='Old-pass-4821', new='New-pass-9137'):
+        return self.client.post(
+            reverse('password-change'), {'old_password': old, 'new_password': new},
+            format='json', HTTP_AUTHORIZATION=f'Bearer {access}',
+        )
+
+    def test_change_password_ends_other_sessions_and_keeps_this_one(self):
+        phone = self.login().data
+        laptop = self.login().data
+
+        response = self.change_password(laptop['access'])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for old in (phone, laptop):
+            self.assertEqual(self.get_profile(old['access']).status_code, status.HTTP_401_UNAUTHORIZED)
+            self.assertEqual(self.refresh(old['refresh']).status_code, status.HTTP_401_UNAUTHORIZED)
+        # The device that changed the password gets fresh tokens.
+        self.assertEqual(self.get_profile(response.data['access']).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.refresh(response.data['refresh']).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.login().status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.login('New-pass-9137').status_code, status.HTTP_200_OK)
+
+    def test_wrong_old_password_is_refused_and_counts_as_a_failed_login(self):
+        access = self.login().data['access']
+
+        response = self.change_password(access, old='not-my-password')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('old_password', response.data)
+        self.assertTrue(GameUser.objects.get(pk=self.user.pk).check_password('Old-pass-4821'))
+        # A stolen access token must not allow guessing the password.
+        self.change_password(access, old='still-wrong')
+        self.change_password(access, old='wrong-again')
+        self.assertEqual(
+            self.change_password(access).status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_weak_new_password_is_refused(self):
+        access = self.login().data['access']
+
+        response = self.change_password(access, new='12345678')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', response.data)
+        self.assertEqual(self.get_profile(access).status_code, status.HTTP_200_OK)
+
+    def test_logout_all_ends_every_session(self):
+        phone = self.login().data
+        laptop = self.login().data
+
+        response = self.client.post(reverse('logout-all'), HTTP_AUTHORIZATION=f'Bearer {laptop["access"]}')
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        for old in (phone, laptop):
+            self.assertEqual(self.get_profile(old['access']).status_code, status.HTTP_401_UNAUTHORIZED)
+            self.assertEqual(self.refresh(old['refresh']).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.login().status_code, status.HTTP_200_OK)
+
+    def test_refreshed_tokens_end_with_the_session(self):
+        refreshed = self.refresh(self.login().data['refresh']).data
+        self.assertEqual(self.get_profile(refreshed['access']).status_code, status.HTTP_200_OK)
+
+        self.client.post(reverse('logout-all'), HTTP_AUTHORIZATION=f'Bearer {refreshed["access"]}')
+
+        self.assertEqual(self.get_profile(refreshed['access']).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.refresh(refreshed['refresh']).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_password_set_elsewhere_also_ends_sessions(self):
+        # e.g. an admin resetting the password, or manage.py changepassword.
+        access = self.login().data['access']
+
+        self.user.set_password('Admin-set-5512')
+        self.user.save()
+
+        self.assertEqual(self.get_profile(access).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @override_settings(PASSWORD_HASHERS=[
+        'django.contrib.auth.hashers.Argon2PasswordHasher',
+        'django.contrib.auth.hashers.MD5PasswordHasher',
+    ])
+    def test_rehashing_the_password_on_login_keeps_the_session(self):
+        from django.contrib.auth.hashers import make_password
+
+        GameUser.objects.filter(pk=self.user.pk).update(password=make_password('Old-pass-4821', hasher='md5'))
+
+        access = self.login().data['access']
+
+        self.assertTrue(GameUser.objects.get(pk=self.user.pk).password.startswith('argon2'))
+        self.assertEqual(self.get_profile(access).status_code, status.HTTP_200_OK)
+
+    def test_tokens_issued_before_session_versions_stay_valid(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        legacy = RefreshToken.for_user(self.user)
+
+        self.assertEqual(self.get_profile(str(legacy.access_token)).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.refresh(str(legacy)).status_code, status.HTTP_200_OK)
+
+
 class AccountIdentityTests(APITestCase):
     """Usernames and emails are unique regardless of case; usernames have a fixed format."""
 

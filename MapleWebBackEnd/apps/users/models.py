@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
+from django.contrib.auth.hashers import check_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 
@@ -55,6 +56,9 @@ class GameUser(AbstractBaseUser):
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     
+    # Stamped into every JWT; bumping it ends all sessions (apps/users/sessions.py).
+    session_version = models.PositiveIntegerField(default=0, editable=False)
+
     lumis = models.PositiveIntegerField(default=0) #Lumis currency
     nova = models.PositiveIntegerField(default=0) #Nova currency
     
@@ -90,7 +94,24 @@ class GameUser(AbstractBaseUser):
     
     def __str__(self):
         return self.username
-    
+
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        if self.pk is not None:
+            # A new password (from the player, an admin or the shell) ends every
+            # session once saved.
+            self.session_version += 1
+
+    def check_password(self, raw_password):
+        # Same as AbstractBaseUser.check_password, except that re-hashing the
+        # same password (hasher upgrade on login) keeps the sessions.
+        def setter(raw_password):
+            super(GameUser, self).set_password(raw_password)
+            self._password = None
+            self.save(update_fields=['password'])
+
+        return check_password(raw_password, self.password, setter)
+
     def has_perm(self, perm, obj=None):
         """Does the user have a specific permission?"""
         return self.is_admin or self.is_superuser
