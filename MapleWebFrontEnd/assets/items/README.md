@@ -11,4 +11,6 @@ AI-generated high-resolution pixel-art source icons for the current backend `Ite
 - Essence tiers are standalone glowing gemstones and progress through copper, iron, gold, and eternal prismatic materials.
 - No baked icon frames, labels, logos, or background glow.
 
-Use `item_icon_catalog.json` to resolve a backend item template ID to its Godot resource path. Keep textures on nearest-neighbor filtering and prefer integer display scales.
+Register each icon in `ItemIcons.ICON_PATHS` (`src/shared/items/item_icons.gd`), keyed by the lower-cased backend template name; template IDs differ between local databases. Keep textures on nearest-neighbor filtering and prefer integer display scales.
+
+`source/` holds high-resolution originals. It has a `.gdignore`, so Godot neither imports nor exports it.

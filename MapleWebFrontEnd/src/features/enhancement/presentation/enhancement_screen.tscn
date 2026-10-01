@@ -1,22 +1,6 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://src/features/enhancement/presentation/enhancement_screen.gd" id="1_script"]
-
-[sub_resource type="StyleBoxFlat" id="StylePanel"]
-bg_color = Color(0.075, 0.105, 0.135, 0.97)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.29, 0.4, 0.48, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-content_margin_left = 16.0
-content_margin_top = 14.0
-content_margin_right = 16.0
-content_margin_bottom = 14.0
 
 [sub_resource type="StyleBoxFlat" id="StyleShowcase"]
 bg_color = Color(0.09, 0.15, 0.19, 0.94)
@@ -33,18 +17,6 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-
-[sub_resource type="StyleBoxFlat" id="StyleAction"]
-bg_color = Color(0.13, 0.35, 0.48, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.35, 0.58, 0.69, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
 
 [node name="EnhancementScreen" type="Control"]
 layout_mode = 3
@@ -72,9 +44,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 34
-theme_override_constants/margin_top = 24
+theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 34
-theme_override_constants/margin_bottom = 22
+theme_override_constants/margin_bottom = 14
 
 [node name="Root" type="VBoxContainer" parent="Margin"]
 layout_mode = 2
@@ -115,9 +87,9 @@ size_flags_vertical = 3
 theme_override_constants/separation = 12
 
 [node name="MenuPanel" type="PanelContainer" parent="Margin/Root/Content"]
+theme_type_variation = &"CompactPanel"
 custom_minimum_size = Vector2(205, 0)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Menu" type="VBoxContainer" parent="Margin/Root/Content/MenuPanel"]
 layout_mode = 2
@@ -133,7 +105,6 @@ text = "ENHANCE"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleAction")
 text = "✦  Lumen Ascend"
 
 [node name="AuroraMenuButton" type="Button" parent="Margin/Root/Content/MenuPanel/Menu"]
@@ -172,13 +143,13 @@ text = "LUMIS —"
 horizontal_alignment = 1
 
 [node name="MainPanel" type="PanelContainer" parent="Margin/Root/Content"]
+theme_type_variation = &"CompactPanel"
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Main" type="VBoxContainer" parent="Margin/Root/Content/MainPanel"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="TargetRow" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main"]
 layout_mode = 2
@@ -197,7 +168,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="ItemShowcase" type="PanelContainer" parent="Margin/Root/Content/MainPanel/Main"]
-custom_minimum_size = Vector2(0, 210)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleShowcase")
 
@@ -207,7 +177,7 @@ theme_override_constants/separation = 7
 
 [node name="TargetIcon" type="TextureRect" parent="Margin/Root/Content/MainPanel/Main/ItemShowcase/Showcase"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 140)
+custom_minimum_size = Vector2(0, 112)
 layout_mode = 2
 texture_filter = 1
 expand_mode = 1
@@ -236,7 +206,7 @@ tabs_visible = false
 
 [node name="Lumen" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 6
 
 [node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
 layout_mode = 2
@@ -303,10 +273,10 @@ autowrap_mode = 2
 
 [node name="LumenButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Lumen"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(250, 50)
+custom_minimum_size = Vector2(250, 44)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_styles/normal = SubResource("StyleAction")
+theme_type_variation = &"PrimaryButton"
 text = "ENHANCE"
 
 [node name="Aurora" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
@@ -361,14 +331,14 @@ theme_override_constants/separation = 10
 unique_name_in_owner = true
 custom_minimum_size = Vector2(190, 48)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleAction")
+theme_type_variation = &"PrimaryButton"
 text = "REVEAL AURORA"
 
 [node name="RerollButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/ActionRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(190, 48)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleAction")
+theme_type_variation = &"PrimaryButton"
 text = "USE ESSENCE"
 
 [node name="PendingPanel" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]

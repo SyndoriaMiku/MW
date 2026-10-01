@@ -152,25 +152,12 @@ func _resolve_mock_skill(skill: Dictionary, target_id: int) -> Dictionary:
 		"damage": damage,
 		"message": "%s used %s and dealt %d damage to %s." % [player.name, skill.get("name", "Skill"), damage, enemy.name],
 	}]
-	if int(enemy.current_hp) <= 0:
-		_mock_battle.status = "victory"
-		events.append({"type": "combatant_defeated", "target_name": enemy.name})
-		events.append({"type": "battle_victory"})
-	else:
-		var enemy_damage := 9
-		player.current_hp = maxi(0, int(player.current_hp) - enemy_damage)
-		_advance_mock_player_cooldowns()
-		events.append({
-			"type": "damage_applied", "actor_name": enemy.name,
-			"target_name": player.name, "amount": enemy_damage,
-		})
-		_mock_battle.turn_count = int(_mock_battle.turn_count) + 1
-		events.append({"type": "turn_started", "turn": _mock_battle.turn_count})
+	_finish_mock_turn(player, enemy, events)
 	return {"ok": true, "data": {"events": events, "combat": _mock_battle.duplicate(true)}}
 
 
 func _resolve_mock_attack(target_id: int) -> Dictionary:
-	var events: Array[Dictionary] = []
+	var events: Array = []
 	var player := _find_mock_combatant(1)
 	var enemy := _find_mock_combatant(target_id)
 	if player.is_empty() or enemy.is_empty() or _mock_battle.status != "in_progress":
@@ -188,28 +175,7 @@ func _resolve_mock_attack(target_id: int) -> Dictionary:
 		"amount": player_damage,
 	})
 
-	if int(enemy.current_hp) <= 0:
-		_mock_battle.status = "victory"
-		events.append({"type": "combatant_defeated", "target_name": enemy.name})
-		events.append({"type": "battle_victory"})
-	else:
-		var enemy_damage := 9
-		player.current_hp = maxi(0, int(player.current_hp) - enemy_damage)
-		events.append({
-			"type": "damage_applied",
-			"actor_name": enemy.name,
-			"target_name": player.name,
-			"amount": enemy_damage,
-		})
-		if int(player.current_hp) <= 0:
-			_mock_battle.status = "defeat"
-			events.append({"type": "combatant_defeated", "target_name": player.name})
-			events.append({"type": "battle_defeat"})
-		else:
-			_advance_mock_player_cooldowns()
-			_mock_battle.turn_count = int(_mock_battle.turn_count) + 1
-			events.append({"type": "turn_started", "turn": _mock_battle.turn_count})
-
+	_finish_mock_turn(player, enemy, events)
 	return {
 		"ok": true,
 		"data": {
@@ -217,6 +183,34 @@ func _resolve_mock_attack(target_id: int) -> Dictionary:
 			"combat": _mock_battle.duplicate(true),
 		},
 	}
+
+
+## Resolves victory, or the enemy's counter-attack and the possible defeat, after
+## the player's action.
+func _finish_mock_turn(player: Dictionary, enemy: Dictionary, events: Array) -> void:
+	if int(enemy.current_hp) <= 0:
+		_mock_battle.status = "victory"
+		events.append({"type": "combatant_defeated", "target_name": enemy.name})
+		events.append({"type": "battle_victory"})
+		return
+
+	var enemy_damage := 9
+	player.current_hp = maxi(0, int(player.current_hp) - enemy_damage)
+	events.append({
+		"type": "damage_applied",
+		"actor_name": enemy.name,
+		"target_name": player.name,
+		"amount": enemy_damage,
+	})
+	if int(player.current_hp) <= 0:
+		_mock_battle.status = "defeat"
+		events.append({"type": "combatant_defeated", "target_name": player.name})
+		events.append({"type": "battle_defeat"})
+		return
+
+	_advance_mock_player_cooldowns()
+	_mock_battle.turn_count = int(_mock_battle.turn_count) + 1
+	events.append({"type": "turn_started", "turn": _mock_battle.turn_count})
 
 
 func _find_mock_combatant(combatant_id: int) -> Dictionary:

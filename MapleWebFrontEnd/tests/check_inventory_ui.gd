@@ -15,7 +15,7 @@ func _ready() -> void:
 		"minimum_level": 1,
 		"att_boost": 5,
 	}
-	var texture: Texture2D = screen._resolve_item_icon(mock_template)
+	var texture: Texture2D = ItemIcons.for_template(mock_template)
 	if texture == null:
 		printerr("INVENTORY_ICON_RESOLVE_FAILED")
 		screen.free()

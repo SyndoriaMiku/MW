@@ -45,6 +45,15 @@ func _ready() -> void:
 		screen.free()
 		get_tree().quit(1)
 		return
+	var repository := BattleRepository.new()
+	repository._find_mock_combatant(1).current_hp = 5
+	var mock_skill: Dictionary = repository._find_mock_combatant(1).skills[1]
+	var skill_result: Dictionary = repository._resolve_mock_skill(mock_skill, 2)
+	if str(skill_result.data.combat.status) != "defeat":
+		printerr("MOCK_SKILL_DEFEAT_FAILED")
+		screen.free()
+		get_tree().quit(1)
+		return
 	print("BATTLE_SKILL_UI_OK selectable=%d label=%s" % [skills.size(), text.replace("\n", " | ")])
 	screen.free()
 	get_tree().quit(0)

@@ -1,22 +1,6 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://src/features/character/presentation/character_profile.gd" id="1_script"]
-
-[sub_resource type="StyleBoxFlat" id="StylePanel"]
-bg_color = Color(0.06, 0.09, 0.14, 0.98)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.18, 0.3, 0.44, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-content_margin_left = 24.0
-content_margin_top = 22.0
-content_margin_right = 24.0
-content_margin_bottom = 22.0
 
 [sub_resource type="StyleBoxFlat" id="StylePortrait"]
 bg_color = Color(0.1, 0.31, 0.5, 1)
@@ -91,7 +75,6 @@ theme_override_constants/separation = 18
 [node name="IdentityPanel" type="PanelContainer" parent="Margin/Root/Content"]
 custom_minimum_size = Vector2(265, 0)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Box" type="VBoxContainer" parent="Margin/Root/Content/IdentityPanel"]
 layout_mode = 2
@@ -144,6 +127,7 @@ layout_mode = 2
 text = "EXP  0 / —"
 
 [node name="ExpProgress" type="ProgressBar" parent="Margin/Root/Content/IdentityPanel/Box"]
+theme_type_variation = &"EXPBar"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
@@ -176,7 +160,6 @@ text = "0 / 0"
 [node name="EquipmentPanel" type="PanelContainer" parent="Margin/Root/Content"]
 custom_minimum_size = Vector2(440, 0)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Box" type="VBoxContainer" parent="Margin/Root/Content/EquipmentPanel"]
 layout_mode = 2
@@ -281,7 +264,6 @@ theme_override_constants/separation = 18
 
 [node name="StatsPanel" type="PanelContainer" parent="Margin/Root/Content/Details"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Box" type="VBoxContainer" parent="Margin/Root/Content/Details/StatsPanel"]
 layout_mode = 2
@@ -378,7 +360,6 @@ autowrap_mode = 2
 [node name="SkillsPanel" type="PanelContainer" parent="Margin/Root/Content/Details"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_styles/panel = SubResource("StylePanel")
 
 [node name="Box" type="VBoxContainer" parent="Margin/Root/Content/Details/SkillsPanel"]
 layout_mode = 2

@@ -1,8 +1,5 @@
 extends Control
 
-const LAUNCHER_SCENE := "res://src/features/world/presentation/battle_launcher.tscn"
-const LOGIN_SCENE := "res://src/features/auth/presentation/login_screen.tscn"
-
 @onready var back_button: Button = %BackButton
 @onready var refresh_button: Button = %RefreshButton
 @onready var character_name: Label = %CharacterName
@@ -38,7 +35,6 @@ var _classes: Array = []
 var _jobs: Array = []
 var _skills: Array = []
 var _equipped_items: Array = []
-var _icon_catalog: Dictionary = {}
 var _item_tooltip: PopupPanel
 var _tooltip_box: VBoxContainer
 
@@ -82,24 +78,13 @@ const SLOT_ID_TO_TYPE := {
 	22: "pendant",
 }
 
-const ITEM_ICON_TEXTURES_BY_NAME := {
-	"copper hammer": preload("res://assets/items/icons/copper_hammer.png"),
-	"copper essence": preload("res://assets/items/icons/copper_essence.png"),
-	"iron essence": preload("res://assets/items/icons/iron_essence.png"),
-	"gold essence": preload("res://assets/items/icons/gold_essence.png"),
-	"eternal essence": preload("res://assets/items/icons/eternal_essence.png"),
-	"copper bow": preload("res://assets/items/icons/copper_bow.png"),
-	"copper staff": preload("res://assets/items/icons/copper_staff.png"),
-}
-
 
 func _ready() -> void:
 	_setup_item_tooltip()
 	back_button.pressed.connect(_on_back_pressed)
 	refresh_button.pressed.connect(_load_profile)
 	skill_list.item_selected.connect(_on_skill_selected)
-	if not SessionStore.has_session():
-		get_tree().change_scene_to_file(LOGIN_SCENE)
+	if not SceneRouter.require_session():
 		return
 	await _load_profile()
 
@@ -120,18 +105,17 @@ func _load_profile() -> void:
 	var classes_response: Dictionary = await ApiClient.get_json("classes/")
 	if not _accept_response(classes_response):
 		return
-	_classes = _unwrap_list(classes_response.get("data", []))
+	_classes = ApiClient.unwrap_list(classes_response.get("data", []))
 
 	var jobs_response: Dictionary = await ApiClient.get_json("classes/jobs/")
 	if not _accept_response(jobs_response):
 		return
-	_jobs = _unwrap_list(jobs_response.get("data", []))
+	_jobs = ApiClient.unwrap_list(jobs_response.get("data", []))
 
 	var equipment_response: Dictionary = await ApiClient.get_json("inventory/equipped/")
 	if not _accept_response(equipment_response):
 		return
-	_equipped_items = _unwrap_list(equipment_response.get("data", []))
-	_icon_catalog = _load_icon_catalog()
+	_equipped_items = ApiClient.unwrap_list(equipment_response.get("data", []))
 
 	_skills = _character.get("skills", [])
 	_render_profile()
@@ -233,7 +217,7 @@ func _create_slot_button(slot: Dictionary, size: Vector2) -> Control:
 
 	var item: Dictionary = equipped.get("item", {})
 	var template: Dictionary = item.get("template", {})
-	var icon_texture := _resolve_item_icon(template)
+	var icon_texture := ItemIcons.for_template(template)
 	if icon_texture != null:
 		empty_label.visible = false
 		var texture_rect := TextureRect.new()
@@ -323,7 +307,7 @@ func _build_item_tooltip(equipped: Dictionary) -> void:
 	icon_panel.add_theme_stylebox_override("panel", icon_style)
 	overview.add_child(icon_panel)
 	var icon := TextureRect.new()
-	icon.texture = _resolve_item_icon(template)
+	icon.texture = ItemIcons.for_template(template)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -560,34 +544,6 @@ func _plain_number(value: float) -> String:
 	return "%.1f" % value
 
 
-func _resolve_item_icon(template: Dictionary) -> Texture2D:
-	var template_name := str(template.get("name", "")).strip_edges().to_lower()
-	var bundled_texture: Variant = ITEM_ICON_TEXTURES_BY_NAME.get(template_name)
-	if bundled_texture is Texture2D:
-		return bundled_texture
-
-	# Template IDs can differ between local databases, so use the stable item name
-	# when the backend ID is not present in this client's icon catalog.
-	var template_id := str(template.get("id", ""))
-	var catalog_entry: Variant = _icon_catalog.get(template_id, {})
-	if catalog_entry is Dictionary:
-		var id_path := str(catalog_entry.get("icon", ""))
-		if not id_path.is_empty() and ResourceLoader.exists(id_path):
-			return load(id_path) as Texture2D
-
-	if template_name.is_empty():
-		return null
-	for entry_value in _icon_catalog.values():
-		if not entry_value is Dictionary:
-			continue
-		var entry: Dictionary = entry_value
-		if str(entry.get("name", "")).strip_edges().to_lower() == template_name:
-			var name_path := str(entry.get("icon", ""))
-			if not name_path.is_empty() and ResourceLoader.exists(name_path):
-				return load(name_path) as Texture2D
-	return null
-
-
 func _find_equipped_item(item_type: String, slot_index: int) -> Dictionary:
 	for equipped in _equipped_items:
 		var item: Dictionary = equipped.get("item", {})
@@ -598,31 +554,6 @@ func _find_equipped_item(item_type: String, slot_index: int) -> Dictionary:
 		if resolved_type == item_type and int(equipped.get("slot_index", 0)) == slot_index:
 			return equipped
 	return {}
-
-
-func _equipment_tooltip(slot_name: String, template: Dictionary, item: Dictionary) -> String:
-	var lines := PackedStringArray([
-		str(template.get("name", "Unknown Item")),
-		"Slot: %s" % slot_name,
-		"Required level: %d" % int(template.get("minimum_level", 1)),
-	])
-	for stat in ["hp", "mp", "att", "str", "agi", "int"]:
-		var value := int(template.get("%s_boost" % stat, 0))
-		if value != 0:
-			lines.append("%s %+d" % [stat.to_upper(), value])
-	var lumen_level := int(item.get("lumen_ascend_level", 0))
-	if lumen_level > 0:
-		lines.append("Lumen +%d" % lumen_level)
-	return "\n".join(lines)
-
-
-func _load_icon_catalog() -> Dictionary:
-	var path := "res://assets/items/item_icon_catalog.json"
-	if not FileAccess.file_exists(path):
-		return {}
-	var file := FileAccess.open(path, FileAccess.READ)
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	return parsed if parsed is Dictionary else {}
 
 
 func _clear_children(parent: Node) -> void:
@@ -671,23 +602,10 @@ func _lookup_name(items: Array, target_id: Variant) -> String:
 	return "Unknown"
 
 
-func _unwrap_list(payload: Variant) -> Array:
-	if payload is Array:
-		return payload
-	if payload is Dictionary:
-		return payload.get("results", [])
-	return []
-
-
 func _accept_response(response: Dictionary) -> bool:
 	if response.get("ok", false):
 		return true
-	if int(response.get("status", 0)) == 401:
-		SessionStore.clear_session()
-		get_tree().change_scene_to_file(LOGIN_SCENE)
-		return false
-	var error: Dictionary = response.get("error", {})
-	_set_loading(false, str(error.get("message", "Unable to load character data.")))
+	_set_loading(false, ApiClient.error_message(response, "Unable to load character data."))
 	return false
 
 
@@ -697,4 +615,4 @@ func _set_loading(is_loading: bool, message: String) -> void:
 
 
 func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file(LAUNCHER_SCENE)
+	SceneRouter.go_to(SceneRouter.LAUNCHER)

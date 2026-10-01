@@ -1,26 +1,5 @@
 extends Control
 
-const LAUNCHER_SCENE := "res://src/features/world/presentation/battle_launcher.tscn"
-const INVENTORY_SCENE := "res://src/features/inventory/presentation/inventory_screen.tscn"
-const LOGIN_SCENE := "res://src/features/auth/presentation/login_screen.tscn"
-
-const EQUIPMENT_TYPES := {
-	"pendant": true, "earring": true, "ring": true, "belt": true,
-	"face": true, "eye": true, "hat": true, "top": true,
-	"bottom": true, "shoes": true, "cape": true, "gloves": true,
-	"shoulder": true, "weapon": true,
-}
-
-const ITEM_ICONS := {
-	"copper hammer": preload("res://assets/items/icons/copper_hammer.png"),
-	"copper essence": preload("res://assets/items/icons/copper_essence.png"),
-	"iron essence": preload("res://assets/items/icons/iron_essence.png"),
-	"gold essence": preload("res://assets/items/icons/gold_essence.png"),
-	"eternal essence": preload("res://assets/items/icons/eternal_essence.png"),
-	"copper bow": preload("res://assets/items/icons/copper_bow.png"),
-	"copper staff": preload("res://assets/items/icons/copper_staff.png"),
-}
-
 @onready var back_button: Button = %BackButton
 @onready var inventory_button: Button = %InventoryButton
 @onready var refresh_button: Button = %RefreshButton
@@ -69,8 +48,8 @@ var _is_loading := false
 
 
 func _ready() -> void:
-	back_button.pressed.connect(func(): get_tree().change_scene_to_file(LAUNCHER_SCENE))
-	inventory_button.pressed.connect(func(): get_tree().change_scene_to_file(INVENTORY_SCENE))
+	back_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.LAUNCHER))
+	inventory_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.INVENTORY))
 	refresh_button.pressed.connect(_load_data)
 	lumen_menu_button.pressed.connect(_select_system.bind(0))
 	aurora_menu_button.pressed.connect(_select_system.bind(1))
@@ -84,8 +63,7 @@ func _ready() -> void:
 	for button in [lumen_menu_button, aurora_menu_button, future_menu_button]:
 		button.toggle_mode = true
 	_select_system(0)
-	if not SessionStore.has_session():
-		get_tree().change_scene_to_file(LOGIN_SCENE)
+	if not SceneRouter.require_session():
 		return
 	await _load_data()
 
@@ -111,7 +89,7 @@ func _load_data() -> void:
 	var inventory_response: Dictionary = await ApiClient.get_json("inventory/")
 	if not _accept_http(inventory_response):
 		return
-	_items = _unwrap_list(inventory_response.get("data", []))
+	_items = ApiClient.unwrap_list(inventory_response.get("data", []))
 	_equipment = []
 	_essences = []
 	for item_value in _items:
@@ -120,7 +98,7 @@ func _load_data() -> void:
 		var item: Dictionary = item_value
 		var template: Dictionary = item.get("template", {})
 		var item_type := str(template.get("item_type", ""))
-		if EQUIPMENT_TYPES.has(item_type):
+		if ItemTypes.is_equipment(item_type):
 			_equipment.append(item)
 		elif item_type == "use" and str(template.get("name", "")).to_lower().contains("essence"):
 			_essences.append(item)
@@ -192,7 +170,7 @@ func _render_selected_item() -> void:
 		_set_action_availability(false, false, false)
 		return
 	var template: Dictionary = _selected_item.get("template", {})
-	target_icon.texture = _resolve_icon(template)
+	target_icon.texture = ItemIcons.for_template(template)
 	target_name.text = str(template.get("name", "Unknown Item"))
 	target_state.text = "%s  •  Required Level %d%s" % [
 		str(template.get("item_type", "equipment")).capitalize(),
@@ -516,12 +494,7 @@ func _accept_mutation(response: Dictionary) -> bool:
 func _accept_http(response: Dictionary) -> bool:
 	if response.get("ok", false):
 		return true
-	if int(response.get("status", 0)) == 401:
-		SessionStore.clear_session()
-		get_tree().change_scene_to_file(LOGIN_SCENE)
-		return false
-	var error: Dictionary = response.get("error", {})
-	_set_loading(false, str(error.get("message", "Unable to update equipment.")))
+	_set_loading(false, ApiClient.error_message(response, "Unable to update equipment."))
 	return false
 
 
@@ -589,11 +562,6 @@ func _format_integer(value: int) -> String:
 	return "-" + formatted if value < 0 else formatted
 
 
-func _resolve_icon(template: Dictionary) -> Texture2D:
-	var value: Variant = ITEM_ICONS.get(str(template.get("name", "")).strip_edges().to_lower())
-	return value if value is Texture2D else null
-
-
 func _find_item(item_id: String) -> Dictionary:
 	for item in _items:
 		if str(item.get("id", "")) == item_id:
@@ -605,11 +573,3 @@ func _selected_option_id(option: OptionButton) -> String:
 	if option == null or option.selected < 0:
 		return ""
 	return str(option.get_item_metadata(option.selected))
-
-
-func _unwrap_list(payload: Variant) -> Array:
-	if payload is Array:
-		return payload
-	if payload is Dictionary:
-		return payload.get("results", [])
-	return []

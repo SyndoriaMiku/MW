@@ -28,7 +28,7 @@ func _ready() -> void:
 		screen.free()
 		get_tree().quit(1)
 		return
-	var icon: Texture2D = screen._resolve_icon({"name": "Copper Hammer"})
+	var icon: Texture2D = ItemIcons.for_template({"name": "Copper Hammer"})
 	if icon == null:
 		printerr("ENHANCEMENT_ICON_RESOLVE_FAILED")
 		screen.free()

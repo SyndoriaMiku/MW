@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://src/features/auth/presentation/login_screen.gd" id="1_script"]
 
@@ -17,13 +17,6 @@ content_margin_left = 38.0
 content_margin_top = 34.0
 content_margin_right = 38.0
 content_margin_bottom = 34.0
-
-[sub_resource type="StyleBoxFlat" id="StyleButton"]
-bg_color = Color(0.14, 0.45, 0.72, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
 
 [node name="LoginScreen" type="Control"]
 layout_mode = 3
@@ -119,7 +112,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_font_sizes/font_size = 17
-theme_override_styles/normal = SubResource("StyleButton")
+theme_type_variation = &"PrimaryButton"
 text = "ENTER WORLD"
 
 [node name="LoadingLabel" type="Label" parent="Center/Card/Form"]
@@ -130,10 +123,11 @@ theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
 text = "Connecting to server..."
 horizontal_alignment = 1
 
-[node name="Server" type="Label" parent="Center/Card/Form"]
+[node name="ServerLabel" type="Label" parent="Center/Card/Form"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.36, 0.43, 0.52, 1)
 theme_override_font_sizes/font_size = 12
-text = "127.0.0.1:8000  •  Development server"
+text = "127.0.0.1:8000"
 horizontal_alignment = 1
 

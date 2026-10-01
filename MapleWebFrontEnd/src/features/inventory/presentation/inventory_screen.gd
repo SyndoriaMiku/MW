@@ -1,26 +1,5 @@
 extends Control
 
-const LAUNCHER_SCENE := "res://src/features/world/presentation/battle_launcher.tscn"
-const LOGIN_SCENE := "res://src/features/auth/presentation/login_screen.tscn"
-const ENHANCEMENT_SCENE := "res://src/features/enhancement/presentation/enhancement_screen.tscn"
-
-const EQUIPMENT_TYPES := {
-	"pendant": true, "earring": true, "ring": true, "belt": true,
-	"face": true, "eye": true, "hat": true, "top": true,
-	"bottom": true, "shoes": true, "cape": true, "gloves": true,
-	"shoulder": true, "weapon": true,
-}
-
-const ITEM_ICON_TEXTURES_BY_NAME := {
-	"copper hammer": preload("res://assets/items/icons/copper_hammer.png"),
-	"copper essence": preload("res://assets/items/icons/copper_essence.png"),
-	"iron essence": preload("res://assets/items/icons/iron_essence.png"),
-	"gold essence": preload("res://assets/items/icons/gold_essence.png"),
-	"eternal essence": preload("res://assets/items/icons/eternal_essence.png"),
-	"copper bow": preload("res://assets/items/icons/copper_bow.png"),
-	"copper staff": preload("res://assets/items/icons/copper_staff.png"),
-}
-
 @onready var back_button: Button = %BackButton
 @onready var refresh_button: Button = %RefreshButton
 @onready var enhancement_button: Button = %EnhancementButton
@@ -42,7 +21,6 @@ var _items: Array = []
 var _equipped_item_ids: Dictionary = {}
 var _equipped_slot_indices_by_type: Dictionary = {}
 var _selected_item: Dictionary = {}
-var _icon_catalog: Dictionary = {}
 var _is_loading := false
 
 
@@ -54,9 +32,7 @@ func _ready() -> void:
 	category_filter.item_selected.connect(_on_category_changed)
 	action_button.pressed.connect(_on_action_pressed)
 	_setup_categories()
-	_icon_catalog = _load_icon_catalog()
-	if not SessionStore.has_session():
-		get_tree().change_scene_to_file(LOGIN_SCENE)
+	if not SceneRouter.require_session():
 		return
 	await _load_inventory()
 
@@ -80,14 +56,14 @@ func _load_inventory() -> void:
 	var inventory_response: Dictionary = await ApiClient.get_json("inventory/")
 	if not _accept_response(inventory_response):
 		return
-	_items = _unwrap_list(inventory_response.get("data", []))
+	_items = ApiClient.unwrap_list(inventory_response.get("data", []))
 
 	var equipped_response: Dictionary = await ApiClient.get_json("inventory/equipped/")
 	if not _accept_response(equipped_response):
 		return
 	_equipped_item_ids.clear()
 	_equipped_slot_indices_by_type.clear()
-	for equipped in _unwrap_list(equipped_response.get("data", [])):
+	for equipped in ApiClient.unwrap_list(equipped_response.get("data", [])):
 		var equipped_item: Dictionary = equipped.get("item", {})
 		_equipped_item_ids[str(equipped_item.get("id", ""))] = true
 		var equipped_type := str(equipped_item.get("template", {}).get("item_type", ""))
@@ -137,7 +113,7 @@ func _create_item_card(item: Dictionary) -> Control:
 	icon_host.custom_minimum_size = Vector2(0, 82)
 	box.add_child(icon_host)
 
-	var texture := _resolve_item_icon(template)
+	var texture := ItemIcons.for_template(template)
 	if texture != null:
 		var icon := TextureRect.new()
 		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
@@ -193,11 +169,11 @@ func _render_details() -> void:
 
 	var template: Dictionary = _selected_item.get("template", {})
 	var item_type := str(template.get("item_type", "etc"))
-	var is_equipment := EQUIPMENT_TYPES.has(item_type)
+	var is_equipment := ItemTypes.is_equipment(item_type)
 	var is_equipped := _equipped_item_ids.has(str(_selected_item.get("id", "")))
 	detail_name.text = str(template.get("name", "Unknown Item"))
 	detail_type.text = "%s  •  Required level %d" % [item_type.replace("_", " ").capitalize(), int(template.get("minimum_level", 1))]
-	detail_icon.texture = _resolve_item_icon(template)
+	detail_icon.texture = ItemIcons.for_template(template)
 	detail_state.text = _item_state_text(_selected_item, is_equipped)
 	detail_stats.text = _item_stats_text(_selected_item)
 	detail_description.text = str(template.get("description", "No description available."))
@@ -252,32 +228,10 @@ func _filtered_items() -> Array:
 		var template: Dictionary = item.get("template", {})
 		var name := str(template.get("name", "")).to_lower()
 		var item_type := str(template.get("item_type", "etc"))
-		var category_matches := category == "all" or item_type == category or (category == "equipment" and EQUIPMENT_TYPES.has(item_type))
+		var category_matches := category == "all" or item_type == category or (category == "equipment" and ItemTypes.is_equipment(item_type))
 		if category_matches and (query.is_empty() or name.contains(query)):
 			results.append(item)
 	return results
-
-
-func _resolve_item_icon(template: Dictionary) -> Texture2D:
-	var template_name := str(template.get("name", "")).strip_edges().to_lower()
-	var bundled: Variant = ITEM_ICON_TEXTURES_BY_NAME.get(template_name)
-	if bundled is Texture2D:
-		return bundled
-	var entry: Variant = _icon_catalog.get(str(template.get("id", "")), {})
-	if entry is Dictionary:
-		var icon_path := str(entry.get("icon", ""))
-		if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-			return load(icon_path) as Texture2D
-	return null
-
-
-func _load_icon_catalog() -> Dictionary:
-	var path := "res://assets/items/item_icon_catalog.json"
-	if not FileAccess.file_exists(path):
-		return {}
-	var file := FileAccess.open(path, FileAccess.READ)
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	return parsed if parsed is Dictionary else {}
 
 
 func _on_item_selected(item: Dictionary) -> void:
@@ -374,23 +328,10 @@ func _item_initials(item_name: String) -> String:
 	return initials.left(3)
 
 
-func _unwrap_list(payload: Variant) -> Array:
-	if payload is Array:
-		return payload
-	if payload is Dictionary:
-		return payload.get("results", [])
-	return []
-
-
 func _accept_response(response: Dictionary) -> bool:
 	if response.get("ok", false):
 		return true
-	if int(response.get("status", 0)) == 401:
-		SessionStore.clear_session()
-		get_tree().change_scene_to_file(LOGIN_SCENE)
-		return false
-	var error: Dictionary = response.get("error", {})
-	_set_loading(false, str(error.get("message", "Unable to load inventory.")))
+	_set_loading(false, ApiClient.error_message(response, "Unable to load inventory."))
 	return false
 
 
@@ -411,8 +352,8 @@ func _clear_children(parent: Node) -> void:
 
 
 func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file(LAUNCHER_SCENE)
+	SceneRouter.go_to(SceneRouter.LAUNCHER)
 
 
 func _on_enhancement_pressed() -> void:
-	get_tree().change_scene_to_file(ENHANCEMENT_SCENE)
+	SceneRouter.go_to(SceneRouter.ENHANCEMENT)

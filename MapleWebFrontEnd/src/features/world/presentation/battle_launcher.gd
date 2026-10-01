@@ -1,11 +1,5 @@
 extends Control
 
-const LOGIN_SCENE := "res://src/features/auth/presentation/login_screen.tscn"
-const BATTLE_SCENE := "res://src/features/battle/presentation/battle_demo.tscn"
-const CHARACTER_SCENE := "res://src/features/character/presentation/character_profile.tscn"
-const INVENTORY_SCENE := "res://src/features/inventory/presentation/inventory_screen.tscn"
-const ENHANCEMENT_SCENE := "res://src/features/enhancement/presentation/enhancement_screen.tscn"
-
 @onready var player_name: Label = %PlayerName
 @onready var player_details: Label = %PlayerDetails
 @onready var stamina_label: Label = %StaminaLabel
@@ -35,8 +29,7 @@ func _ready() -> void:
 	enhancement_button.pressed.connect(_on_enhancement_pressed)
 	logout_button.pressed.connect(_on_logout_pressed)
 	dungeon_picker.item_selected.connect(_on_dungeon_selected)
-	if not SessionStore.has_session():
-		get_tree().change_scene_to_file(LOGIN_SCENE)
+	if not SceneRouter.require_session():
 		return
 	await _load_screen_data()
 
@@ -57,13 +50,7 @@ func _load_screen_data() -> void:
 		_handle_api_error(dungeon_response)
 		return
 
-	var payload: Variant = dungeon_response.get("data", [])
-	if payload is Dictionary:
-		_dungeons = payload.get("results", [])
-	elif payload is Array:
-		_dungeons = payload
-	else:
-		_dungeons = []
+	_dungeons = ApiClient.unwrap_list(dungeon_response.get("data", []))
 	_render_dungeons()
 	var ready_message := "Battle in progress — resume when ready." if _has_active_battle else "Connected to Django backend."
 	_set_loading(false, ready_message)
@@ -147,40 +134,36 @@ func _on_enter_pressed() -> void:
 	if SessionStore.active_battle_id.is_empty():
 		_set_loading(false, "Server did not return a combat instance ID.")
 		return
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	SceneRouter.go_to(SceneRouter.BATTLE)
 
 
 func _on_resume_pressed() -> void:
 	if not _has_active_battle or SessionStore.active_battle_id.is_empty():
 		return
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	SceneRouter.go_to(SceneRouter.BATTLE)
 
 
 func _on_logout_pressed() -> void:
-	SessionStore.clear_session()
-	get_tree().change_scene_to_file(LOGIN_SCENE)
+	_set_loading(true, "Signing out...")
+	logout_button.disabled = true
+	await SessionStore.logout()
+	SceneRouter.go_to(SceneRouter.LOGIN)
 
 
 func _on_character_pressed() -> void:
-	get_tree().change_scene_to_file(CHARACTER_SCENE)
+	SceneRouter.go_to(SceneRouter.CHARACTER)
 
 
 func _on_inventory_pressed() -> void:
-	get_tree().change_scene_to_file(INVENTORY_SCENE)
+	SceneRouter.go_to(SceneRouter.INVENTORY)
 
 
 func _on_enhancement_pressed() -> void:
-	get_tree().change_scene_to_file(ENHANCEMENT_SCENE)
+	SceneRouter.go_to(SceneRouter.ENHANCEMENT)
 
 
 func _handle_api_error(response: Dictionary) -> void:
-	var status := int(response.get("status", 0))
-	var error: Dictionary = response.get("error", {})
-	if status == 401:
-		SessionStore.clear_session()
-		get_tree().change_scene_to_file(LOGIN_SCENE)
-		return
-	_set_loading(false, str(error.get("message", "Unable to load game data.")))
+	_set_loading(false, ApiClient.error_message(response, "Unable to load game data."))
 
 
 func _set_loading(is_loading: bool, message: String) -> void:

@@ -1,15 +1,15 @@
 extends Control
 
-const LAUNCHER_SCENE := "res://src/features/world/presentation/battle_launcher.tscn"
-
 @onready var username_input: LineEdit = %UsernameInput
 @onready var password_input: LineEdit = %PasswordInput
 @onready var login_button: Button = %LoginButton
 @onready var error_label: Label = %ErrorLabel
 @onready var loading_label: Label = %LoadingLabel
+@onready var server_label: Label = %ServerLabel
 
 
 func _ready() -> void:
+	server_label.text = ApiClient.server_host()
 	login_button.pressed.connect(_on_login_pressed)
 	username_input.text_submitted.connect(_focus_password)
 	password_input.text_submitted.connect(_submit_from_password)
@@ -38,7 +38,7 @@ func _on_login_pressed() -> void:
 	)
 	if not response.get("ok", false):
 		_set_loading(false)
-		_show_error(str(response.get("error", {}).get("message", "Login failed.")))
+		_show_error(ApiClient.error_message(response, "Login failed."))
 		return
 
 	var payload: Dictionary = response.get("data", {})
@@ -50,7 +50,7 @@ func _on_login_pressed() -> void:
 		return
 
 	SessionStore.begin_session(username, access, refresh)
-	get_tree().change_scene_to_file(LAUNCHER_SCENE)
+	SceneRouter.go_to(SceneRouter.LAUNCHER)
 
 
 func _set_loading(is_loading: bool) -> void:

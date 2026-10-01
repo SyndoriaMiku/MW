@@ -244,7 +244,7 @@ func _target_for_skill(skill: Dictionary) -> CombatantState:
 func _on_retry_pressed() -> void:
 	if not _repository.use_mock:
 		SessionStore.active_battle_id = ""
-		get_tree().change_scene_to_file("res://src/features/world/presentation/battle_launcher.tscn")
+		SceneRouter.go_to(SceneRouter.LAUNCHER)
 		return
 	_repository.reset_mock()
 	combat_log.clear()
@@ -254,7 +254,7 @@ func _on_retry_pressed() -> void:
 func _on_back_pressed() -> void:
 	if _battle != null and _battle.status != "in_progress":
 		SessionStore.active_battle_id = ""
-	get_tree().change_scene_to_file("res://src/features/world/presentation/battle_launcher.tscn")
+	SceneRouter.go_to(SceneRouter.LAUNCHER)
 
 
 func _present_event(event: Dictionary) -> void:

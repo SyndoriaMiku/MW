@@ -18,6 +18,7 @@ config/features=PackedStringArray("4.7")
 
 ApiClient="*res://src/network/api_client.gd"
 SessionStore="*res://src/session/session_store.gd"
+SceneRouter="*res://src/app/scene_router.gd"
 
 [display]
 
@@ -26,6 +27,14 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+
+[gui]
+
+theme/custom="res://src/shared/ui/main_theme.tres"
+
+[maple_world]
+
+network/api_base_url="http://127.0.0.1:8000/api"
 
 [rendering]
 

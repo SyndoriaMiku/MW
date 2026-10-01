@@ -2,32 +2,21 @@ extends Node
 
 
 func _ready() -> void:
-	var catalog_path := "res://assets/items/item_icon_catalog.json"
-	if not FileAccess.file_exists(catalog_path):
-		printerr("CATALOG_MISSING")
-		get_tree().quit(1)
-		return
-	var file := FileAccess.open(catalog_path, FileAccess.READ)
-	var catalog: Variant = JSON.parse_string(file.get_as_text())
-	if not catalog is Dictionary:
-		printerr("CATALOG_INVALID")
-		get_tree().quit(1)
-		return
-	for template_id in catalog:
-		var path: String = catalog[template_id].get("icon", "")
-		var exists := ResourceLoader.exists(path)
-		var texture: Resource = load(path) if exists else null
-		print("ITEM_ICON id=%s exists=%s type=%s path=%s" % [
-			template_id,
-			exists,
+	for icon_name in ItemIcons.ICON_PATHS:
+		var path: String = ItemIcons.ICON_PATHS[icon_name]
+		var texture := ItemIcons.for_template({"name": icon_name.capitalize()})
+		print("ITEM_ICON name=%s type=%s path=%s" % [
+			icon_name,
 			texture.get_class() if texture != null else "null",
 			path,
 		])
+		if texture == null:
+			printerr("ITEM_ICON_MISSING %s" % path)
+			get_tree().quit(1)
+			return
 	var profile_script: GDScript = load("res://src/features/character/presentation/character_profile.gd")
 	var profile: Control = profile_script.new()
-	# The bundled Copper Hammer icon must work even when runtime catalog loading fails
-	# and the backend uses a different template ID.
-	profile._icon_catalog = {}
+	# Icons resolve by template name, so a backend with different template IDs still works.
 	profile._equipped_items = [{
 		"slot": 9,
 		"slot_index": 0,
