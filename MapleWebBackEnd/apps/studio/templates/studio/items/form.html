@@ -11,7 +11,8 @@
   {% if not is_new %}
   <div class="actions">
     {% if clone_url %}<a class="btn ghost" href="{{ clone_url }}">Nhân bản / tạo cho class khác</a>{% endif %}
-    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
   </div>
   {% endif %}
 </header>

@@ -180,6 +180,15 @@ table.list tbody tr:hover { background: var(--panel-2); }
 .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .checklist li { display: flex; gap: 10px; align-items: baseline; }
 
+/* History */
+.history { display: flex; flex-direction: column; gap: 12px; }
+.history-entry { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.history-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.history-meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+.history-rows { display: flex; flex-direction: column; gap: 4px; }
+.history-rows h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+td.old { color: var(--muted); text-decoration: line-through; }
+
 /* Item preview */
 .preview { background: #1d1a24; color: #eee8f6; border-radius: 10px; padding: 14px; font-size: 13px; border: 1px solid #3a3346; }
 .preview .p-name { font-weight: 700; font-size: 15px; color: #ffd58a; }

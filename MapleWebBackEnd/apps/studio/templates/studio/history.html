@@ -1,0 +1,75 @@
+{% extends 'studio/base.html' %}
+{% load studio_tags %}
+{% block title %}Lịch sử thay đổi{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Studio</p>
+    <h1>{% if one_object and rows %}Lịch sử: {{ rows.0.change.target_repr }}{% else %}Lịch sử thay đổi{% endif %}</h1>
+  </div>
+  {% if one_object %}<a class="btn ghost" href="{% url 'studio:history' %}">Xem mọi thay đổi</a>{% endif %}
+</header>
+
+<section class="card">
+  <form method="get" class="toolbar">
+    {% if params.id %}<input type="hidden" name="id" value="{{ params.id }}">{% endif %}
+    <input class="input" type="search" name="q" value="{{ params.q }}" placeholder="Tìm theo tên, nội dung…">
+    <select class="input" name="type">
+      <option value="">Mọi loại dữ liệu</option>
+      {% for type in types %}<option value="{{ type }}" {% if params.type == type %}selected{% endif %}>{{ type }}</option>{% endfor %}
+    </select>
+    <select class="input" name="user">
+      <option value="">Mọi người</option>
+      {% for name in users %}<option value="{{ name }}" {% if params.user == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+    <select class="input" name="action">
+      <option value="">Mọi thao tác</option>
+      {% for value, label in actions %}<option value="{{ value }}" {% if params.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn ghost" type="submit">Lọc</button>
+  </form>
+
+  {% if rows %}
+  <div class="history">
+    {% for row in rows %}{% with change=row.change %}
+      <article class="history-entry">
+        <div class="history-head">
+          <span class="tag {% if change.action == 'create' %}good{% elif change.action == 'delete' %}bad{% elif change.action == 'action' %}accent{% endif %}">{{ change.get_action_display }}</span>
+          <b>{% if row.url %}<a href="{{ row.url }}">{{ change.target_repr }}</a>{% else %}{{ change.target_repr }}{% endif %}</b>
+          <span class="help">{{ change.target_type }}</span>
+          <span class="history-meta">{{ change.username|default:"—" }} · {{ change.created_at|date:"d/m/Y H:i" }}</span>
+        </div>
+        {% if change.summary %}<p class="help">{{ change.summary }}</p>{% endif %}
+        {% if row.fields %}
+          <div class="table-wrap">
+            <table class="grid">
+              <thead><tr><th>Trường</th><th>Trước</th><th>Sau</th></tr></thead>
+              <tbody>
+                {% for label, values in row.fields.items %}
+                  <tr><td>{{ label }}</td><td class="old">{{ values.0|show }}</td><td>{{ values.1|show }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+        {% for table, parts in row.rows.items %}
+          <div class="history-rows">
+            <h3>{{ table|capfirst }}</h3>
+            {% for name in parts.added %}<div><span class="tag good">thêm</span> {{ name }}</div>{% endfor %}
+            {% for name in parts.deleted %}<div><span class="tag bad">xóa</span> {{ name }}</div>{% endfor %}
+            {% for item in parts.changed %}
+              <div><span class="tag">sửa</span> {{ item.row }}:
+                {% for label, values in item.fields.items %}<span class="help">{{ label }} {{ values.0|show }} → {{ values.1|show }}</span>{% if not forloop.last %}; {% endif %}{% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </article>
+    {% endwith %}{% endfor %}
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}
+    <p class="empty">Chưa có thay đổi nào.</p>
+  {% endif %}
+</section>
+{% endblock %}

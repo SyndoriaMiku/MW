@@ -10,7 +10,9 @@ from django.views import View
 from apps.classes.models import CharacterClass, Job
 from apps.items.models import ItemTemplate
 
+from .. import history
 from ..access import StaffRequiredMixin
+from ..models import StudioChange
 from ..forms.items import GROUP_LABELS, RULE_FORMS, CloneItemForm, ItemTemplateForm
 from ..items_logic import (
     GEAR_TYPES, ITEM_GROUPS, STAT_FIELDS, STAT_LABELS, USE_KIND_LABELS, USE_RULE_RELATIONS,
@@ -105,6 +107,12 @@ class ItemEditorView(EditorView):
             rule.save()
             rule_form.save_m2m()
 
+    def extra_changes(self, form, extra):
+        kind = form.cleaned_data.get('use_kind') or ''
+        if not kind:
+            return {}
+        return {f'Công dụng: {label}': values for label, values in history.form_changes(extra[kind]).items()}
+
     def get_extra_context(self, obj, form):
         classes = list(CharacterClass.objects.order_by('name'))
         jobs = list(Job.objects.select_related('character_class').order_by('character_class__name', 'name'))
@@ -196,6 +204,8 @@ class ItemCloneView(StaffRequiredMixin, View):
         try:
             with transaction.atomic():
                 copies = [copy_for_class(item, character_class, job) for character_class, job in targets]
+                for copy in copies:
+                    history.record(request.user, StudioChange.Action.CREATE, copy, summary=f'Nhân bản cho class khác từ "{item.name}"')
         except ValidationError as exc:
             form.add_error(None, '; '.join(exc.messages))
             return self.render_page(item, form)
@@ -209,6 +219,7 @@ class ItemCloneView(StaffRequiredMixin, View):
         rule_m2m = {}
         if rule is not None:
             rule_m2m = {field.name: list(getattr(rule, field.name).all()) for field in rule._meta.many_to_many}
+        source_name = item.name
         with transaction.atomic():
             item.pk = item.id = None
             item.name = f'{item.name} (bản sao)'[:100]
@@ -222,5 +233,6 @@ class ItemCloneView(StaffRequiredMixin, View):
                 rule.save()
                 for name, values in rule_m2m.items():
                     getattr(rule, name).set(values)
+            history.record(self.request.user, StudioChange.Action.CREATE, item, summary=f'Bản sao của "{source_name}"')
         messages.success(self.request, f'Đã tạo bản sao "{item.name}".')
         return redirect(reverse('studio:item-edit', args=[item.pk]))

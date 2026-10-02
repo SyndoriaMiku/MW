@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import characters, dashboard, items, world
+from .views import characters, dashboard, history, items, world
 
 app_name = 'studio'
 
@@ -16,6 +16,7 @@ def crud(prefix, name, editor, delete, list_view):
 
 urlpatterns = [
     path('', dashboard.DashboardView.as_view(), name='dashboard'),
+    path('history/', history.HistoryView.as_view(), name='history'),
     *crud('items', 'item', items.ItemEditorView, items.ItemDeleteView, items.ItemListView),
     path('items/suggest/', items.ItemSuggestView.as_view(), name='item-suggest'),
     path('items/estimate/', items.ItemEstimateView.as_view(), name='item-estimate'),

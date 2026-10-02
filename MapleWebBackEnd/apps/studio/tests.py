@@ -10,6 +10,7 @@ from apps.users.models import GameUser
 from apps.world.models import EnemyTemplate, LootTable, NormalDungeonTemplate, Region
 
 from .fields import PercentField
+from .models import StudioChange
 
 
 def formset_data(prefix, rows, initial=0):
@@ -393,6 +394,96 @@ class WorldEditorTests(StudioTestCase):
         })
 
         self.assertEqual(list(Region.objects.get(name='Victoria').locations.values_list('name', flat=True)), ['Henesys'])
+
+
+class HistoryTests(StudioTestCase):
+    """Every Studio save, delete and copy is recorded with who did it and what changed."""
+
+    def latest(self):
+        return StudioChange.objects.order_by('-id').first()
+
+    def test_creating_and_editing_record_field_changes(self):
+        self.post_item(name='Leather Cap', item_type='hat', str_boost=3)
+        item = ItemTemplate.objects.get(name='Leather Cap')
+        created = self.latest()
+        self.assertEqual((created.action, created.username, created.target_type, created.target_id),
+                         ('create', 'editor', 'items.ItemTemplate', str(item.pk)))
+
+        self.post_item(reverse('studio:item-edit', args=[item.pk]), name='Leather Cap', item_type='hat', str_boost=6,
+                       class_restriction=[self.warrior.pk])
+
+        change = self.latest()
+        self.assertEqual(change.action, 'update')
+        self.assertEqual(change.changes['STR'], [3, 6])
+        self.assertEqual(change.changes['Class mặc được'], [[], ['Warrior']])
+
+    def test_saving_without_changes_records_nothing(self):
+        item = ItemTemplate.objects.create(name='Plain Ring', item_type='ring')
+        self.post_item(reverse('studio:item-edit', args=[item.pk]), name='Plain Ring', item_type='ring')
+
+        self.assertFalse(StudioChange.objects.exists())
+
+    def test_rows_and_percentages_read_as_in_studio(self):
+        self.client.post(reverse('studio:enemy-new'), {
+            'name': 'Snail', 'level': 1, 'base_hp': 10, 'base_mp': 0, 'base_att': 1,
+            'exp_reward': 1, 'lumis_reward_min': 0, 'lumis_reward_max': 1,
+            **formset_data('skills', []),
+            **formset_data('loot', [{'item_template': ItemTemplate.objects.create(name='Shell', item_type='etc').pk,
+                                     'base_drop_rate': 25, 'min_quantity': 1, 'max_quantity': 1, 'drop_type': 'common'}]),
+        })
+        enemy = EnemyTemplate.objects.get(name='Snail')
+        loot = enemy.loot_tables.get()
+
+        self.client.post(reverse('studio:enemy-edit', args=[enemy.pk]), {
+            'name': 'Snail', 'level': 1, 'base_hp': 10, 'base_mp': 0, 'base_att': 1,
+            'exp_reward': 1, 'lumis_reward_min': 0, 'lumis_reward_max': 1,
+            **formset_data('skills', []),
+            **formset_data('loot', [{'id': loot.pk, 'enemy': enemy.pk, 'item_template': loot.item_template_id,
+                                     'base_drop_rate': 40, 'min_quantity': 1, 'max_quantity': 1, 'drop_type': 'common'}], initial=1),
+        })
+
+        rows = self.latest().changes['_rows']
+        changed = next(iter(rows.values()))['changed'][0]
+        self.assertEqual(changed['fields']['Tỉ lệ rơi % (%)'], [25, 40])
+
+    def test_use_rule_changes_are_recorded(self):
+        self.post_item(name='Tonic', item_type='use', use_kind='battle', **{
+            'rule_battle-hp_restore': 50, 'rule_battle-mp_restore': 0, 'rule_battle-target_type': 'SELF',
+            'rule_battle-cooldown_turns': 0,
+        })
+
+        changes = self.latest().changes
+        self.assertEqual(changes['Công dụng: Hồi HP (số)'], [0, 50])
+        self.assertIn('Công dụng', changes)
+
+    def test_delete_and_copies_are_recorded(self):
+        armor = ItemTemplate.objects.create(name='Warrior Mail', item_type='top', str_boost=5)
+        armor.class_restriction.set([self.warrior])
+        self.client.post(reverse('studio:item-clone', args=[armor.pk]), {'classes': [self.archer.pk]})
+        self.assertIn('Nhân bản', self.latest().summary)
+
+        self.client.post(reverse('studio:item-delete', args=[armor.pk]))
+
+        deleted = self.latest()
+        self.assertEqual((deleted.action, deleted.target_repr, deleted.target_id), ('delete', 'Warrior Mail', str(armor.pk)))
+
+    def test_history_page_filters_and_hides_player_data_from_staff(self):
+        item = ItemTemplate.objects.create(name='Cape', item_type='cape')
+        StudioChange.objects.create(username='editor', action='update', target_type='items.ItemTemplate',
+                                    target_id=str(item.pk), target_repr='Cape', changes={'HP': [0, 5]})
+        StudioChange.objects.create(username='boss', action='action', target_type='users.GameUser',
+                                    target_id='1', target_repr='player', summary='Khóa tài khoản')
+
+        page = self.client.get(reverse('studio:history'))
+        self.assertEqual([row['change'].target_repr for row in page.context['rows']], ['Cape'])
+
+        one = self.client.get(reverse('studio:history'), {'type': 'items.ItemTemplate', 'id': item.pk})
+        self.assertEqual(one.context['rows'][0]['url'], reverse('studio:item-edit', args=[item.pk]))
+
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=['is_superuser'])
+        page = self.client.get(reverse('studio:history'))
+        self.assertEqual(len(page.context['rows']), 2)
 
 
 class DashboardTests(StudioTestCase):

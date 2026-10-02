@@ -8,7 +8,9 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import ListView
 
+from .. import history
 from ..access import StaffRequiredMixin
+from ..models import StudioChange
 
 
 class StudioListView(StaffRequiredMixin, ListView):
@@ -85,6 +87,25 @@ class EditorView(StaffRequiredMixin, View):
     def after_save(self, obj, form, formsets, extra):
         """Save what the formsets do not, inside the same transaction."""
 
+    def extra_changes(self, form, extra):
+        """History entries for the extra forms, merged into the saved change."""
+        return {}
+
+    def record_history(self, obj, created, form, formsets, extra):
+        changes = history.form_changes(form)
+        rows = {}
+        for prefix, formset in formsets.items():
+            row_changes = history.formset_changes(formset)
+            if row_changes:
+                rows[str(formset.model._meta.verbose_name_plural)] = row_changes
+        if rows:
+            changes['_rows'] = rows
+        changes.update(self.extra_changes(form, extra))
+        if not created and not changes:
+            return
+        action = StudioChange.Action.CREATE if created else StudioChange.Action.UPDATE
+        history.record(self.request.user, action, obj, changes=changes)
+
     def get_extra_context(self, obj, form):
         return {}
 
@@ -99,6 +120,7 @@ class EditorView(StaffRequiredMixin, View):
             'list_url': reverse(self.list_url_name),
             'can_add_another': bool(self.new_url()),
             'delete_url': self.delete_url(obj) if obj is not None and obj.pk is not None else None,
+            'history_url': history.history_url(obj) if obj is not None and obj.pk is not None else None,
             'opts': self.model._meta,
         }
         context.update(self.get_extra_context(obj, form))
@@ -129,6 +151,7 @@ class EditorView(StaffRequiredMixin, View):
                 formset.instance = saved
                 formset.save()
             self.after_save(saved, form, formsets, extra)
+            self.record_history(saved, obj is None, form, formsets, extra)
         messages.success(request, f'Đã lưu "{saved}".')
         if '_add_another' in request.POST and self.new_url():
             return redirect(self.new_url())
@@ -164,8 +187,16 @@ class StudioDeleteView(StaffRequiredMixin, View):
     def post(self, request, pk):
         obj = get_object_or_404(self.model, pk=pk)
         name = str(obj)
+        counts, _ = self.collect(obj)
+        target = {'target_type': obj._meta.label, 'target_id': obj.pk, 'target_repr': name}
         try:
-            obj.delete()
+            with transaction.atomic():
+                obj.delete()
+                history.record(
+                    request.user, StudioChange.Action.DELETE, summary='Xóa kèm: ' + ', '.join(
+                        f'{count} {label}' for label, count in counts.items()) if counts else '',
+                    **target,
+                )
         except ProtectedError:
             messages.error(request, f'Không xóa được "{name}": còn dữ liệu khác đang dùng nó.')
             return redirect(request.path)

@@ -12,4 +12,13 @@ class StaffRequiredMixin:
             return redirect_to_login(request.get_full_path(), reverse('admin:login'))
         if not (user.is_active and user.is_staff):
             raise PermissionDenied('Studio is for staff accounts.')
+        if self.superuser_only and not user.is_superuser:
+            raise PermissionDenied('This part of Studio is for superusers.')
         return super().dispatch(request, *args, **kwargs)
+
+    # Staff edit game data; players, Nova and moderation need a superuser.
+    superuser_only = False
+
+
+class SuperuserRequiredMixin(StaffRequiredMixin):
+    superuser_only = True

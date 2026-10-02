@@ -6,6 +6,7 @@
     <p class="eyebrow"><a href="{{ list_url }}">Quái vật</a></p>
     <h1>{% if is_new %}Tạo quái mới{% else %}{{ object.name }}{% endif %}</h1>
   </div>
+  {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
   {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa quái</a>{% endif %}
 </header>
 

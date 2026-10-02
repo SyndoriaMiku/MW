@@ -24,6 +24,8 @@
       <a href="{% url 'studio:enemy-list' %}" class="{% if section == 'enemies' %}active{% endif %}">Quái vật</a>
       <a href="{% url 'studio:dungeon-list' %}" class="{% if section == 'dungeons' %}active{% endif %}">Dungeon</a>
       <a href="{% url 'studio:region-list' %}" class="{% if section == 'regions' %}active{% endif %}">Khu vực</a>
+      <p class="nav-group">Theo dõi</p>
+      <a href="{% url 'studio:history' %}" class="{% if section == 'history' %}active{% endif %}">Lịch sử</a>
     </nav>
     <div class="sidebar-foot">
       <span>{{ request.user.username }}</span>
