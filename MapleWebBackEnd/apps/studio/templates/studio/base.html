@@ -37,6 +37,10 @@
       <a href="{% url 'studio:effect-tags' %}" class="{% if section == 'tags' %}active{% endif %}">Tag hiệu ứng</a>
       <a href="{% url 'studio:aurora-line-counts' %}" class="{% if section == 'aurora-lines' %}active{% endif %}">Số dòng Aurora</a>
       <a href="{% url 'studio:aurora-lumis-costs' %}" class="{% if section == 'aurora-lumis' %}active{% endif %}">Giá reroll Aurora</a>
+      {% if request.user.is_superuser %}
+      <p class="nav-group">Người chơi</p>
+      <a href="{% url 'studio:player-list' %}" class="{% if section == 'players' %}active{% endif %}">Tài khoản</a>
+      {% endif %}
       <p class="nav-group">Theo dõi</p>
       <a href="{% url 'studio:history' %}" class="{% if section == 'history' %}active{% endif %}">Lịch sử</a>
     </nav>

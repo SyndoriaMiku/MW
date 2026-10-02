@@ -1,0 +1,120 @@
+{% extends 'studio/base.html' %}
+{% block title %}{{ player.username }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{% url 'studio:player-list' %}">Người chơi</a></p>
+    <h1>{{ player.username }} {% if not player.is_active %}<span class="tag bad">bị khóa</span>{% endif %}</h1>
+  </div>
+  <a class="btn ghost" href="{{ history_url }}">Lịch sử thao tác</a>
+</header>
+
+<div class="layout-2">
+  <div>
+    <section class="card">
+      <h2>Tài khoản</h2>
+      <table class="grid">
+        <tbody>
+          <tr><td>Email</td><td>{{ player.email }}</td></tr>
+          <tr><td>Đăng nhập gần nhất</td><td>{{ player.last_login|date:"d/m/Y H:i"|default:"chưa đăng nhập" }}</td></tr>
+          <tr><td>Lumis</td><td>{{ player.lumis }}</td></tr>
+          <tr><td>Nova</td><td>{{ player.nova }}</td></tr>
+          <tr><td>Quyền</td><td>{% if player.is_superuser %}Superuser{% elif player.is_staff %}Staff{% else %}Người chơi{% endif %}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Nhân vật</h2>
+      {% if character %}
+        <table class="grid">
+          <tbody>
+            <tr><td>Tên</td><td><b>{{ character.name }}</b></td></tr>
+            <tr><td>Class / Job</td><td>{{ character.character_class.name|default:"—" }} / {{ character.job.name|default:"—" }}</td></tr>
+            <tr><td>Cấp</td><td>{{ character.level }} ({{ character.current_exp }} EXP)</td></tr>
+            <tr><td>Thể lực</td><td>{{ character.current_stamina }} / {{ character.max_stamina }}</td></tr>
+            <tr><td>HP / MP / ATT</td><td>{{ character.total_hp }} / {{ character.total_mp }} / {{ character.total_att }}</td></tr>
+            <tr><td>STR / AGI / INT</td><td>{{ character.total_str }} / {{ character.total_agi }} / {{ character.total_int }}</td></tr>
+            <tr><td>Trận đang chạy</td><td>{% if battle %}{{ battle.pk }} · lượt {{ battle.turn_count }}{% else %}không có{% endif %}</td></tr>
+          </tbody>
+        </table>
+      {% else %}<p class="empty">Chưa tạo nhân vật.</p>{% endif %}
+    </section>
+
+    {% if character %}
+    <section class="card">
+      <h2>Túi đồ ({{ items|length }})</h2>
+      {% if items %}
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Item</th><th>Số lượng</th><th>Lumen</th><th>Aurora</th><th>Trạng thái</th></tr></thead>
+          <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item.template.name }}</td><td>{{ item.quantity }}</td><td>{{ item.lumen_ascend_level }}</td><td>{{ item.aurora_level }}</td>
+              <td>
+                {% if item.equipped_in %}<span class="tag accent">đang mặc</span>{% endif %}
+                {% if item.is_destroyed %}<span class="tag bad">fragment</span>{% endif %}
+                {% if item.expired_at %}<span class="tag">hạn {{ item.expired_at|date:"d/m H:i" }}</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="empty">Túi đồ trống.</p>{% endif %}
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h2>Sổ Nova (20 dòng gần nhất)</h2>
+      {% if nova_entries %}
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Lúc</th><th>Loại</th><th>Số</th><th>Số dư</th><th>Mã</th><th>Nội dung</th><th>Ghi chú</th></tr></thead>
+          <tbody>
+          {% for entry in nova_entries %}
+            <tr><td>{{ entry.created_at|date:"d/m/Y H:i" }}</td><td>{{ entry.get_kind_display }}</td><td>{{ entry.amount }}</td>
+              <td>{{ entry.balance_after }}</td><td>{{ entry.reference|default:"—" }}</td><td>{{ entry.description }}</td><td class="help">{{ entry.note }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="empty">Chưa có giao dịch Nova.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside>
+    <section class="card">
+      <h2>Thao tác</h2>
+      <p class="lead">Mỗi thao tác được ghi vào lịch sử kèm lý do.</p>
+      {% if player.is_active %}
+        {% include 'studio/players/action.html' with action='lock' label='Khóa tài khoản' danger=True confirm='Khóa tài khoản và đăng xuất người chơi khỏi mọi thiết bị?' %}
+      {% else %}
+        {% include 'studio/players/action.html' with action='unlock' label='Mở khóa tài khoản' confirm='Mở khóa tài khoản này?' %}
+      {% endif %}
+      {% include 'studio/players/action.html' with action='logout_all' label='Đăng xuất mọi thiết bị' confirm='Đăng xuất người chơi khỏi mọi thiết bị?' %}
+      {% include 'studio/players/action.html' with action='reset_password' label='Đặt lại mật khẩu' danger=True confirm='Tạo mật khẩu tạm mới? Mật khẩu cũ mất tác dụng và người chơi bị đăng xuất.' %}
+      {% if battle %}
+        {% include 'studio/players/action.html' with action='end_battle' label='Gỡ trận bị kẹt' danger=True confirm='Đưa nhân vật ra khỏi trận đang chạy? Nhân vật không nhận thưởng trận này.' %}
+      {% endif %}
+      {% if character %}
+        {% include 'studio/players/action.html' with action='refill_stamina' label='Hồi đầy thể lực' confirm='Hồi đầy thể lực cho nhân vật?' %}
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Cộng / trừ Nova</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="nova">
+        {% include 'studio/partials/form_errors.html' with form=nova_form %}
+        <div class="fields" style="grid-template-columns:1fr">
+          {% for field in nova_form.visible_fields %}{% include 'studio/partials/field.html' with field=field %}{% endfor %}
+        </div>
+        <div class="actions" style="margin-top:10px"><button class="btn" type="submit">Ghi vào sổ Nova</button></div>
+      </form>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+<form method="post" class="player-action" data-confirm="{{ confirm }}">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="{{ action }}">
+  <input class="input" name="reason" maxlength="200" placeholder="Lý do (không bắt buộc)" aria-label="Lý do: {{ label }}">
+  <button type="submit" class="btn {% if danger %}danger{% else %}ghost{% endif %}">{{ label }}</button>
+</form>

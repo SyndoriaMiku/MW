@@ -36,6 +36,7 @@ EDIT_URLS = {
     'characters.RateEvent': ('studio:event-edit', 'rate'),
     'items.LumenEvent': ('studio:event-edit', 'lumen'),
     'items.AuroraEvent': ('studio:event-edit', 'aurora'),
+    'users.GameUser': ('studio:player-detail',),
 }
 # Configuration tables are edited as a whole, so their changes have no object id.
 TABLE_URLS = {

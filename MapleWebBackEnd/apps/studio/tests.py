@@ -11,7 +11,7 @@ from apps.items.models import (
     TimedBuffRule,
 )
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
-from apps.users.models import GameUser
+from apps.users.models import GameUser, NovaTransaction
 from apps.world.models import EnemyTemplate, ExperienceTable, LootTable, NormalDungeonTemplate, Region
 
 from .fields import PercentField
@@ -785,6 +785,102 @@ class ShopQuestEventTests(StudioTestCase):
                     reverse('studio:event-new', args=['lumen']), reverse('studio:event-new', args=['aurora'])):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class PlayerManagementTests(StudioTestCase):
+    """Superusers view players and use the safe actions; every action is recorded."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=['is_superuser'])
+        self.player = GameUser.objects.create_user(username='tester', email='tester@example.com', password='Old-pass-4821')
+        self.player.character = Character.objects.create(name='Tester', job=self.fighter, character_class=self.warrior,
+                                                         current_stamina=5)
+        self.player.save(update_fields=['character'])
+        self.url = reverse('studio:player-detail', args=[self.player.pk])
+
+    def act(self, action, **data):
+        return self.client.post(self.url, {'action': action, **data})
+
+    def test_staff_without_superuser_cannot_open_player_pages(self):
+        self.staff.is_superuser = False
+        self.staff.save(update_fields=['is_superuser'])
+
+        self.assertEqual(self.client.get(reverse('studio:player-list')).status_code, 403)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_list_and_detail_open(self):
+        listing = self.client.get(reverse('studio:player-list'), {'q': 'Tester'})
+        self.assertEqual([p.username for p in listing.context['object_list']], ['tester'])
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+
+    def test_lock_ends_sessions_and_unlock(self):
+        version = self.player.session_version
+
+        self.act('lock', reason='spam')
+        self.player.refresh_from_db()
+        self.assertFalse(self.player.is_active)
+        self.assertGreater(self.player.session_version, version)
+        change = StudioChange.objects.get()
+        self.assertEqual((change.action, change.summary, change.changes), ('action', 'Khóa tài khoản', {'Lý do': [None, 'spam']}))
+
+        self.act('unlock')
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.is_active)
+
+    def test_reset_password_shows_it_once_and_never_records_it(self):
+        response = self.act('reset_password')
+
+        password = response.context['password']
+        self.assertEqual(response['Cache-Control'], 'no-store')
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.check_password(password))
+        self.assertFalse(self.player.check_password('Old-pass-4821'))
+        self.assertNotIn(password, str(StudioChange.objects.get().changes) + StudioChange.objects.get().summary)
+
+    def test_cannot_lock_your_own_account(self):
+        self.client.post(reverse('studio:player-detail', args=[self.staff.pk]), {'action': 'lock'})
+
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.is_active)
+
+    def test_refill_stamina_and_end_a_stuck_battle(self):
+        self.act('refill_stamina')
+        character = Character.objects.get(pk=self.player.character_id)
+        self.assertEqual(character.current_stamina, character.max_stamina)
+
+        from apps.battles.services import BattleService
+        from apps.party.models import Party, PartyMember
+        party = Party.objects.create(name='Solo', leader=character, max_size=1)
+        PartyMember.objects.create(party=party, character=character, position=1)
+        enemy = EnemyTemplate.objects.create(name='Wall', level=1, base_hp=999, base_mp=0, base_att=1, exp_reward=50,
+                                             lumis_reward_min=10, lumis_reward_max=10)
+        combat = BattleService.create_combat_instance(party, [enemy])
+        BattleService.start_combat(combat)
+
+        self.act('end_battle', reason='kẹt sau khi mất mạng')
+
+        self.assertIsNone(BattleService.get_active_combat_for_character(character))
+        combat.refresh_from_db()
+        self.assertEqual(combat.status, 'defeat')
+        character.refresh_from_db()
+        self.assertEqual(character.current_exp, 0)  # no rewards
+
+    def test_nova_goes_through_the_ledger(self):
+        self.act('nova', kind='donation', amount=500, reference='kofi-9', description='Cảm ơn', note='')
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.nova, 500)
+        entry = NovaTransaction.objects.get()
+        self.assertEqual((entry.reference, entry.created_by), ('kofi-9', self.staff))
+
+        again = self.act('nova', kind='donation', amount=500, reference='kofi-9', description='', note='')
+        self.assertIn('Mã donate này đã được cộng trước đó.', again.context['nova_form'].non_field_errors())
+        too_much = self.act('nova', kind='adjustment', amount=-900, reference='', description='', note='')
+        self.assertIn('Người chơi không đủ Nova để trừ chừng này.', too_much.context['nova_form'].non_field_errors())
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.nova, 500)
+        self.assertEqual(StudioChange.objects.filter(target_type='users.GameUser').count(), 1)
 
 
 class DashboardTests(StudioTestCase):

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import characters, content, dashboard, history, items, tables, tiers, world
+from .views import characters, content, dashboard, history, items, players, tables, tiers, world
 
 app_name = 'studio'
 
@@ -17,6 +17,8 @@ def crud(prefix, name, editor, delete, list_view):
 urlpatterns = [
     path('', dashboard.DashboardView.as_view(), name='dashboard'),
     path('history/', history.HistoryView.as_view(), name='history'),
+    path('players/', players.PlayerListView.as_view(), name='player-list'),
+    path('players/<int:pk>/', players.PlayerDetailView.as_view(), name='player-detail'),
     path('settings/experience/', tables.ExperienceTableView.as_view(), name='experience-table'),
     path('settings/equipment-slots/', tables.EquipmentSlotTableView.as_view(), name='equipment-slots'),
     path('settings/effect-tags/', tables.SpecialEffectTagTableView.as_view(), name='effect-tags'),

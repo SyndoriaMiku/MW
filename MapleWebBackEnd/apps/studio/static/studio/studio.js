@@ -132,6 +132,21 @@
     root.querySelectorAll('[data-materials]').forEach(setupMaterials);
   }
 
+  // ---- Ask before account actions; copy buttons ----
+  document.addEventListener('submit', (event) => {
+    const message = event.target.dataset?.confirm;
+    if (message && !window.confirm(message)) event.preventDefault();
+  });
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+    const source = document.querySelector(button.dataset.copy);
+    navigator.clipboard?.writeText(source.textContent.trim()).then(
+      () => { button.textContent = 'Đã sao chép'; },
+      () => { window.getSelection().selectAllChildren(source); },
+    );
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-formset]').forEach(setupFormset);
     document.querySelectorAll('[data-growth-preview]').forEach(setupGrowthPreview);
