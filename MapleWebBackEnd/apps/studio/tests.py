@@ -4,7 +4,9 @@ from django.urls import reverse
 from apps.characters.models import Character, EquipmentSlotConfig
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
-from apps.items.models import AuroraLumisCostRule, BattleConsumableRule, ItemTemplate, LumenTierProperty, TimedBuffRule
+from apps.items.models import (
+    AuroraLumisCostRule, AuroraProperty, BattleConsumableRule, ItemSet, ItemTemplate, LumenTierProperty, TimedBuffRule,
+)
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
 from apps.users.models import GameUser
 from apps.world.models import EnemyTemplate, ExperienceTable, LootTable, NormalDungeonTemplate, Region
@@ -562,6 +564,99 @@ class SettingsTableTests(StudioTestCase):
         effect = EffectTemplate.objects.create(name='Rage')
         page = self.client.get(reverse('studio:effect-edit', args=[effect.pk]))
         self.assertIn('icon_key', page.context['form'].fields)
+
+
+class TierEditorTests(StudioTestCase):
+    """Lumen and Aurora tiers with their rule tables, and item sets."""
+
+    def lumen_data(self, costs, ascend, name='Tier 1 - Warrior 1-59'):
+        return {'name': name, 'tier': 1, 'max_lumen_level': 5,
+                **formset_data('costs', costs), **formset_data('ascend', ascend)}
+
+    def test_lumen_tier_with_rates_in_percent_and_stat_rules(self):
+        response = self.client.post(reverse('studio:lumen-new'), self.lumen_data(
+            [{'current_level': 0, 'lumis_cost': 1000, 'success_rate': 70, 'failure_rate': 25, 'heavy_failure_rate': 5}],
+            [{'lumen_level': 1, 'item_types': ['weapon', 'top'], 'hp_boost': 0, 'mp_boost': 0, 'att_boost': 3,
+              'str_boost': 2, 'agi_boost': 0, 'int_boost': 0}],
+        ))
+
+        tier = LumenTierProperty.objects.get(name='Tier 1 - Warrior 1-59')
+        self.assertRedirects(response, reverse('studio:lumen-edit', args=[tier.pk]))
+        cost = tier.cost_rules.get()
+        self.assertEqual((cost.success_rate, cost.failure_rate, cost.heavy_failure_rate), (0.7, 0.25, 0.05))
+        self.assertEqual(tier.ascend_rules.get().item_types, ['weapon', 'top'])
+
+    def test_rates_must_add_up_to_100_percent(self):
+        response = self.client.post(reverse('studio:lumen-new'), self.lumen_data(
+            [{'current_level': 0, 'lumis_cost': 1000, 'success_rate': 70, 'failure_rate': 20, 'heavy_failure_rate': 5}], [],
+        ))
+
+        errors = response.context['formsets']['costs'].forms[0].non_field_errors()
+        self.assertEqual(list(errors), ['Ba tỉ lệ phải cộng lại bằng 100% (đang là 95.0%).'])
+        self.assertFalse(LumenTierProperty.objects.exists())
+
+    def test_copy_for_another_class_swaps_name_and_main_stat(self):
+        tier = LumenTierProperty.objects.create(name='Tier 1 - Warrior 1-59', tier=1, max_lumen_level=5)
+        tier.cost_rules.create(current_level=0, lumis_cost=1000, success_rate=1, failure_rate=0, heavy_failure_rate=0)
+        tier.ascend_rules.create(lumen_level=1, item_types=['top'], hp_boost=10, str_boost=4)
+
+        self.client.post(reverse('studio:lumen-copy', args=[tier.pk]), {'classes': [self.archer.pk]})
+
+        copy = LumenTierProperty.objects.get(name='Tier 1 - Archer 1-59')
+        rule = copy.ascend_rules.get()
+        self.assertEqual((rule.str_boost, rule.agi_boost, rule.hp_boost), (0, 4, 10))
+        self.assertEqual(copy.cost_rules.get().lumis_cost, 1000)
+        self.assertEqual(StudioChange.objects.get().target_repr, str(copy))
+
+        self.client.post(reverse('studio:lumen-copy', args=[tier.pk]), {'plain_copy': '1'})
+        self.client.post(reverse('studio:lumen-copy', args=[tier.pk]), {'plain_copy': '1'})
+        self.assertTrue(LumenTierProperty.objects.filter(name='Tier 1 - Warrior 1-59 (bản sao) (2)').exists())
+
+    def test_aurora_tier_lines_and_copy(self):
+        response = self.client.post(reverse('studio:aurora-new'), {
+            'name': 'Rare', 'tier': 1, 'max_aurora_level': 3, **formset_data('lines', [
+                {'aurora_level': 1, 'item_types': ['ring'], 'stat_type': 'str', 'line_type': 'flat', 'value': 5, 'weight': 3},
+                {'aurora_level': 2, 'item_types': ['ring'], 'stat_type': 'drop', 'line_type': 'flat', 'value': 5, 'weight': 1},
+            ]),
+        })
+        self.assertEqual(response.status_code, 200)  # a flat drop line is refused
+        self.assertFalse(AuroraProperty.objects.exists())
+
+        self.client.post(reverse('studio:aurora-new'), {
+            'name': 'Rare', 'tier': 1, 'max_aurora_level': 3, **formset_data('lines', [
+                {'aurora_level': 1, 'item_types': ['ring'], 'stat_type': 'str', 'line_type': 'flat', 'value': 5, 'weight': 3},
+            ]),
+        })
+        tier = AuroraProperty.objects.get(name='Rare')
+        self.client.post(reverse('studio:aurora-copy', args=[tier.pk]))
+        self.assertEqual(AuroraProperty.objects.get(name='Rare (bản sao)').line_pools.get().value, 5)
+
+    def test_item_set_with_items_and_effects(self):
+        hat = ItemTemplate.objects.create(name='Iron Helm', item_type='hat')
+        mail = ItemTemplate.objects.create(name='Iron Mail', item_type='top')
+
+        self.client.post(reverse('studio:set-new'), {
+            'name': 'Iron Set', 'description': '', 'items': [hat.pk, mail.pk],
+            **formset_data('effects', [{'required_count': 2, 'hp_boost': 50, 'mp_boost': 0, 'att_boost': 0,
+                                        'str_boost': 0, 'agi_boost': 0, 'int_boost': 0, 'all_stats_boost': 3}]),
+        })
+
+        item_set = ItemSet.objects.get(name='Iron Set')
+        self.assertEqual(set(item_set.items.all()), {hat, mail})
+        self.assertEqual((item_set.effects.get().required_count, item_set.effects.get().all_stats_boost), (2, 3))
+
+    def test_tier_pages_open(self):
+        tier = LumenTierProperty.objects.create(name='T', tier=1)
+        aurora = AuroraProperty.objects.create(name='A', tier=1)
+        item_set = ItemSet.objects.create(name='S')
+        for url in (reverse('studio:lumen-list'), reverse('studio:lumen-new'), reverse('studio:lumen-edit', args=[tier.pk]),
+                    reverse('studio:lumen-copy', args=[tier.pk]), reverse('studio:aurora-list'),
+                    reverse('studio:aurora-edit', args=[aurora.pk]), reverse('studio:set-list'),
+                    reverse('studio:set-edit', args=[item_set.pk]), reverse('studio:experience-table'),
+                    reverse('studio:equipment-slots'), reverse('studio:effect-tags'),
+                    reverse('studio:aurora-line-counts'), reverse('studio:aurora-lumis-costs')):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
 
 
 class DashboardTests(StudioTestCase):

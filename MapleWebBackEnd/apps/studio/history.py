@@ -27,6 +27,17 @@ EDIT_URLS = {
     'world.NormalDungeonTemplate': ('studio:dungeon-edit', 'normal'),
     'world.BossDungeonTemplate': ('studio:dungeon-edit', 'boss'),
     'world.Region': ('studio:region-edit',),
+    'items.LumenTierProperty': ('studio:lumen-edit',),
+    'items.AuroraProperty': ('studio:aurora-edit',),
+    'items.ItemSet': ('studio:set-edit',),
+}
+# Configuration tables are edited as a whole, so their changes have no object id.
+TABLE_URLS = {
+    'world.ExperienceTable': 'studio:experience-table',
+    'characters.EquipmentSlotConfig': 'studio:equipment-slots',
+    'skilles.SpecialEffectTag': 'studio:effect-tags',
+    'items.AuroraLineCountConfig': 'studio:aurora-line-counts',
+    'items.AuroraLumisCostRule': 'studio:aurora-lumis-costs',
 }
 
 
@@ -127,6 +138,8 @@ def visible_changes(user):
 
 
 def target_url(change):
+    if change.target_type in TABLE_URLS:
+        return reverse(TABLE_URLS[change.target_type])
     route = EDIT_URLS.get(change.target_type)
     if not route or not change.target_id or change.action == StudioChange.Action.DELETE:
         return None

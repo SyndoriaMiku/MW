@@ -152,6 +152,10 @@ table.grid tr.is-deleted td { opacity: .4; text-decoration: line-through; }
 table.grid td .input { min-width: 80px; }
 table.list tbody tr:hover { background: var(--panel-2); }
 .row-actions { white-space: nowrap; text-align: right; }
+/* Multi-choice cells (item types in rule tables): compact wrapping pills. */
+table.grid td div[id^="id_"] { display: flex; flex-wrap: wrap; gap: 4px; min-width: 260px; max-width: 420px; }
+table.grid td div[id^="id_"] label { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; }
+table.grid td div[id^="id_"] label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 .formset .btn[data-add-row] { margin-top: 8px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .toolbar .input { width: auto; min-width: 160px; }

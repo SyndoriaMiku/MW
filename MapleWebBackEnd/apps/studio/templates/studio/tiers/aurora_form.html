@@ -1,0 +1,38 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Bậc Aurora mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Bậc Aurora</a></p>
+    <h1>{% if is_new %}Tạo bậc Aurora{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if copy_url %}<form method="post" action="{{ copy_url }}">{% csrf_token %}<button class="btn ghost" type="submit">Nhân bản</button></form>{% endif %}
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Bậc</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.tier %}
+      {% include 'studio/partials/field.html' with field=form.max_aurora_level %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>Kho dòng tiềm năng</h2>
+    <p class="lead">Dòng ra được ở cấp Aurora từ mức này trở lên. "Số": cộng thẳng (+5 STR); "%": cộng theo % (+5% STR). Tỉ lệ rơi đồ chỉ được dùng kiểu %.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.lines %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

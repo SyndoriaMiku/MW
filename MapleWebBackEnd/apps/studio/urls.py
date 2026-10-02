@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import characters, dashboard, history, items, tables, world
+from .views import characters, dashboard, history, items, tables, tiers, world
 
 app_name = 'studio'
 
@@ -26,6 +26,11 @@ urlpatterns = [
     path('items/suggest/', items.ItemSuggestView.as_view(), name='item-suggest'),
     path('items/estimate/', items.ItemEstimateView.as_view(), name='item-estimate'),
     path('items/<int:pk>/clone/', items.ItemCloneView.as_view(), name='item-clone'),
+    *crud('lumen-tiers', 'lumen', tiers.LumenTierEditorView, tiers.LumenTierDeleteView, tiers.LumenTierListView),
+    path('lumen-tiers/<int:pk>/copy/', tiers.LumenTierCopyView.as_view(), name='lumen-copy'),
+    *crud('aurora-tiers', 'aurora', tiers.AuroraTierEditorView, tiers.AuroraTierDeleteView, tiers.AuroraTierListView),
+    path('aurora-tiers/<int:pk>/copy/', tiers.AuroraTierCopyView.as_view(), name='aurora-copy'),
+    *crud('item-sets', 'set', tiers.ItemSetEditorView, tiers.ItemSetDeleteView, tiers.ItemSetListView),
     *crud('classes', 'class', characters.ClassEditorView, characters.ClassDeleteView, characters.ClassListView),
     *crud('skills', 'skill', characters.SkillEditorView, characters.SkillDeleteView, characters.SkillListView),
     *crud('effects', 'effect', characters.EffectEditorView, characters.EffectDeleteView, characters.EffectListView),

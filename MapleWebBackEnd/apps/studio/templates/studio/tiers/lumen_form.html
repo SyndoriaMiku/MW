@@ -1,0 +1,43 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Bậc Lumen mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Bậc Lumen</a></p>
+    <h1>{% if is_new %}Tạo bậc Lumen{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if copy_url %}<a class="btn ghost" href="{{ copy_url }}">Nhân bản / tạo cho class khác</a>{% endif %}
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Bậc</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.tier %}
+      {% include 'studio/partials/field.html' with field=form.max_lumen_level %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>Giá &amp; tỉ lệ nâng cấp</h2>
+    <p class="lead">Mỗi dòng áp dụng khi đồ đang ở cấp Lumen đó và nâng lên cấp tiếp theo. Thành công + thất bại + thất bại nặng = 100%. Thất bại nặng phá đồ thành fragment.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.costs %}
+  </section>
+  <section class="card">
+    <h2>Chỉ số cộng thêm</h2>
+    <p class="lead">Chỉ số cộng thêm khi đồ lên tới cấp Lumen đó (cộng dồn mọi cấp đã qua). Một loại đồ chỉ có một dòng mỗi cấp.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.ascend %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

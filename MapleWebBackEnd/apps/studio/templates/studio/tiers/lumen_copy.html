@@ -1,0 +1,29 @@
+{% extends 'studio/base.html' %}
+{% block title %}Nhân bản {{ tier.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{% url 'studio:lumen-edit' tier.pk %}">{{ tier.name }}</a></p>
+    <h1>Nhân bản bậc Lumen</h1>
+  </div>
+</header>
+<form method="post" novalidate>
+  {% csrf_token %}
+  <section class="card">
+    <h2>Bản sao y hệt</h2>
+    <p class="lead">Giữ nguyên mọi luật giá và chỉ số. Tên thêm "(bản sao)".</p>
+    <div><button class="btn ghost" type="submit" name="plain_copy" value="1">Tạo bản sao</button></div>
+  </section>
+  <section class="card">
+    <h2>Tạo bản cho class khác</h2>
+    <p class="lead">
+      {% if source_class %}Bậc này thuộc <b>{{ source_class.name }}</b>: tên bậc đổi "{{ source_class.name }}" thành tên class mới,{% else %}Tên bậc thêm tên class mới,{% endif %}
+      và chỉ số chính trong luật chỉ số chuyển sang chỉ số chính của class đó (Warrior: STR, Archer: AGI, Magician: INT). Luật giá giữ nguyên.
+    </p>
+    {% include 'studio/partials/form_errors.html' %}
+    <div class="fields">{% include 'studio/partials/field.html' with field=form.classes wide=True choices=True %}</div>
+    <div class="actions" style="margin-top:12px"><button class="btn" type="submit">Tạo các bản đã chọn</button>
+      <a class="btn ghost" href="{% url 'studio:lumen-edit' tier.pk %}">Hủy</a></div>
+  </section>
+</form>
+{% endblock %}

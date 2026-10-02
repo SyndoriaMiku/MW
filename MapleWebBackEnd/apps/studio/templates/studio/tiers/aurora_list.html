@@ -1,0 +1,32 @@
+{% extends 'studio/base.html' %}
+{% block title %}Bậc Aurora{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Vật phẩm</p>
+    <h1>Bậc Aurora</h1>
+  </div>
+  <a class="btn" href="{% url 'studio:aurora-new' %}">+ Bậc mới</a>
+</header>
+<p class="help" style="margin-top:-8px;max-width:75ch">Mỗi bậc là kho các dòng tiềm năng có thể ra khi reroll, theo cấp Aurora và loại đồ. Số dòng và giá reroll bằng Lumis chỉnh ở mục Cấu hình.</p>
+<section class="card">
+  {% if object_list %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Bậc</th><th>Tên</th><th>Cấp Aurora tối đa</th><th>Số dòng trong kho</th><th>Item dùng</th></tr></thead>
+      <tbody>
+      {% for tier in object_list %}
+        <tr>
+          <td>{{ tier.tier }}</td>
+          <td><a href="{% url 'studio:aurora-edit' tier.pk %}"><b>{{ tier.name }}</b></a></td>
+          <td>{{ tier.max_aurora_level }}</td>
+          <td>{% if tier.line_count %}{{ tier.line_count }}{% else %}<span class="tag bad">chưa có</span>{% endif %}</td>
+          <td>{{ tier.item_count }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Chưa có bậc Aurora nào.</p>{% endif %}
+</section>
+{% endblock %}

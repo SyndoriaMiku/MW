@@ -16,6 +16,9 @@
       <a href="{% url 'studio:dashboard' %}" class="{% if section == 'dashboard' %}active{% endif %}">Tổng quan</a>
       <p class="nav-group">Vật phẩm</p>
       <a href="{% url 'studio:item-list' %}" class="{% if section == 'items' %}active{% endif %}">Item</a>
+      <a href="{% url 'studio:lumen-list' %}" class="{% if section == 'lumen' %}active{% endif %}">Bậc Lumen</a>
+      <a href="{% url 'studio:aurora-list' %}" class="{% if section == 'aurora' %}active{% endif %}">Bậc Aurora</a>
+      <a href="{% url 'studio:set-list' %}" class="{% if section == 'sets' %}active{% endif %}">Set đồ</a>
       <p class="nav-group">Nhân vật</p>
       <a href="{% url 'studio:class-list' %}" class="{% if section == 'classes' %}active{% endif %}">Class &amp; Job</a>
       <a href="{% url 'studio:skill-list' %}" class="{% if section == 'skills' %}active{% endif %}">Skill</a>

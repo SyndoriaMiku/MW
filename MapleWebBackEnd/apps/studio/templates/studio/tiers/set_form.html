@@ -1,0 +1,37 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Set mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Set đồ</a></p>
+    <h1>{% if is_new %}Tạo set đồ{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Set</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.description wide=True %}
+      {% include 'studio/partials/field.html' with field=form.items wide=True choices=True %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>Hiệu ứng theo số món đang mặc</h2>
+    <p class="lead">Mỗi dòng có tác dụng khi nhân vật mặc đủ số món của set; các mốc cộng dồn.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.effects %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}
