@@ -1,0 +1,37 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Shop đặc biệt mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Shop</a> · Shop đặc biệt</p>
+    <h1>{% if is_new %}Tạo shop đặc biệt{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+{{ item_options|json_script:"studio-item-options" }}
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Shop</h2>
+    <div class="fields">
+      {% for field in form.visible_fields %}
+        {% if field.name == 'description' %}{% include 'studio/partials/field.html' with field=field wide=True %}{% else %}{% include 'studio/partials/field.html' with field=field %}{% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>Món đổi</h2>
+    <p class="lead">Mỗi dòng: item người chơi nhận và nguyên liệu phải nộp cho một lần đổi. "Giới hạn đổi" tính theo tài khoản trong mỗi kỳ reset (0 = không giới hạn); với shop event, bộ đếm cũng về 0 khi đợt mới bắt đầu.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.items %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

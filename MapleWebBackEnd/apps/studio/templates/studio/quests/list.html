@@ -1,0 +1,37 @@
+{% extends 'studio/base.html' %}
+{% block title %}Quest{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Nội dung</p>
+    <h1>Quest</h1>
+  </div>
+  <a class="btn" href="{% url 'studio:quest-new' %}">+ Quest mới</a>
+</header>
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tìm theo tên…">
+    <button class="btn ghost" type="submit">Tìm</button>
+  </form>
+  {% if object_list %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Quest</th><th>Loại</th><th>Cấp</th><th>Mục tiêu</th><th>Thưởng</th><th>Cần xong trước</th></tr></thead>
+      <tbody>
+      {% for quest in object_list %}
+        <tr>
+          <td><a href="{% url 'studio:quest-edit' quest.pk %}"><b>{{ quest.name }}</b></a></td>
+          <td>{% if quest.quest_type == 'daily' %}Hằng ngày{% elif quest.quest_type == 'weekly' %}Hằng tuần{% else %}Một lần{% endif %}</td>
+          <td>{{ quest.required_level }}</td>
+          <td>{% if quest.objective_count %}{{ quest.objective_count }}{% else %}<span class="tag bad">chưa có</span>{% endif %}</td>
+          <td>{{ quest.exp_reward }} EXP · {{ quest.lumis_reward }} Lumis{% if quest.reward_count %} · {{ quest.reward_count }} item{% endif %}</td>
+          <td>{% for pre in quest.prerequisite_quests.all %}<span class="tag">{{ pre.name }}</span> {% empty %}<span class="help">—</span>{% endfor %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}<p class="empty">Chưa có quest nào.</p>{% endif %}
+</section>
+{% endblock %}

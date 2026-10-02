@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import characters, dashboard, history, items, tables, tiers, world
+from .views import characters, content, dashboard, history, items, tables, tiers, world
 
 app_name = 'studio'
 
@@ -40,4 +40,16 @@ urlpatterns = [
     path('dungeons/<str:kind>/<int:pk>/', world.DungeonEditorView.as_view(), name='dungeon-edit'),
     path('dungeons/<str:kind>/<int:pk>/delete/', world.DungeonDeleteView.as_view(), name='dungeon-delete'),
     *crud('regions', 'region', world.RegionEditorView, world.RegionDeleteView, world.RegionListView),
+    path('shops/', content.ShopListView.as_view(), name='shop-list'),
+    path('shops/new/', content.ShopCategoryEditorView.as_view(), name='shop-new'),
+    path('shops/<int:pk>/', content.ShopCategoryEditorView.as_view(), name='shop-edit'),
+    path('shops/<int:pk>/delete/', content.ShopCategoryDeleteView.as_view(), name='shop-delete'),
+    path('special-shops/new/', content.SpecialShopEditorView.as_view(), name='special-shop-new'),
+    path('special-shops/<int:pk>/', content.SpecialShopEditorView.as_view(), name='special-shop-edit'),
+    path('special-shops/<int:pk>/delete/', content.SpecialShopDeleteView.as_view(), name='special-shop-delete'),
+    *crud('quests', 'quest', content.QuestEditorView, content.QuestDeleteView, content.QuestListView),
+    path('events/', content.EventListView.as_view(), name='event-list'),
+    path('events/<str:kind>/new/', content.EventEditorView.as_view(), name='event-new'),
+    path('events/<str:kind>/<int:pk>/', content.EventEditorView.as_view(), name='event-edit'),
+    path('events/<str:kind>/<int:pk>/delete/', content.EventDeleteView.as_view(), name='event-delete'),
 ]

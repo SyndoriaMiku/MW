@@ -17,6 +17,7 @@
       rows.appendChild(row);
       total.value = String(index + 1);
       initWithin(row);
+      refreshConditionals(box.closest('form'));
       row.querySelector('input:not([type=hidden]), select')?.focus();
     });
     box.addEventListener('click', (event) => {

@@ -1,0 +1,61 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Quest mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Quest</a></p>
+    <h1>{% if is_new %}Tạo quest{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Quest</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.quest_type %}
+      {% include 'studio/partials/field.html' with field=form.required_level %}
+      {% include 'studio/partials/field.html' with field=form.exp_reward %}
+      {% include 'studio/partials/field.html' with field=form.lumis_reward %}
+      {% include 'studio/partials/field.html' with field=form.description wide=True %}
+      {% include 'studio/partials/field.html' with field=form.prerequisite_quests wide=True choices=True %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Mục tiêu</h2>
+    <p class="lead">Mỗi dòng một mục tiêu. Hạ quái và qua dungeon để trống mục tiêu = bất kỳ. Thu thập item đếm theo túi đồ và trừ item khi nhận thưởng.</p>
+    {% with formset=formsets.objectives %}
+    <div class="formset" data-formset="{{ formset.prefix }}">
+      {{ formset.management_form }}
+      {% for error in formset.non_form_errors %}<div class="message error">{{ error }}</div>{% endfor %}
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Loại</th><th>Mục tiêu</th><th>Số lượng</th><th></th></tr></thead>
+          <tbody data-rows>
+            {% for row in formset.forms %}{% include 'studio/quests/objective_row.html' with row=row %}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <template data-empty-form>{% include 'studio/quests/objective_row.html' with row=formset.empty_form %}</template>
+      <button type="button" class="btn ghost" data-add-row>+ Thêm mục tiêu</button>
+    </div>
+    {% endwith %}
+  </section>
+
+  <section class="card">
+    <h2>Item thưởng</h2>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.rewards %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

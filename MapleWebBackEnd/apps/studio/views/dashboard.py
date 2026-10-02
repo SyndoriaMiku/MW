@@ -5,6 +5,8 @@ from django.views import View
 
 from apps.classes.models import CharacterClass, Job
 from apps.items.models import AuroraLumisCostRule, ItemTemplate
+from apps.quests.models import QuestTemplate
+from apps.shops.models import ShopItem, SpecialShopItem
 from apps.skilles.models import EffectTemplate, SkillTemplate
 from apps.world.models import BossDungeonTemplate, EnemyTemplate, NormalDungeonTemplate
 
@@ -33,6 +35,13 @@ def configuration_checks():
     add(list(NormalDungeonTemplate.objects.filter(stage_enemies__isnull=True)), 'Dungeon thường chưa có quái (người chơi không vào được).', 'studio:dungeon-list')
     add(list(BossDungeonTemplate.objects.filter(stage_enemies__isnull=True)), 'Dungeon boss chưa có quái (người chơi không vào được).', 'studio:dungeon-list')
     add(list(EnemyTemplate.objects.filter(loot_tables__isnull=True)), 'Quái chưa rơi đồ gì.', 'studio:enemy-list')
+    if not ShopItem.objects.exists():
+        checks.append({
+            'message': 'Chưa có shop bán gì: người chơi chưa có chỗ tiêu Lumis.',
+            'names': [], 'count': 0, 'url': reverse('studio:shop-list'),
+        })
+    add(list(SpecialShopItem.objects.filter(specialshopitemrecipe__isnull=True)),
+        'Món ở shop đặc biệt chưa có nguyên liệu (không đổi được).', 'studio:shop-list')
     if not AuroraLumisCostRule.objects.exists():
         checks.append({
             'message': 'Chưa có bảng giá reroll Aurora bằng Lumis (người chơi chỉ reroll bằng đá được).',
@@ -51,6 +60,8 @@ class DashboardView(StaffRequiredMixin, View):
             ('Hiệu ứng', EffectTemplate.objects.count(), 'studio:effect-list'),
             ('Quái vật', EnemyTemplate.objects.count(), 'studio:enemy-list'),
             ('Dungeon', NormalDungeonTemplate.objects.count() + BossDungeonTemplate.objects.count(), 'studio:dungeon-list'),
+            ('Món bán ở shop', ShopItem.objects.count() + SpecialShopItem.objects.count(), 'studio:shop-list'),
+            ('Quest', QuestTemplate.objects.count(), 'studio:quest-list'),
         ]
         return render(request, 'studio/dashboard.html', {
             'section': 'dashboard',

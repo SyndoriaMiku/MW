@@ -27,6 +27,10 @@
       <a href="{% url 'studio:enemy-list' %}" class="{% if section == 'enemies' %}active{% endif %}">Quái vật</a>
       <a href="{% url 'studio:dungeon-list' %}" class="{% if section == 'dungeons' %}active{% endif %}">Dungeon</a>
       <a href="{% url 'studio:region-list' %}" class="{% if section == 'regions' %}active{% endif %}">Khu vực</a>
+      <p class="nav-group">Kinh tế &amp; nội dung</p>
+      <a href="{% url 'studio:shop-list' %}" class="{% if section == 'shops' %}active{% endif %}">Shop</a>
+      <a href="{% url 'studio:quest-list' %}" class="{% if section == 'quests' %}active{% endif %}">Quest</a>
+      <a href="{% url 'studio:event-list' %}" class="{% if section == 'events' %}active{% endif %}">Event</a>
       <p class="nav-group">Cấu hình</p>
       <a href="{% url 'studio:experience-table' %}" class="{% if section == 'experience' %}active{% endif %}">Bảng EXP</a>
       <a href="{% url 'studio:equipment-slots' %}" class="{% if section == 'slots' %}active{% endif %}">Ô trang bị</a>

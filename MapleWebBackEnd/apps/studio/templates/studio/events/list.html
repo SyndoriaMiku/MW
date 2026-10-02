@@ -1,0 +1,36 @@
+{% extends 'studio/base.html' %}
+{% block title %}Event{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Nội dung</p>
+    <h1>Event</h1>
+  </div>
+  <div class="actions">
+    {% for group in sections %}<a class="btn {% if not forloop.first %}ghost{% endif %}" href="{% url 'studio:event-new' group.kind %}">+ {{ group.label }}</a>{% endfor %}
+  </div>
+</header>
+{% for group in sections %}
+<section class="card">
+  <h2>{{ group.label }}</h2>
+  <p class="lead">{{ group.lead }}</p>
+  {% if group.rows %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Event</th><th>Trạng thái</th><th>Bắt đầu</th><th>Kết thúc</th></tr></thead>
+      <tbody>
+      {% for row in group.rows %}{% with event=row.event %}
+        <tr>
+          <td><a href="{% url 'studio:event-edit' group.kind event.pk %}"><b>{{ event.name }}</b></a></td>
+          <td>{% if row.running %}<span class="tag good">đang chạy</span>{% elif event.is_active %}<span class="tag">đã bật, ngoài thời gian</span>{% else %}<span class="tag">tắt</span>{% endif %}</td>
+          <td>{{ event.start_time|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td>{{ event.end_time|date:"d/m/Y H:i"|default:"—" }}</td>
+        </tr>
+      {% endwith %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Chưa có event nào.</p>{% endif %}
+</section>
+{% endfor %}
+{% endblock %}

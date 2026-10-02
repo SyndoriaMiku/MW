@@ -1,0 +1,16 @@
+<tr class="{% if row.errors %}has-error{% endif %}" data-row>
+  <td>{{ row.kind }}{% for error in row.kind.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+  <td>
+    <div data-show-when="{{ row.prefix }}-kind=DEFEAT_ENEMY">{{ row.enemy_to_defeat }}<small class="help">Trống = quái bất kỳ</small></div>
+    <div data-show-when="{{ row.prefix }}-kind=COLLECT_ITEM">{{ row.item_to_collect }}{% for error in row.item_to_collect.errors %}<small class="error">{{ error }}</small>{% endfor %}</div>
+    <div data-show-when="{{ row.prefix }}-kind=CLEAR_NORMAL_DUNGEON">{{ row.dungeon_to_clear }}<small class="help">Trống = dungeon bất kỳ</small></div>
+    <div data-show-when="{{ row.prefix }}-kind=CLEAR_BOSS_DUNGEON">{{ row.boss_dungeon_to_clear }}<small class="help">Trống = dungeon boss bất kỳ</small></div>
+  </td>
+  <td>{{ row.count }}{% for error in row.count.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+  <td class="row-actions">
+    {% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}
+    {% if row.DELETE %}<span class="hidden">{{ row.DELETE }}</span>{% endif %}
+    <button type="button" class="btn ghost small" data-delete-row>Xóa</button>
+    {% for error in row.non_field_errors %}<small class="error">{{ error }}</small>{% endfor %}
+  </td>
+</tr>

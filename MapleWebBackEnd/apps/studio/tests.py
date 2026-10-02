@@ -1,11 +1,14 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.characters.models import Character, EquipmentSlotConfig
+from apps.characters.models import Character, EquipmentSlotConfig, RateEvent
+from apps.quests.models import QuestTemplate
+from apps.shops.models import ShopCategory, SpecialShop
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
 from apps.items.models import (
-    AuroraLumisCostRule, AuroraProperty, BattleConsumableRule, ItemSet, ItemTemplate, LumenTierProperty, TimedBuffRule,
+    AuroraLumisCostRule, AuroraProperty, BattleConsumableRule, ItemSet, ItemTemplate, LumenEvent, LumenTierProperty,
+    TimedBuffRule,
 )
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
 from apps.users.models import GameUser
@@ -655,6 +658,131 @@ class TierEditorTests(StudioTestCase):
                     reverse('studio:set-edit', args=[item_set.pk]), reverse('studio:experience-table'),
                     reverse('studio:equipment-slots'), reverse('studio:effect-tags'),
                     reverse('studio:aurora-line-counts'), reverse('studio:aurora-lumis-costs')):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class ShopQuestEventTests(StudioTestCase):
+    """Shops, special shops with their recipes, quests with objectives, and events."""
+
+    def setUp(self):
+        super().setUp()
+        self.potion = ItemTemplate.objects.create(name='Red Potion', item_type='use')
+        self.ore = ItemTemplate.objects.create(name='Ore', item_type='etc')
+        self.gem = ItemTemplate.objects.create(name='Gem', item_type='etc')
+
+    def category_data(self, items, required_level=1):
+        return {'name': 'Tạp hóa', 'currency_type': 'lumis', 'required_level': required_level, 'order': 0,
+                'start_date': '', 'end_date': '', **formset_data('items', items)}
+
+    def test_shop_category_with_items(self):
+        self.client.post(reverse('studio:shop-new'), self.category_data([
+            {'item_template': self.potion.pk, 'price': 50, 'stock': 0, 'reset_cycle': 'none', 'required_level': 1, 'order': 0},
+        ]))
+
+        category = ShopCategory.objects.get(name='Tạp hóa')
+        self.assertEqual((category.shop_items.get().item_template, category.shop_items.get().price), (self.potion, 50))
+
+    def test_item_level_cannot_be_below_the_category_and_missing_items_do_not_crash(self):
+        response = self.client.post(reverse('studio:shop-new'), self.category_data([
+            {'item_template': self.potion.pk, 'price': 50, 'stock': 0, 'reset_cycle': 'none', 'required_level': 1, 'order': 0},
+            {'item_template': '', 'price': 10, 'stock': 0, 'reset_cycle': 'none', 'required_level': 10, 'order': 1},
+        ], required_level=10))
+
+        forms = response.context['formsets']['items'].forms
+        self.assertIn('required_level', forms[0].errors)
+        self.assertIn('item_template', forms[1].errors)
+        self.assertFalse(ShopCategory.objects.exists())
+
+    def special_data(self, items):
+        return {'name': 'Đổi quặng', 'is_active': 'on', 'required_level': 1, 'order': 0, 'start_time': '',
+                'end_time': '', 'description': '', **formset_data('items', items)}
+
+    def test_special_shop_saves_each_exchange_recipe(self):
+        recipe = f'[{{"item_template_id": {self.ore.pk}, "quantity": 5}}, {{"item_template_id": {self.gem.pk}, "quantity": 1}}]'
+        self.client.post(reverse('studio:special-shop-new'), self.special_data([
+            {'item': self.potion.pk, 'recipe': recipe, 'exchange_limit': 3, 'reset_cycle': 'daily', 'is_active': 'on'},
+        ]))
+
+        special_item = SpecialShop.objects.get(name='Đổi quặng').items.get()
+        rows = special_item.specialshopitemrecipe_set.order_by('item_id')
+        self.assertEqual([(row.item, row.quantity) for row in rows], [(self.ore, 5), (self.gem, 1)])
+
+        shop = special_item.shop
+        self.client.post(reverse('studio:special-shop-edit', args=[shop.pk]), self.special_data([
+            {'id': special_item.pk, 'shop': shop.pk, 'item': self.potion.pk,
+             'recipe': f'[{{"item_template_id": {self.ore.pk}, "quantity": 2}}]', 'exchange_limit': 3,
+             'reset_cycle': 'daily', 'is_active': 'on'},
+        ]) | {'items-INITIAL_FORMS': '1'})
+        self.assertEqual(list(special_item.specialshopitemrecipe_set.values_list('item', 'quantity')), [(self.ore.pk, 2)])
+
+    def test_an_exchange_needs_materials(self):
+        response = self.client.post(reverse('studio:special-shop-new'), self.special_data([
+            {'item': self.potion.pk, 'recipe': '[]', 'exchange_limit': 0, 'reset_cycle': 'none', 'is_active': 'on'},
+        ]))
+
+        self.assertIn('recipe', response.context['formsets']['items'].forms[0].errors)
+        self.assertFalse(SpecialShop.objects.exists())
+
+    def quest_data(self, objectives, rewards=()):
+        return {'name': 'Diệt slime', 'quest_type': 'daily', 'required_level': 1, 'exp_reward': 100, 'lumis_reward': 50,
+                'description': 'Hạ slime', **formset_data('objectives', objectives), **formset_data('rewards', list(rewards))}
+
+    def test_quest_objectives_by_kind(self):
+        slime = EnemyTemplate.objects.create(name='Slime', level=1, base_hp=10, base_mp=0, base_att=1, exp_reward=1,
+                                             lumis_reward_min=0, lumis_reward_max=1)
+        self.client.post(reverse('studio:quest-new'), self.quest_data([
+            # A leftover item choice on a defeat objective is dropped.
+            {'kind': 'DEFEAT_ENEMY', 'enemy_to_defeat': slime.pk, 'item_to_collect': self.ore.pk, 'count': 10},
+            {'kind': 'COLLECT_ITEM', 'item_to_collect': self.ore.pk, 'count': 3},
+        ], [{'item_template': self.potion.pk, 'quantity': 2}]))
+
+        quest = QuestTemplate.objects.get(name='Diệt slime')
+        defeat, collect = quest.objectives.order_by('id')
+        self.assertEqual((defeat.objective_type, defeat.enemy_to_defeat, defeat.defeat_count, defeat.item_to_collect), ('DEFEAT_ENEMY', slime, 10, None))
+        self.assertEqual((collect.objective_type, collect.collect_count), ('COLLECT_ITEM', 3))
+        self.assertEqual(quest.rewards.get().quantity, 2)
+
+        page = self.client.get(reverse('studio:quest-edit', args=[quest.pk]))
+        first = page.context['formsets']['objectives'].forms[0]
+        self.assertEqual((first.initial['kind'], first.initial['count']), ('DEFEAT_ENEMY', 10))
+
+    def test_collect_objectives_need_an_item(self):
+        response = self.client.post(reverse('studio:quest-new'), self.quest_data([{'kind': 'COLLECT_ITEM', 'count': 3}]))
+
+        self.assertIn('item_to_collect', response.context['formsets']['objectives'].forms[0].errors)
+        self.assertFalse(QuestTemplate.objects.exists())
+
+    def test_events_of_each_kind(self):
+        self.client.post(reverse('studio:event-new', args=['rate']), {
+            'name': 'x2 EXP', 'is_active': 'on', 'start_time': '', 'end_time': '', 'exp_rate_bonus': 100,
+            'lumis_rate_bonus': 0, 'drop_rate_bonus': 0, 'epic_drop_rate_bonus': 0, 'description': '',
+        })
+        self.client.post(reverse('studio:event-new', args=['lumen']), {
+            'name': 'Lumen vui', 'is_active': 'on', 'start_time': '', 'end_time': '', 'success_flat_bonus': 10,
+            'heavy_failure_multiplier': 0, 'bonus_levels': 0, 'description': '',
+        })
+        refused = self.client.post(reverse('studio:event-new', args=['aurora']), {
+            'name': 'Aurora', 'is_active': 'on', 'start_time': '2026-10-05T10:00', 'end_time': '2026-10-05T09:00',
+            'tier_up_chance_multiplier': 1.5, 'description': '',
+        })
+
+        self.assertEqual(RateEvent.objects.get(name='x2 EXP').exp_rate_bonus, 100)
+        self.assertEqual(LumenEvent.objects.get(name='Lumen vui').success_flat_bonus, 0.1)
+        self.assertIn('end_time', refused.context['form'].errors)
+        listing = self.client.get(reverse('studio:event-list'))
+        self.assertTrue(listing.context['sections'][0]['rows'][0]['running'])
+        self.assertEqual(self.client.get('/studio/events/party/new/').status_code, 404)
+
+    def test_pages_open(self):
+        category = ShopCategory.objects.create(name='C')
+        special = SpecialShop.objects.create(name='S')
+        quest = QuestTemplate.objects.create(name='Q', description='d')
+        for url in (reverse('studio:shop-list'), reverse('studio:shop-new'), reverse('studio:shop-edit', args=[category.pk]),
+                    reverse('studio:special-shop-new'), reverse('studio:special-shop-edit', args=[special.pk]),
+                    reverse('studio:quest-list'), reverse('studio:quest-new'), reverse('studio:quest-edit', args=[quest.pk]),
+                    reverse('studio:event-list'), reverse('studio:event-new', args=['rate']),
+                    reverse('studio:event-new', args=['lumen']), reverse('studio:event-new', args=['aurora'])):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 

@@ -1,0 +1,60 @@
+{% extends 'studio/base.html' %}
+{% block title %}Shop{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Kinh tế</p>
+    <h1>Shop</h1>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'studio:shop-new' %}">+ Danh mục shop</a>
+    <a class="btn ghost" href="{% url 'studio:special-shop-new' %}">+ Shop đặc biệt</a>
+  </div>
+</header>
+
+<section class="card">
+  <h2>Shop thường</h2>
+  <p class="lead">Mua bằng Lumis hoặc Nova, chia theo danh mục. Danh mục có thời gian là danh mục event.</p>
+  {% if categories %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Danh mục</th><th>Trả bằng</th><th>Cấp</th><th>Thời gian</th><th>Món bán</th></tr></thead>
+      <tbody>
+      {% for category in categories %}
+        <tr>
+          <td><a href="{% url 'studio:shop-edit' category.pk %}"><b>{{ category.name }}</b></a></td>
+          <td><span class="tag {% if category.currency_type == 'nova' %}accent{% endif %}">{{ category.get_currency_type_display }}</span></td>
+          <td>{{ category.required_level }}</td>
+          <td>{% if category.start_date or category.end_date %}{{ category.start_date|date:"d/m H:i"|default:"…" }} → {{ category.end_date|date:"d/m H:i"|default:"…" }}{% if not category.is_active %} <span class="tag">đã đóng</span>{% endif %}{% else %}<span class="help">luôn mở</span>{% endif %}</td>
+          <td>{% for shop_item in category.shop_items.all %}<span class="tag">{{ shop_item.item_template.name }} · {{ shop_item.price }}</span> {% empty %}<span class="tag bad">chưa bán gì</span>{% endfor %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Chưa có danh mục nào. Người chơi chưa có chỗ tiêu Lumis.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Shop đặc biệt (đổi đồ)</h2>
+  <p class="lead">Đổi nguyên liệu lấy item. Không có thời gian là shop vĩnh viễn; có thời gian là shop event.</p>
+  {% if special %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Shop</th><th>Trạng thái</th><th>Cấp</th><th>Thời gian</th><th>Món đổi</th></tr></thead>
+      <tbody>
+      {% for row in special %}{% with shop=row.shop %}
+        <tr>
+          <td><a href="{% url 'studio:special-shop-edit' shop.pk %}"><b>{{ shop.name }}</b></a></td>
+          <td>{% if row.open %}<span class="tag good">đang mở</span>{% else %}<span class="tag">đóng</span>{% endif %}</td>
+          <td>{{ shop.required_level }}</td>
+          <td>{% if shop.is_event %}{{ shop.start_time|date:"d/m H:i"|default:"…" }} → {{ shop.end_time|date:"d/m H:i"|default:"…" }}{% else %}<span class="help">vĩnh viễn</span>{% endif %}</td>
+          <td>{% for special_item in shop.items.all %}<span class="tag">{{ special_item.item.name }}</span> {% empty %}<span class="tag bad">chưa có món</span>{% endfor %}</td>
+        </tr>
+      {% endwith %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Chưa có shop đặc biệt nào.</p>{% endif %}
+</section>
+{% endblock %}

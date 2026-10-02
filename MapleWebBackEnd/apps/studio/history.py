@@ -30,6 +30,12 @@ EDIT_URLS = {
     'items.LumenTierProperty': ('studio:lumen-edit',),
     'items.AuroraProperty': ('studio:aurora-edit',),
     'items.ItemSet': ('studio:set-edit',),
+    'shops.ShopCategory': ('studio:shop-edit',),
+    'shops.SpecialShop': ('studio:special-shop-edit',),
+    'quests.QuestTemplate': ('studio:quest-edit',),
+    'characters.RateEvent': ('studio:event-edit', 'rate'),
+    'items.LumenEvent': ('studio:event-edit', 'lumen'),
+    'items.AuroraEvent': ('studio:event-edit', 'aurora'),
 }
 # Configuration tables are edited as a whole, so their changes have no object id.
 TABLE_URLS = {

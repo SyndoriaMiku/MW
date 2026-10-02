@@ -1,0 +1,30 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}{{ kind_label }} mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Event</a> · {{ kind_label }}</p>
+    <h1>{% if is_new %}Tạo {{ kind_label|lower }}{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  <div class="actions">
+    {% if history_url %}<a class="btn ghost" href="{{ history_url }}">Lịch sử</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+</header>
+<p class="help" style="margin-top:-8px">{{ kind_lead }}</p>
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <div class="fields">
+      {% for field in form.visible_fields %}
+        {% if field.name == 'description' %}{% include 'studio/partials/field.html' with field=field wide=True %}{% else %}{% include 'studio/partials/field.html' with field=field %}{% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}
