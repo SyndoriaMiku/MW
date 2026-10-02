@@ -1,0 +1,42 @@
+{% extends 'studio/base.html' %}
+{% block title %}Nhân bản {{ item.name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{% url 'studio:item-edit' item.pk %}">{{ item.name }}</a></p>
+    <h1>Nhân bản item</h1>
+  </div>
+</header>
+
+<section class="card">
+  <h2>Bản sao y hệt</h2>
+  <p class="lead">Giữ nguyên mọi chỉ số, class và công dụng. Tên thêm "(bản sao)", icon/visual key để trống.</p>
+  <form method="post">{% csrf_token %}<button class="btn ghost" type="submit" name="plain_copy" value="1">Tạo bản sao</button></form>
+</section>
+
+{% if is_gear %}
+<section class="card">
+  <h2>Tạo bản cho class khác</h2>
+  <p class="lead">
+    Chỉ số chính hiện tại: <b>{{ main_stat }}</b>. Mỗi bản mới chuyển chỉ số này sang chỉ số chính của class đích
+    (Warrior: STR, Archer: AGI, Magician: INT), đặt giới hạn class và chọn bậc Lumen biến thể tương ứng nếu có.
+    {% if item.item_type == 'weapon' %}Vũ khí đi theo job, vì mỗi job cầm một loại vũ khí.{% endif %}
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    {% include 'studio/partials/form_errors.html' %}
+    <div class="fields">
+      {% if item.item_type == 'weapon' %}
+        {% include 'studio/partials/field.html' with field=form.jobs wide=True choices=True %}
+      {% else %}
+        {% include 'studio/partials/field.html' with field=form.classes wide=True choices=True %}
+      {% endif %}
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" type="submit">Tạo các bản đã chọn</button>
+      <a class="btn ghost" href="{% url 'studio:item-edit' item.pk %}">Hủy</a>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Quái mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Quái vật</a></p>
+    <h1>{% if is_new %}Tạo quái mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa quái</a>{% endif %}
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Chỉ số</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.level %}
+      {% include 'studio/partials/field.html' with field=form.is_boss %}
+      {% include 'studio/partials/field.html' with field=form.base_hp %}
+      {% include 'studio/partials/field.html' with field=form.base_mp %}
+      {% include 'studio/partials/field.html' with field=form.base_att %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Phần thưởng khi hạ</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.exp_reward %}
+      {% include 'studio/partials/field.html' with field=form.lumis_reward_min %}
+      {% include 'studio/partials/field.html' with field=form.lumis_reward_max %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Skill của quái</h2>
+    <p class="lead">Quái thử skill có ưu tiên cao nhất trước. Chỉ hiện skill dành cho quái.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.skills %}
+  </section>
+
+  <section class="card">
+    <h2>Rơi đồ</h2>
+    <p class="lead">Tỉ lệ gốc trước khi cộng buff/event. Đồ "chia cho party" do trưởng nhóm phân phát.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.loot %}
+  </section>
+
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

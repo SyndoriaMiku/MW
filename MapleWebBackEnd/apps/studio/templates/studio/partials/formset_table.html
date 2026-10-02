@@ -1,0 +1,25 @@
+{% comment %}
+  An editable table for an inline formset: one row per child, "+ Thêm dòng"
+  clones the empty form, "Xóa" marks a row for deletion.
+{% endcomment %}
+<div class="formset" data-formset="{{ formset.prefix }}">
+  {{ formset.management_form }}
+  {% for error in formset.non_form_errors %}<div class="message error">{{ error }}</div>{% endfor %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          {% for field in formset.empty_form.visible_fields %}{% if field.name != 'DELETE' %}<th>{{ field.label }}</th>{% endif %}{% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody data-rows>
+        {% for row in formset.forms %}
+          {% include 'studio/partials/formset_row.html' with row=row %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <template data-empty-form>{% include 'studio/partials/formset_row.html' with row=formset.empty_form %}</template>
+  <button type="button" class="btn ghost" data-add-row>+ Thêm dòng</button>
+</div>

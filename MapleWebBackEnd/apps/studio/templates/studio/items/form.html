@@ -1,0 +1,149 @@
+{% extends 'studio/base.html' %}
+{% load static %}
+{% block title %}{% if is_new %}Item mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block scripts %}<script src="{% static 'studio/studio-items.js' %}" defer></script>{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Item</a></p>
+    <h1>{% if is_new %}Tạo item mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if not is_new %}
+  <div class="actions">
+    {% if clone_url %}<a class="btn ghost" href="{{ clone_url }}">Nhân bản / tạo cho class khác</a>{% endif %}
+    {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa</a>{% endif %}
+  </div>
+  {% endif %}
+</header>
+
+{{ builder_data|json_script:"item-builder-data" }}
+<form method="post" data-item-builder novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <div class="layout-2">
+    <div>
+      <section class="card">
+        <h2>1. Loại đồ &amp; cấp</h2>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.name %}
+          {% include 'studio/partials/field.html' with field=form.item_type %}
+          <div data-show-when="item_type=weapon">{% include 'studio/partials/field.html' with field=form.weapon_type %}</div>
+          {% include 'studio/partials/field.html' with field=form.minimum_level %}
+        </div>
+      </section>
+
+      <section class="card" data-show-when="item_type={{ gear_types }}">
+        <h2>2. Dành cho class nào</h2>
+        <p class="lead">Chọn một class để Studio đánh dấu chỉ số chính: Warrior dùng STR, Archer dùng AGI, Magician dùng INT.</p>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.class_restriction wide=True choices=True %}
+          {% include 'studio/partials/field.html' with field=form.job_restriction wide=True choices=True %}
+        </div>
+        <p class="help" data-weapon-hint></p>
+      </section>
+
+      <section class="card" data-show-when="item_type={{ gear_types }}">
+        <h2>3. Chỉ số <span class="tag accent" data-main-stat-label></span></h2>
+        <div class="actions" style="margin-bottom:12px">
+          <button type="button" class="btn ghost" data-suggest>Gợi ý chỉ số theo cấp</button>
+          <span class="help">Điền sẵn theo loại đồ và cấp, rồi chỉnh lại tùy ý.</span>
+        </div>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.str_boost %}
+          {% include 'studio/partials/field.html' with field=form.agi_boost %}
+          {% include 'studio/partials/field.html' with field=form.int_boost %}
+          {% include 'studio/partials/field.html' with field=form.all_stats_boost %}
+          {% include 'studio/partials/field.html' with field=form.att_boost %}
+          {% include 'studio/partials/field.html' with field=form.hp_boost %}
+          {% include 'studio/partials/field.html' with field=form.mp_boost %}
+          {% include 'studio/partials/field.html' with field=form.drop_rate_boost unit='%' %}
+        </div>
+      </section>
+
+      <section class="card" data-show-when="item_type={{ gear_types }}">
+        <h2>4. Nâng cấp</h2>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.lumen_tier %}
+          {% include 'studio/partials/field.html' with field=form.aurora_tier %}
+        </div>
+      </section>
+
+      <section class="card" data-show-when="item_type={{ use_types }}">
+        <h2>3. Công dụng</h2>
+        <div class="field choices">{{ form.use_kind }}{% for error in form.use_kind.errors %}<small class="error">{{ error }}</small>{% endfor %}</div>
+        {% for kind, rule_form in extra.items %}
+          <div class="rule" data-show-when="use_kind={{ kind }}" style="margin-top:14px">
+            {% include 'studio/partials/form_errors.html' with form=rule_form %}
+            <div class="fields">
+              {% for field in rule_form.visible_fields %}
+                {% if field.name == 'item_types' or field.name == 'lumen_tiers' or field.name == 'restorable_items' %}
+                  {% include 'studio/partials/field.html' with field=field wide=True choices=True %}
+                {% else %}
+                  {% include 'studio/partials/field.html' with field=field %}
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="card">
+        <h2>Giao dịch &amp; thời hạn</h2>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.is_tradeable %}
+          {% include 'studio/partials/field.html' with field=form.is_trade_once %}
+          {% include 'studio/partials/field.html' with field=form.is_sellable %}
+          {% include 'studio/partials/field.html' with field=form.sell_price %}
+          {% include 'studio/partials/field.html' with field=form.expire_after_minutes %}
+          {% include 'studio/partials/field.html' with field=form.expires_at %}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Hiển thị</h2>
+        <div class="fields">
+          {% include 'studio/partials/field.html' with field=form.description wide=True %}
+          {% include 'studio/partials/field.html' with field=form.icon_key %}
+          {% include 'studio/partials/field.html' with field=form.visual_key %}
+        </div>
+      </section>
+
+      <div class="sticky-actions actions">
+        <button type="submit" class="btn">Lưu</button>
+        {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+        <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+      </div>
+    </div>
+
+    <aside>
+      <section class="card">
+        <h2>Xem trước</h2>
+        <div class="preview" data-preview>
+          <div class="p-name" data-p-name>Tên item</div>
+          <div class="p-sub" data-p-sub></div>
+          <div data-p-stats></div>
+          <div class="p-req" data-p-req></div>
+          <div class="p-desc" data-p-desc></div>
+        </div>
+      </section>
+      <section class="card" data-show-when="item_type={{ gear_types }}">
+        <h2>Ước tính sát thương</h2>
+        <p class="lead">Sát thương gốc theo công thức thật của game, chưa tính skill và final damage.</p>
+        <div class="fields">
+          <div class="field">
+            <label for="estimate-job">Job</label>
+            <select id="estimate-job" class="input" data-estimate-job>
+              {% for job in estimate_jobs %}<option value="{{ job.id }}" data-class="{{ job.character_class_id }}">{{ job.name }} ({{ job.character_class.name }})</option>{% empty %}<option value="">Chưa có job</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="estimate-level">Cấp nhân vật</label>
+            <input id="estimate-level" class="input" type="number" min="1" max="300" data-estimate-level>
+          </div>
+        </div>
+        <div class="estimate" data-estimate><p class="help">Nhập chỉ số để xem.</p></div>
+      </section>
+    </aside>
+  </div>
+</form>
+{% endblock %}

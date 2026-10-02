@@ -1,0 +1,21 @@
+{% if rows %}
+<div class="table-wrap">
+  <table class="grid list">
+    <thead><tr><th>Tên</th><th>Nằm ở</th><th>Cấp</th><th>{% if kind == 'boss' %}Reset{% else %}Thể lực{% endif %}</th><th>Quái</th><th>Thưởng</th></tr></thead>
+    <tbody>
+    {% for dungeon in rows %}
+      <tr>
+        <td><a href="{% url 'studio:dungeon-edit' kind dungeon.pk %}"><b>{{ dungeon.name }}</b></a></td>
+        <td>{% if dungeon.location %}{{ dungeon.location }}{% else %}<span class="help">—</span>{% endif %}</td>
+        <td>{{ dungeon.required_level }}</td>
+        <td>{% if kind == 'boss' %}{{ dungeon.get_time_type_display }}{% else %}{{ dungeon.stamina_cost }}{% endif %}</td>
+        <td>{% if dungeon.enemy_total %}{{ dungeon.enemy_total }}{% else %}<span class="tag bad">chưa có quái</span>{% endif %}</td>
+        <td>{{ dungeon.exp_reward }} EXP · {{ dungeon.lumis_reward }} Lumis</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="empty">Chưa có dungeon nào.</p>
+{% endif %}

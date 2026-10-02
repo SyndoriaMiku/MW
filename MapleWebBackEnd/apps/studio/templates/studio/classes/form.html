@@ -1,0 +1,54 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Class mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Class &amp; Job</a></p>
+    <h1>{% if is_new %}Tạo class mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa class</a>{% endif %}
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Class</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.main_stat %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Tăng trưởng mỗi cấp</h2>
+    <p class="lead">Game cộng phần nguyên của mỗi ô khi lên cấp: 1.5 chỉ cộng 1, 0.5 không cộng gì.</p>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.hp_growth %}
+      {% include 'studio/partials/field.html' with field=form.mp_growth %}
+      {% include 'studio/partials/field.html' with field=form.str_growth %}
+      {% include 'studio/partials/field.html' with field=form.agi_growth %}
+      {% include 'studio/partials/field.html' with field=form.int_growth %}
+    </div>
+    <div class="table-wrap" style="margin-top:14px">
+      <table class="grid" data-growth-preview="{{ preview_levels|join:',' }}" data-base="{{ base_stats|join:',' }}">
+        <thead><tr><th>Cấp</th><th>HP</th><th>MP</th><th>STR</th><th>AGI</th><th>INT</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="help" data-growth-warning></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Job</h2>
+    <p class="lead">Mỗi job cầm đúng một loại vũ khí. Hệ số chỉ số chính nhân vào sát thương (1 = 100%).</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.jobs %}
+  </section>
+
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'studio/base.html' %}
+{% block title %}Quái vật{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Thế giới</p>
+    <h1>Quái vật</h1>
+  </div>
+  <a class="btn" href="{% url 'studio:enemy-new' %}">+ Quái mới</a>
+</header>
+
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tìm theo tên…">
+    <button class="btn ghost" type="submit">Tìm</button>
+  </form>
+  {% if object_list %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Tên</th><th>Cấp</th><th>HP / ATT</th><th>EXP</th><th>Lumis</th><th>Skill</th><th>Rơi đồ</th></tr></thead>
+      <tbody>
+      {% for enemy in object_list %}
+        <tr>
+          <td><a href="{% url 'studio:enemy-edit' enemy.pk %}"><b>{{ enemy.name }}</b></a>{% if enemy.is_boss %} <span class="tag accent">boss</span>{% endif %}</td>
+          <td>{{ enemy.level }}</td>
+          <td>{{ enemy.base_hp }} / {{ enemy.base_att }}</td>
+          <td>{{ enemy.exp_reward }}</td>
+          <td>{{ enemy.lumis_reward_min }}–{{ enemy.lumis_reward_max }}</td>
+          <td>{{ enemy.skill_count }}</td>
+          <td>{% if enemy.loot_count %}{{ enemy.loot_count }}{% else %}<span class="tag bad">không có</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}
+    <p class="empty">Không có quái nào khớp.</p>
+  {% endif %}
+</section>
+{% endblock %}

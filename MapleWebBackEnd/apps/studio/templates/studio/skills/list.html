@@ -1,0 +1,51 @@
+{% extends 'studio/base.html' %}
+{% block title %}Skill{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Nhân vật</p>
+    <h1>Skill</h1>
+  </div>
+  <a class="btn" href="{% url 'studio:skill-new' %}">+ Skill mới</a>
+</header>
+
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tìm theo tên…">
+    <select class="input" name="job">
+      <option value="">Mọi job</option>
+      <option value="none" {% if job_filter == 'none' %}selected{% endif %}>Không thuộc job (chung / quái)</option>
+      {% for job in jobs %}<option value="{{ job.pk }}" {% if job_filter == job.pk|stringformat:'s' %}selected{% endif %}>{{ job.name }} ({{ job.character_class.name }})</option>{% endfor %}
+    </select>
+    <select class="input" name="availability">
+      <option value="">Người chơi &amp; quái</option>
+      {% for value, label in availabilities %}<option value="{{ value }}" {% if availability == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn ghost" type="submit">Lọc</button>
+  </form>
+
+  {% if object_list %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Tên</th><th>Job</th><th>Tác dụng</th><th>Cấp mở</th><th>MP / hồi chiêu</th><th>Số cấp</th><th>Hiệu ứng</th></tr></thead>
+      <tbody>
+      {% for skill in object_list %}
+        <tr>
+          <td><a href="{% url 'studio:skill-edit' skill.pk %}"><b>{{ skill.name }}</b></a>{% if skill.is_basic_attack %} <span class="tag accent">đánh thường</span>{% endif %}</td>
+          <td>{% if skill.job %}{{ skill.job.name }}{% else %}<span class="help">{{ skill.get_availability_display }}</span>{% endif %}</td>
+          <td>{{ skill.get_effect_type_display }} · {{ skill.get_target_type_display }}</td>
+          <td>{{ skill.required_level }}</td>
+          <td>{{ skill.mp_cost }} / {{ skill.cooldown }}</td>
+          <td>{% if skill.level_count %}{{ skill.level_count }}{% else %}<span class="tag">chưa có</span>{% endif %}</td>
+          <td>{% if skill.applies_effect %}<a href="{% url 'studio:effect-edit' skill.applies_effect.pk %}">{{ skill.applies_effect.name }}</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}
+    <p class="empty">Không có skill nào khớp.</p>
+  {% endif %}
+</section>
+{% endblock %}

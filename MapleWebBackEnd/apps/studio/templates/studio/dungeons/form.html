@@ -1,0 +1,40 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}{{ kind_label }} mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Dungeon</a> · {{ kind_label }}</p>
+    <h1>{% if is_new %}Tạo {{ kind_label|lower }}{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa dungeon</a>{% endif %}
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Thông tin</h2>
+    <div class="fields">
+      {% for field in form.visible_fields %}
+        {% if field.name == 'description' %}
+          {% include 'studio/partials/field.html' with field=field wide=True %}
+        {% else %}
+          {% include 'studio/partials/field.html' with field=field %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Quái trong trận</h2>
+    <p class="lead">Tổng số quái tối đa 6. Dungeon không có quái thì người chơi không vào được.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.enemies %}
+  </section>
+
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

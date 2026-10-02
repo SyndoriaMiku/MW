@@ -1,0 +1,23 @@
+{% extends 'studio/base.html' %}
+{% block title %}Dungeon{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Thế giới</p>
+    <h1>Dungeon</h1>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'studio:dungeon-new' 'normal' %}">+ Dungeon thường</a>
+    <a class="btn ghost" href="{% url 'studio:dungeon-new' 'boss' %}">+ Dungeon boss</a>
+  </div>
+</header>
+
+<section class="card">
+  <h2>Dungeon thường</h2>
+  {% include 'studio/dungeons/table.html' with rows=normal kind='normal' %}
+</section>
+<section class="card">
+  <h2>Dungeon boss</h2>
+  {% include 'studio/dungeons/table.html' with rows=boss kind='boss' %}
+</section>
+{% endblock %}

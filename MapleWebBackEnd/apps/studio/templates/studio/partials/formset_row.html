@@ -1,0 +1,14 @@
+<tr class="{% if row.errors %}has-error{% endif %}" data-row>
+  {% for field in row.visible_fields %}{% if field.name != 'DELETE' %}
+    <td data-field="{{ field.html_name }}">
+      {{ field }}
+      {% for error in field.errors %}<small class="error">{{ error }}</small>{% endfor %}
+    </td>
+  {% endif %}{% endfor %}
+  <td class="row-actions">
+    {% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}
+    {% if row.DELETE %}<span class="hidden">{{ row.DELETE }}</span>{% endif %}
+    <button type="button" class="btn ghost small" data-delete-row>Xóa</button>
+    {% for error in row.non_field_errors %}<small class="error">{{ error }}</small>{% endfor %}
+  </td>
+</tr>

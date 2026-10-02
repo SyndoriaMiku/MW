@@ -1,0 +1,4 @@
+{% if form.non_field_errors %}
+  <div class="message error">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>
+{% endif %}
+{% for hidden in form.hidden_fields %}{% for error in hidden.errors %}<div class="message error">{{ hidden.label }}: {{ error }}</div>{% endfor %}{% endfor %}

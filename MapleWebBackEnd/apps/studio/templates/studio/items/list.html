@@ -1,0 +1,52 @@
+{% extends 'studio/base.html' %}
+{% block title %}Item{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Vật phẩm</p>
+    <h1>Item</h1>
+  </div>
+  <a class="btn" href="{% url 'studio:item-new' %}">+ Item mới</a>
+</header>
+
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tìm theo tên…">
+    <select class="input" name="group">
+      <option value="">Mọi loại</option>
+      {% for key, label in groups.items %}<option value="{{ key }}" {% if group == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select class="input" name="class">
+      <option value="">Mọi class</option>
+      {% for cc in classes %}<option value="{{ cc.id }}" {% if class_id == cc.id|stringformat:'s' %}selected{% endif %}>{{ cc.name }}</option>{% endfor %}
+    </select>
+    <button class="btn ghost" type="submit">Lọc</button>
+  </form>
+
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Tên</th><th>Loại</th><th>Cấp</th><th>Class</th><th>Chỉ số / công dụng</th><th></th></tr></thead>
+      <tbody>
+      {% for row in rows %}{% with item=row.item %}
+        <tr>
+          <td><a href="{% url 'studio:item-edit' item.pk %}"><b>{{ item.name }}</b></a></td>
+          <td>{{ item.get_item_type_display }}{% if item.weapon_type %} · {{ item.get_weapon_type_display }}{% endif %}</td>
+          <td>{{ item.minimum_level }}</td>
+          <td>{% for cc in item.class_restriction.all %}<span class="tag">{{ cc.name }}</span> {% empty %}<span class="help">Mọi class</span>{% endfor %}</td>
+          <td>
+            {% for label, value, css in row.stats %}<span class="tag {{ css }}">{{ label }} +{{ value }}</span> {% endfor %}
+            {% if row.use_kind %}<span class="tag accent">{{ row.use_kind }}</span>{% endif %}
+          </td>
+          <td class="row-actions"><a class="btn ghost small" href="{% url 'studio:item-clone' item.pk %}">Nhân bản</a></td>
+        </tr>
+      {% endwith %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}
+    <p class="empty">Không có item nào khớp.</p>
+  {% endif %}
+</section>
+{% endblock %}

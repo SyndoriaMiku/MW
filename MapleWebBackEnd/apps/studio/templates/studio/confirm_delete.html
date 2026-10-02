@@ -1,0 +1,29 @@
+{% extends 'studio/base.html' %}
+{% block title %}Xóa {{ object }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">{{ opts.verbose_name|capfirst }}</p>
+    <h1>Xóa "{{ object }}"?</h1>
+  </div>
+</header>
+<section class="card">
+  {% if protected %}
+    <p class="message error">Không xóa được: các dữ liệu sau đang dùng nó và phải đổi hoặc xóa trước.</p>
+    <ul>{% for item in protected %}<li>{{ item }}</li>{% endfor %}</ul>
+    <a class="btn" href="{{ cancel_url }}">Quay lại</a>
+  {% else %}
+    {% if counts %}
+      <p class="message warning">Xóa sẽ xóa luôn những dữ liệu đi kèm sau. Không hoàn tác được.</p>
+      <ul class="counts">{% for name, count in counts.items %}<li><b>{{ count }}</b> {{ name }}</li>{% endfor %}</ul>
+    {% else %}
+      <p>Không có dữ liệu nào khác bị xóa theo. Không hoàn tác được.</p>
+    {% endif %}
+    <form method="post" class="actions">
+      {% csrf_token %}
+      <button type="submit" class="btn danger">Xóa vĩnh viễn</button>
+      <a class="btn ghost" href="{{ cancel_url }}">Hủy</a>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

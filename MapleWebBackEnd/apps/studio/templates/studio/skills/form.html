@@ -1,0 +1,65 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Skill mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Skill</a></p>
+    <h1>{% if is_new %}Tạo skill mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa skill</a>{% endif %}
+</header>
+
+{{ item_options|json_script:"studio-item-options" }}
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Thông tin</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.availability %}
+      {% include 'studio/partials/field.html' with field=form.job %}
+      {% include 'studio/partials/field.html' with field=form.required_level %}
+      {% include 'studio/partials/field.html' with field=form.is_basic_attack %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Cơ chế</h2>
+    <p class="lead">Sát thương = (sát thương nhân vật × tỉ lệ + sát thương cộng thêm) × % sát thương của cấp skill.</p>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.effect_type %}
+      {% include 'studio/partials/field.html' with field=form.target_type %}
+      {% include 'studio/partials/field.html' with field=form.mp_cost %}
+      {% include 'studio/partials/field.html' with field=form.cooldown %}
+      {% include 'studio/partials/field.html' with field=form.power_ratio unit='%' %}
+      {% include 'studio/partials/field.html' with field=form.base_power %}
+      {% include 'studio/partials/field.html' with field=form.applies_effect %}
+    </div>
+    <div data-show-when="effect_type=PASSIVE" style="margin-top:12px">
+      {% include 'studio/partials/field.html' with field=form.boosted_skills wide=True choices=True %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Các cấp của skill</h2>
+    <p class="lead">Cấp 1 mở tự động khi đủ cấp nhân vật. Cấp có nguyên liệu thì người chơi tự bấm nâng (tốn nguyên liệu); không có thì tự lên.</p>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.levels %}
+  </section>
+
+  <section class="card">
+    <h2>Hiển thị</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.description wide=True %}
+      {% include 'studio/partials/field.html' with field=form.icon_key %}
+      {% include 'studio/partials/field.html' with field=form.visual_key %}
+    </div>
+  </section>
+
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

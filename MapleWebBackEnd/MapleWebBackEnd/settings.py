@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'apps.world',        # World and locations
     'apps.quests',       # Quest system
     'apps.shops',        # Shop system
+    'apps.studio',       # Game data editor for staff at /studio/
 
     # Third Party Apps
     'rest_framework',

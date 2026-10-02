@@ -1,0 +1,92 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Hiệu ứng mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Hiệu ứng</a></p>
+    <h1>{% if is_new %}Tạo hiệu ứng mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa hiệu ứng</a>{% endif %}
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Cơ bản</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.effect_kind %}
+      {% include 'studio/partials/field.html' with field=form.duration_turns %}
+      {% include 'studio/partials/field.html' with field=form.stacking_rule %}
+      {% include 'studio/partials/field.html' with field=form.dispellable %}
+      {% include 'studio/partials/field.html' with field=form.dispel_count %}
+      {% include 'studio/partials/field.html' with field=form.special_effects wide=True choices=True %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Chỉ số khi đang có hiệu ứng</h2>
+    <p class="lead">Dương = tăng (buff), âm = giảm (debuff). Có thể dùng cả số và %.</p>
+    <div class="table-wrap">
+      <table class="grid">
+        <thead><tr><th>Chỉ số</th><th>Cộng số</th><th>Cộng %</th></tr></thead>
+        <tbody>
+          {% for label, flat, percent in stat_rows %}
+            <tr>
+              <td><b>{{ label }}</b></td>
+              <td>{{ flat }}{% for error in flat.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+              <td>{{ percent }}{% for error in percent.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Mỗi lượt</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.hp_change_per_turn %}
+      {% include 'studio/partials/field.html' with field=form.mp_change_per_turn %}
+      {% include 'studio/partials/field.html' with field=form.damage_power_ratio_per_turn %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Sát thương &amp; hồi phục</h2>
+    <p class="lead">20 = +20%, -20 = -20%.</p>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.final_damage_modifier %}
+      {% include 'studio/partials/field.html' with field=form.damage_dealt_modifier %}
+      {% include 'studio/partials/field.html' with field=form.damage_taken_modifier %}
+      {% include 'studio/partials/field.html' with field=form.health_dealt_modifier %}
+      {% include 'studio/partials/field.html' with field=form.health_received_modifier %}
+      {% include 'studio/partials/field.html' with field=form.mana_dealt_modifier %}
+      {% include 'studio/partials/field.html' with field=form.mana_received_modifier %}
+      {% include 'studio/partials/field.html' with field=form.shields_points %}
+      {% include 'studio/partials/field.html' with field=form.cooldown_reduction %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Phần thưởng trận</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.exp_rate_change %}
+      {% include 'studio/partials/field.html' with field=form.lumis_rate_change %}
+      {% include 'studio/partials/field.html' with field=form.drop_rate_change %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Mô tả</h2>
+    <div class="fields">{% include 'studio/partials/field.html' with field=form.description wide=True %}</div>
+  </section>
+
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}

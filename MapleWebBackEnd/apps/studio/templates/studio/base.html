@@ -1,0 +1,45 @@
+{% load static %}<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Studio{% endblock %} · MapleWeb Studio</title>
+  <link rel="stylesheet" href="{% static 'studio/studio.css' %}">
+  <script src="{% static 'studio/studio.js' %}" defer></script>
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="{% url 'studio:dashboard' %}">MapleWeb <span>Studio</span></a>
+    <nav>
+      <a href="{% url 'studio:dashboard' %}" class="{% if section == 'dashboard' %}active{% endif %}">Tổng quan</a>
+      <p class="nav-group">Vật phẩm</p>
+      <a href="{% url 'studio:item-list' %}" class="{% if section == 'items' %}active{% endif %}">Item</a>
+      <p class="nav-group">Nhân vật</p>
+      <a href="{% url 'studio:class-list' %}" class="{% if section == 'classes' %}active{% endif %}">Class &amp; Job</a>
+      <a href="{% url 'studio:skill-list' %}" class="{% if section == 'skills' %}active{% endif %}">Skill</a>
+      <a href="{% url 'studio:effect-list' %}" class="{% if section == 'effects' %}active{% endif %}">Hiệu ứng</a>
+      <p class="nav-group">Thế giới</p>
+      <a href="{% url 'studio:enemy-list' %}" class="{% if section == 'enemies' %}active{% endif %}">Quái vật</a>
+      <a href="{% url 'studio:dungeon-list' %}" class="{% if section == 'dungeons' %}active{% endif %}">Dungeon</a>
+      <a href="{% url 'studio:region-list' %}" class="{% if section == 'regions' %}active{% endif %}">Khu vực</a>
+    </nav>
+    <div class="sidebar-foot">
+      <span>{{ request.user.username }}</span>
+      <a href="{% url 'admin:index' %}">Django admin ↗</a>
+    </div>
+  </aside>
+  <main class="content">
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

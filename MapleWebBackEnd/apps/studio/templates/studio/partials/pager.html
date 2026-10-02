@@ -1,0 +1,7 @@
+{% if is_paginated %}
+<div class="pager">
+  {% if page_obj.has_previous %}<a class="btn ghost small" href="?{% if filter_params %}{{ filter_params }}&{% endif %}page={{ page_obj.previous_page_number }}">← Trước</a>{% endif %}
+  <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} mục</span>
+  {% if page_obj.has_next %}<a class="btn ghost small" href="?{% if filter_params %}{{ filter_params }}&{% endif %}page={{ page_obj.next_page_number }}">Sau →</a>{% endif %}
+</div>
+{% endif %}

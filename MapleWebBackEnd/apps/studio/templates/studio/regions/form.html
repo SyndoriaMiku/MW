@@ -1,0 +1,33 @@
+{% extends 'studio/base.html' %}
+{% block title %}{% if is_new %}Khu vực mới{% else %}{{ object.name }}{% endif %}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow"><a href="{{ list_url }}">Khu vực</a></p>
+    <h1>{% if is_new %}Tạo khu vực mới{% else %}{{ object.name }}{% endif %}</h1>
+  </div>
+  {% if delete_url %}<a class="btn ghost link-danger" href="{{ delete_url }}">Xóa khu vực</a>{% endif %}
+</header>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include 'studio/partials/form_errors.html' %}
+  <section class="card">
+    <h2>Khu vực</h2>
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=form.name %}
+      {% include 'studio/partials/field.html' with field=form.order %}
+      {% include 'studio/partials/field.html' with field=form.description wide=True %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>Địa điểm</h2>
+    {% include 'studio/partials/formset_table.html' with formset=formsets.locations %}
+  </section>
+  <div class="sticky-actions actions">
+    <button type="submit" class="btn">Lưu</button>
+    {% if can_add_another %}<button type="submit" name="_add_another" value="1" class="btn ghost">Lưu &amp; tạo tiếp</button>{% endif %}
+    <a class="btn ghost" href="{{ list_url }}">Về danh sách</a>
+  </div>
+</form>
+{% endblock %}
