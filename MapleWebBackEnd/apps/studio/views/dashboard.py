@@ -36,7 +36,7 @@ def configuration_checks():
     if not AuroraLumisCostRule.objects.exists():
         checks.append({
             'message': 'Chưa có bảng giá reroll Aurora bằng Lumis (người chơi chỉ reroll bằng đá được).',
-            'names': [], 'count': 0, 'url': reverse('admin:items_auroralumiscostrule_changelist'),
+            'names': [], 'count': 0, 'url': reverse('studio:aurora-lumis-costs'),
         })
     return checks
 

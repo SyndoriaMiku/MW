@@ -7,13 +7,14 @@ class ActiveEffectSerializer(serializers.ModelSerializer):
     effect_template_id = serializers.IntegerField(read_only=True)
     effect_kind = serializers.CharField(source='effect_template.effect_kind', read_only=True)
     dispellable = serializers.BooleanField(source='effect_template.dispellable', read_only=True)
+    icon_key = serializers.CharField(source='effect_template.icon_key', read_only=True, allow_null=True)
     # Special effect tag ids, e.g. 'stun', 'silence'.
     special_effects = serializers.SerializerMethodField()
 
     class Meta:
         model = ActiveEffect
         fields = [
-            'id', 'effect_template_id', 'effect_name', 'effect_kind', 'dispellable',
+            'id', 'effect_template_id', 'effect_name', 'effect_kind', 'dispellable', 'icon_key',
             'special_effects', 'remaining_turns', 'current_stacks', 'remaining_shield_points',
         ]
 

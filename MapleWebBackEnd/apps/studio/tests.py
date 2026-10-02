@@ -1,13 +1,13 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.characters.models import Character
+from apps.characters.models import Character, EquipmentSlotConfig
 from apps.classes.models import CharacterClass, Job
 from apps.inventory.models import InventoryItem
-from apps.items.models import BattleConsumableRule, ItemTemplate, LumenTierProperty, TimedBuffRule
-from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate
+from apps.items.models import AuroraLumisCostRule, BattleConsumableRule, ItemTemplate, LumenTierProperty, TimedBuffRule
+from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
 from apps.users.models import GameUser
-from apps.world.models import EnemyTemplate, LootTable, NormalDungeonTemplate, Region
+from apps.world.models import EnemyTemplate, ExperienceTable, LootTable, NormalDungeonTemplate, Region
 
 from .fields import PercentField
 from .models import StudioChange
@@ -484,6 +484,84 @@ class HistoryTests(StudioTestCase):
         self.staff.save(update_fields=['is_superuser'])
         page = self.client.get(reverse('studio:history'))
         self.assertEqual(len(page.context['rows']), 2)
+
+
+class SettingsTableTests(StudioTestCase):
+    """Flat configuration tables: the EXP table, slots, effect tags and Aurora settings."""
+
+    def test_pasting_an_exp_table_updates_levels_and_records_them(self):
+        ExperienceTable.objects.create(level=1, required_exp=15)
+        ExperienceTable.objects.create(level=2, required_exp=25)
+        ExperienceTable.objects.create(level=3, required_exp=40)
+
+        response = self.client.post(reverse('studio:experience-table'), {
+            'paste': '1', 'table': '1:20, 2:25,\n4:15.500', 'replace_all': 'on',
+        })
+
+        self.assertRedirects(response, reverse('studio:experience-table'))
+        self.assertEqual(dict(ExperienceTable.objects.values_list('level', 'required_exp')), {1: 20, 2: 25, 4: 15500})
+        change = StudioChange.objects.get()
+        self.assertEqual(change.changes, {'Cấp 1': [15, 20], 'Cấp 4': [None, 15500], 'Cấp 3': [40, None]})
+
+    def test_a_badly_formed_paste_changes_nothing(self):
+        ExperienceTable.objects.create(level=1, required_exp=15)
+
+        response = self.client.post(reverse('studio:experience-table'), {'paste': '1', 'table': '1:20, two:30'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('table', response.context['paste_form'].errors)
+        self.assertEqual(ExperienceTable.objects.get().required_exp, 15)
+
+    def test_rows_are_edited_as_a_table(self):
+        row = ExperienceTable.objects.create(level=1, required_exp=15)
+
+        self.client.post(reverse('studio:experience-table'), formset_data('rows', [
+            {'id': row.pk, 'level': 1, 'required_exp': 30}, {'level': 2, 'required_exp': 60},
+        ], initial=1))
+
+        self.assertEqual(dict(ExperienceTable.objects.values_list('level', 'required_exp')), {1: 30, 2: 60})
+        rows = StudioChange.objects.get().changes['_rows']['Bảng EXP']
+        self.assertEqual(rows['changed'][0]['fields'], {'EXP cần để lên cấp tiếp theo': [15, 30]})
+        self.assertEqual(len(rows['added']), 1)
+
+    def test_combat_tags_cannot_be_deleted_or_renamed(self):
+        stun, _ = SpecialEffectTag.objects.get_or_create(id='stun', defaults={'name': 'Stun'})
+        SpecialEffectTag.objects.get_or_create(id='silence', defaults={'name': 'Silence'})
+        tags = list(SpecialEffectTag.objects.order_by('id'))
+        rows = [{'id': tag.pk, 'name': tag.name, 'description': ''} for tag in tags]
+        rows[[t.pk for t in tags].index('stun')]['DELETE'] = 'on'
+
+        response = self.client.post(reverse('studio:effect-tags'), formset_data('rows', rows, initial=len(rows)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(SpecialEffectTag.objects.filter(id='stun').exists())
+
+        # The id box of an existing tag is read-only, and a forged rename is refused.
+        page = self.client.get(reverse('studio:effect-tags'))
+        self.assertTrue(page.context['formset'].forms[0].fields['id'].widget.attrs.get('readonly'))
+        rows[[t.pk for t in tags].index('stun')].pop('DELETE')
+        rows[[t.pk for t in tags].index('stun')]['id'] = 'stunned'
+        response = self.client.post(reverse('studio:effect-tags'), formset_data('rows', rows, initial=len(rows)))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SpecialEffectTag.objects.filter(id='stunned').exists())
+        self.assertTrue(SpecialEffectTag.objects.filter(id='stun').exists())
+
+    def test_slots_and_aurora_tables_save(self):
+        self.client.post(reverse('studio:equipment-slots'), formset_data('rows', [
+            {'order': 1, 'slot_type': 'ring', 'display_name': 'Nhẫn', 'max_count': 4, 'allowed_item_types': ['ring']},
+        ]))
+        self.client.post(reverse('studio:aurora-lumis-costs'), formset_data('rows', [
+            {'aurora_level': 1, 'min_item_level': 0, 'lumis_cost': 500},
+        ]))
+
+        slot = EquipmentSlotConfig.objects.get(slot_type='ring')
+        self.assertEqual((slot.max_count, slot.allowed_item_types), (4, ['ring']))
+        self.assertEqual(AuroraLumisCostRule.objects.get().lumis_cost, 500)
+
+    def test_effects_get_an_icon_key(self):
+        effect = EffectTemplate.objects.create(name='Rage')
+        page = self.client.get(reverse('studio:effect-edit', args=[effect.pk]))
+        self.assertIn('icon_key', page.context['form'].fields)
 
 
 class DashboardTests(StudioTestCase):

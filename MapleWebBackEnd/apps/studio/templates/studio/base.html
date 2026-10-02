@@ -24,6 +24,12 @@
       <a href="{% url 'studio:enemy-list' %}" class="{% if section == 'enemies' %}active{% endif %}">Quái vật</a>
       <a href="{% url 'studio:dungeon-list' %}" class="{% if section == 'dungeons' %}active{% endif %}">Dungeon</a>
       <a href="{% url 'studio:region-list' %}" class="{% if section == 'regions' %}active{% endif %}">Khu vực</a>
+      <p class="nav-group">Cấu hình</p>
+      <a href="{% url 'studio:experience-table' %}" class="{% if section == 'experience' %}active{% endif %}">Bảng EXP</a>
+      <a href="{% url 'studio:equipment-slots' %}" class="{% if section == 'slots' %}active{% endif %}">Ô trang bị</a>
+      <a href="{% url 'studio:effect-tags' %}" class="{% if section == 'tags' %}active{% endif %}">Tag hiệu ứng</a>
+      <a href="{% url 'studio:aurora-line-counts' %}" class="{% if section == 'aurora-lines' %}active{% endif %}">Số dòng Aurora</a>
+      <a href="{% url 'studio:aurora-lumis-costs' %}" class="{% if section == 'aurora-lumis' %}active{% endif %}">Giá reroll Aurora</a>
       <p class="nav-group">Theo dõi</p>
       <a href="{% url 'studio:history' %}" class="{% if section == 'history' %}active{% endif %}">Lịch sử</a>
     </nav>

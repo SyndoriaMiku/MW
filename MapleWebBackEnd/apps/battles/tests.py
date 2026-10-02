@@ -1545,6 +1545,16 @@ class CombatEffectMechanicsTests(BattleFixtureMixin, APITestCase):
         self.assertEqual(buffed.data['action_log']['damage'], 15)
         self.assertFalse(ActiveEffect.objects.filter(effect_template=rage).exists())
 
+    def test_active_effects_carry_their_icon_key(self):
+        combat = self.create_battle(enemy_hp=500)
+        player = combat.combatants.get(is_player=True)
+        self.put(player, self.effect('Rage', icon_key='effect.rage.icon'))
+
+        snapshot = self.client.get(reverse('battles:battle-state', args=[combat.id])).data
+
+        me = next(c for c in snapshot['combatants'] if c['id'] == player.id)
+        self.assertEqual(me['active_effects'][0]['icon_key'], 'effect.rage.icon')
+
     def test_silence_blocks_skills_but_not_basic_attacks(self):
         owned = self.owned_skill(name='Fireball', target_type='ENEMY', effect_type='DAMAGE', base_power=5)
         combat = self.create_battle(enemy_hp=500)
@@ -1557,6 +1567,7 @@ class CombatEffectMechanicsTests(BattleFixtureMixin, APITestCase):
         fireball = next(s for s in me['skills'] if s['character_skill_id'] == owned.id)
         self.assertFalse(fireball['can_use'])
         self.assertEqual(me['active_effects'][0]['special_effects'], ['silence'])
+        self.assertIsNone(me['active_effects'][0]['icon_key'])
 
         self.assertFalse(
             BattleService.execute_action(player, 'SKILL', enemy, character_skill_id=owned.id)['success']

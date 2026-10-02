@@ -80,8 +80,8 @@
   </section>
 
   <section class="card">
-    <h2>Mô tả</h2>
-    <div class="fields">{% include 'studio/partials/field.html' with field=form.description wide=True %}</div>
+    <h2>Hiển thị</h2>
+    <div class="fields">{% include 'studio/partials/field.html' with field=form.description wide=True %}{% include 'studio/partials/field.html' with field=form.icon_key %}</div>
   </section>
 
   <div class="sticky-actions actions">

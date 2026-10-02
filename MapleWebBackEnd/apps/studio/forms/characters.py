@@ -120,7 +120,7 @@ class EffectTemplateForm(StudioModelForm):
             'final_damage_modifier', 'damage_dealt_modifier', 'damage_taken_modifier',
             'health_dealt_modifier', 'health_received_modifier', 'mana_dealt_modifier', 'mana_received_modifier',
             'exp_rate_change', 'lumis_rate_change', 'drop_rate_change', 'shields_points', 'cooldown_reduction',
-            'description',
+            'description', 'icon_key',
         )
         labels = {
             'name': 'Tên hiệu ứng', 'effect_kind': 'Loại', 'duration_turns': 'Kéo dài (lượt)',
@@ -130,7 +130,7 @@ class EffectTemplateForm(StudioModelForm):
             'hp_change_per_turn': 'HP mỗi lượt', 'mp_change_per_turn': 'MP mỗi lượt',
             'exp_rate_change': 'EXP thưởng %', 'lumis_rate_change': 'Lumis thưởng %', 'drop_rate_change': 'Rơi đồ %',
             'shields_points': 'Khiên (chặn sát thương)', 'cooldown_reduction': 'Giảm hồi chiêu (lượt)',
-            'description': 'Mô tả',
+            'description': 'Mô tả', 'icon_key': 'Icon key',
         }
         help_texts = {
             'duration_turns': 'Tính theo lượt của mục tiêu. 0 = tức thời (ví dụ chỉ để gỡ hiệu ứng).',

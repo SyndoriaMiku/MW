@@ -41,6 +41,12 @@ class EffectTemplate(models.Model):
         ),
     )
     icon = models.ImageField(upload_to='images/icons/effects', null=True, blank=True) #Icon for the effect
+    # Uploaded icons do not survive a redeploy on hosts without a persistent
+    # disk; the client draws its own art from this key, like items and skills.
+    icon_key = models.CharField(
+        max_length=255, unique=True, null=True, blank=True,
+        help_text='Stable frontend key for the effect icon.',
+    )
     #Stacking
     class StackingRule(models.TextChoices):
         REFRESH = 'REFRESH', 'Refresh Duration'

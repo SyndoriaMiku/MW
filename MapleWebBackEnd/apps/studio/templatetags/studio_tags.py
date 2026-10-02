@@ -4,6 +4,11 @@ register = template.Library()
 
 
 @register.filter
+def get_item(mapping, key):
+    return mapping.get(key) if hasattr(mapping, 'get') else None
+
+
+@register.filter
 def show(value):
     """A history value as people read it: lists joined, yes/no for booleans, a dash for nothing."""
     if value is None or value == '' or value == []:

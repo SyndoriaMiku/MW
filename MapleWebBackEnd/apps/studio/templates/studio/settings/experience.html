@@ -1,0 +1,56 @@
+{% extends 'studio/base.html' %}
+{% load studio_tags %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Cấu hình</p>
+    <h1>{{ title }}</h1>
+  </div>
+  <a class="btn ghost" href="{{ history_url }}">Lịch sử</a>
+</header>
+<p class="help" style="margin-top:-8px;max-width:75ch">{{ lead }} Hiện có {{ levels }} cấp, tổng {{ total }} EXP.</p>
+
+<section class="card">
+  <h2>Dán cả bảng</h2>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="paste" value="1">
+    {% include 'studio/partials/form_errors.html' with form=paste_form %}
+    <div class="fields">
+      {% include 'studio/partials/field.html' with field=paste_form.table wide=True %}
+      {% include 'studio/partials/field.html' with field=paste_form.replace_all %}
+    </div>
+    <div class="actions" style="margin-top:10px"><button type="submit" class="btn">Áp dụng bảng dán</button></div>
+  </form>
+</section>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <section class="card">
+    <h2>Sửa từng cấp</h2>
+    <div class="formset" data-formset="{{ formset.prefix }}">
+      {{ formset.management_form }}
+      {% for error in formset.non_form_errors %}<div class="message error">{{ error }}</div>{% endfor %}
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Cấp</th><th>EXP cần</th><th>% so với cấp trước</th><th></th></tr></thead>
+          <tbody data-rows>
+            {% for row in formset.forms %}
+              <tr class="{% if row.errors %}has-error{% endif %}" data-row>
+                <td>{{ row.level }}{% for error in row.level.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+                <td>{{ row.required_exp }}{% for error in row.required_exp.errors %}<small class="error">{{ error }}</small>{% endfor %}</td>
+                <td class="help">{% with g=growth|get_item:row.instance.level %}{% if g is not None %}+{{ g }}%{% endif %}{% endwith %}</td>
+                <td class="row-actions">{% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}<span class="hidden">{{ row.DELETE }}</span><button type="button" class="btn ghost small" data-delete-row>Xóa</button></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <template data-empty-form>{% include 'studio/partials/formset_row.html' with row=formset.empty_form %}</template>
+      <button type="button" class="btn ghost" data-add-row>+ Thêm cấp</button>
+    </div>
+  </section>
+  <div class="sticky-actions actions"><button type="submit" class="btn">Lưu</button></div>
+</form>
+{% endblock %}
