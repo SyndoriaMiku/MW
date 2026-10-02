@@ -1,0 +1,316 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/features/battle/presentation/battle_screen.gd" id="1_script"]
+
+[node name="BattleScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.03, 0.045, 0.07, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="SafeArea/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="EncounterLabel" type="Label" parent="SafeArea/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "BATTLE"
+text_overrun_behavior = 3
+
+[node name="TurnBox" type="VBoxContainer" parent="SafeArea/VBox/Header"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TurnLabel" type="Label" parent="SafeArea/VBox/Header/TurnBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_override_font_sizes/font_size = 22
+text = "TURN 01"
+horizontal_alignment = 1
+
+[node name="PhaseLabel" type="Label" parent="SafeArea/VBox/Header/TurnBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "PLAYER PHASE"
+horizontal_alignment = 1
+
+[node name="HeaderSpacer" type="Control" parent="SafeArea/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ConnectionStatus" type="Label" parent="SafeArea/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 12
+text = "LOADING"
+
+[node name="ForfeitButton" type="Button" parent="SafeArea/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Leave the battle. It counts as a defeat and gives no rewards."
+text = "FORFEIT"
+
+[node name="BackButton" type="Button" parent="SafeArea/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Go back to the board. An unfinished battle can be resumed there."
+text = "BACK TO BOARD"
+
+[node name="Arena" type="HBoxContainer" parent="SafeArea/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="PartyColumn" type="VBoxContainer" parent="SafeArea/VBox/Arena"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PartyTitle" type="Label" parent="SafeArea/VBox/Arena/PartyColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "YOUR PARTY"
+
+[node name="PartyList" type="VBoxContainer" parent="SafeArea/VBox/Arena/PartyColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="EnemyColumn" type="VBoxContainer" parent="SafeArea/VBox/Arena"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EnemyTitle" type="Label" parent="SafeArea/VBox/Arena/EnemyColumn"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.6, 0.56, 1)
+theme_override_font_sizes/font_size = 13
+text = "ENEMIES  •  CLICK ONE TO TARGET IT"
+
+[node name="EnemyGrid" type="GridContainer" parent="SafeArea/VBox/Arena/EnemyColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+columns = 3
+
+[node name="Bottom" type="HBoxContainer" parent="SafeArea/VBox"]
+custom_minimum_size = Vector2(0, 196)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LogPanel" type="PanelContainer" parent="SafeArea/VBox/Bottom"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"CompactPanel"
+
+[node name="CombatLog" type="RichTextLabel" parent="SafeArea/VBox/Bottom/LogPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+bbcode_enabled = true
+scroll_following = true
+theme_override_font_sizes/normal_font_size = 13
+
+[node name="ActionPanel" type="PanelContainer" parent="SafeArea/VBox/Bottom"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+theme_type_variation = &"CompactPanel"
+
+[node name="ActionBox" type="VBoxContainer" parent="SafeArea/VBox/Bottom/ActionPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TargetLabel" type="Label" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.77, 0.32, 1)
+text = "TARGET  —"
+text_overrun_behavior = 3
+
+[node name="Actions" type="HBoxContainer" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AttackButton" type="Button" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "ATTACK"
+
+[node name="SkillButton" type="Button" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "SKILL"
+
+[node name="ItemButton" type="Button" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "ITEM"
+
+[node name="HintLabel" type="Label" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 3
+
+[node name="SkipIdleButton" type="Button" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "SKIP IDLE PLAYER"
+
+[node name="EffectLayer" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ResultOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="ResultOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.02, 0.04, 0.78)
+
+[node name="Center" type="CenterContainer" parent="ResultOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="ResultOverlay/Center"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+
+[node name="Box" type="VBoxContainer" parent="ResultOverlay/Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResultTitle" type="Label" parent="ResultOverlay/Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "VICTORY"
+horizontal_alignment = 1
+
+[node name="ResultSubtitle" type="Label" parent="ResultOverlay/Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+text = "-"
+horizontal_alignment = 1
+
+[node name="Separator" type="HSeparator" parent="ResultOverlay/Center/Card/Box"]
+layout_mode = 2
+
+[node name="RewardsLabel" type="Label" parent="ResultOverlay/Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ResultError" type="Label" parent="ResultOverlay/Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ResultActions" type="HBoxContainer" parent="ResultOverlay/Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AgainButton" type="Button" parent="ResultOverlay/Center/Card/Box/ResultActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "ENTER AGAIN"
+
+[node name="BoardButton" type="Button" parent="ResultOverlay/Center/Card/Box/ResultActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "BACK TO BOARD"
+
+[node name="ForfeitDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Forfeit the battle?"
+ok_button_text = "Forfeit"
+dialog_text = "You leave the battle. It counts as a defeat and gives no rewards."
+
+[node name="PollTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 3.0

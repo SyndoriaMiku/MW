@@ -35,16 +35,21 @@ Sửa kèm khi làm Giai đoạn 2:
 - [x] ID số từ JSON là float (`5` → `"5.0"`), làm URL `inventory/5.0/equip/` trả 404 — nút Equip/Unequip trước đây hỏng với backend thật. Dùng `ApiClient.id_string()` cho mọi ID
 - [x] `ApiClient` đọc định dạng lỗi chung của backend (`code`, `message`, `fields`)
 
-## Giai đoạn 3 — Battle hoàn chỉnh
+## Giai đoạn 3 — Battle hoàn chỉnh ✅
 
-- [ ] Hiển thị nhiều quái (backend có `stage_enemies`, client chỉ vẽ `first_enemy`) + chọn mục tiêu
-- [ ] Màn kết quả: EXP, level up, drop, tiền
-- [ ] Nút bỏ trận (`battles/<id>/forfeit/`)
-- [ ] Dùng item trong trận (`action_type: ITEM`)
-- [ ] Gửi `expected_version` để tránh xung đột trạng thái
-- [ ] Xử lý `skip-idle-turn` / phase quái rõ ràng; `_status_text` hiện đúng phase
-- [ ] Nút "Retry" ở chế độ live đổi thành "Về sảnh"/"Vào lại dungeon"
-- [ ] Sprite nhân vật/quái, animation đánh, số damage bay lên
+- [x] Đọc đúng event của backend (`action`, `effect_tick`, `turn_skipped`, `forfeit`, `battle_result`) — trước đây client chờ các khoá `type` mà server không bao giờ gửi
+- [x] Hiển thị nhiều quái + click để chọn mục tiêu; skill đánh lan / tự thân không cần mục tiêu
+- [x] Nhận diện nhân vật của mình qua `entity_id` (đúng cho trận party)
+- [x] Màn kết quả: EXP, Lumis, level up, item rơi; thua thì báo không mất stamina
+- [x] Nút Forfeit (có hộp xác nhận)
+- [x] Dùng item trong trận (`action_type: ITEM`), hiện số lượng và cooldown
+- [x] Gửi `expected_version` (409 → tự tải lại) và `client_action_id` (lỗi mạng → gửi lại an toàn)
+- [x] Trận party: poll khi chờ người khác, nút bỏ lượt người chơi treo máy (`skip-idle-turn`), hiện đúng phase
+- [x] "Enter again" vào lại cùng dungeon, "Back to board" khi trận kết thúc
+- [x] Số damage/heal bay lên, thanh máu tụt theo từng event, thẻ nháy khi trúng đòn
+- [x] Mock offline trả dữ liệu đúng định dạng backend (2 quái, skill đánh lan, bình máu, phần thưởng)
+- [ ] Sprite nhân vật/quái và animation đánh thật (cần art; hiện dùng ô màu thay thế, `visual_key` đã có sẵn trong dữ liệu)
+- [ ] Hiển thị biểu tượng hiệu ứng (buff/debuff) thay vì chỉ ghi tên
 
 ## Giai đoạn 4 — Kinh tế & phát triển nhân vật
 

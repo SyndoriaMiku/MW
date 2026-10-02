@@ -7,7 +7,7 @@ Godot 4 client for the Maple World turn-based RPG backend (`../MapleWebBackEnd`)
 - Account sign-up, then character creation: pick a job (the class follows) and a name checked against the backend's rules.
 - Sign in with JWT; the access token is refreshed automatically and logout blacklists the refresh token.
 - Adventure board: character summary, stamina, normal dungeons, and resuming an active battle (`/api/battles/active/`).
-- Turn-based battle with attack, skills (cooldown and MP aware), and an event-driven combat log.
+- Turn-based battle against several enemies: click to target, attack, skills (single, area, self), battle items, forfeit, and a result screen with EXP, Lumis, level-up and drops. Actions carry `expected_version` and a `client_action_id`, so stale or retried actions are safe.
 - Character profile with currency, progression, combat stats, equipment slots, and learned skills.
 - Inventory with search, category filter, and equip/unequip.
 - Enhancement: Lumen Ascend with live rates, Aurora reveal, and Essence rerolls.
@@ -20,7 +20,7 @@ Godot 4 client for the Maple World turn-based RPG backend (`../MapleWebBackEnd`)
 3. Start the Django backend at `http://127.0.0.1:8000`.
 4. Press `F5`, sign in, select a normal dungeon, and enter battle.
 
-Run `battle_demo.tscn` directly with `F6` to use the offline mock battle.
+Run `battle_screen.tscn` directly with `F6` to use the offline mock battle.
 
 ## Backend URL
 
