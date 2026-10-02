@@ -38,7 +38,8 @@ class ListingViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'delete', 'head', 'options']
 
     def get_queryset(self):
-        queryset = Listing.objects.filter(is_active=True).select_related(
+        # Newest first, with a stable order so pages neither repeat nor skip listings.
+        queryset = Listing.objects.filter(is_active=True).order_by('-id').select_related(
             'seller', 'item__template__lumen_tier', 'item__template__aurora_tier'
         ).prefetch_related(
             'item__aurora_lines',

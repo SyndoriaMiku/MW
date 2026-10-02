@@ -126,7 +126,7 @@ class PaginationOrderTests(APITestCase):
 
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            for url in ('/api/classes/', '/api/classes/jobs/', '/api/inventory/'):
+            for url in ('/api/classes/', '/api/classes/jobs/', '/api/inventory/', '/api/market/listings/'):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
         unordered = [str(w.message) for w in caught if 'UnorderedObjectListWarning' in type(w.message).__name__]
