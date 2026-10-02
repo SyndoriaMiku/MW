@@ -1,0 +1,93 @@
+{% extends 'studio/base.html' %}
+{% block title %}Market{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Vận hành · chỉ superuser</p>
+    <h1>Market &amp; trade</h1>
+  </div>
+</header>
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tên tài khoản hoặc item…">
+    <button class="btn ghost" type="submit">Lọc</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Đang rao bán ({{ listings|length }})</h2>
+  {% if listings %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>#</th><th>Item</th><th>Số lượng</th><th>Giá</th><th>Người bán</th><th></th></tr></thead>
+      <tbody>
+      {% for listing in listings %}
+        <tr>
+          <td>{{ listing.pk }}</td>
+          <td>{{ listing.item.template.name }}{% if listing.item.lumen_ascend_level %} · Lumen {{ listing.item.lumen_ascend_level }}{% endif %}</td>
+          <td>{{ listing.quantity }}</td><td>{{ listing.price }}</td>
+          <td><a href="{% url 'studio:player-detail' listing.seller.pk %}">{{ listing.seller.username }}</a></td>
+          <td class="row-actions">
+            <form method="post" class="actions" data-confirm="Gỡ listing {{ listing.pk }}? Item về lại túi người bán.">
+              {% csrf_token %}<input type="hidden" name="action" value="cancel_listing"><input type="hidden" name="pk" value="{{ listing.pk }}">
+              <input class="input" name="reason" maxlength="200" placeholder="Lý do" style="width:140px">
+              <button class="btn ghost small" type="submit">Gỡ</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Không có listing nào đang mở.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Trade đang chờ ({{ trades|length }})</h2>
+  {% if trades %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>#</th><th>Người gửi</th><th>Người nhận</th><th>Item</th><th>Lumis</th><th>Tạo lúc</th><th></th></tr></thead>
+      <tbody>
+      {% for trade in trades %}
+        <tr>
+          <td>{{ trade.pk }}</td>
+          <td><a href="{% url 'studio:player-detail' trade.sender.pk %}">{{ trade.sender.username }}</a>{% if trade.sender_ready %} <span class="tag good">sẵn sàng</span>{% endif %}</td>
+          <td><a href="{% url 'studio:player-detail' trade.receiver.pk %}">{{ trade.receiver.username }}</a>{% if trade.receiver_ready %} <span class="tag good">sẵn sàng</span>{% endif %}</td>
+          <td>{% for trade_item in trade.items.all %}<span class="tag">{% if trade_item.is_sender %}→{% else %}←{% endif %} {{ trade_item.item.template.name }}</span> {% empty %}<span class="help">—</span>{% endfor %}</td>
+          <td>{{ trade.sender_lumis }} → / ← {{ trade.receiver_lumis }}</td>
+          <td>{{ trade.created_at|date:"d/m H:i" }}</td>
+          <td class="row-actions">
+            <form method="post" class="actions" data-confirm="Hủy trade {{ trade.pk }}? Item của hai bên được giải phóng.">
+              {% csrf_token %}<input type="hidden" name="action" value="cancel_trade"><input type="hidden" name="pk" value="{{ trade.pk }}">
+              <input class="input" name="reason" maxlength="200" placeholder="Lý do" style="width:140px">
+              <button class="btn ghost small" type="submit">Hủy</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Không có trade nào đang chờ.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Giao dịch market gần đây</h2>
+  {% if sales %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Lúc</th><th>Item</th><th>Số lượng</th><th>Giá</th><th>Phí</th><th>Người bán nhận</th><th>Người bán</th><th>Người mua</th></tr></thead>
+      <tbody>
+      {% for sale in sales %}
+        <tr><td>{{ sale.created_at|date:"d/m/Y H:i" }}</td><td>{{ sale.item_template.name|default:"—" }}</td><td>{{ sale.quantity }}</td>
+          <td>{{ sale.price }}</td><td>{{ sale.fee }}</td><td>{{ sale.seller_received }}</td>
+          <td><a href="{% url 'studio:player-detail' sale.seller.pk %}">{{ sale.seller.username }}</a></td>
+          <td><a href="{% url 'studio:player-detail' sale.buyer.pk %}">{{ sale.buyer.username }}</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Chưa có giao dịch nào.</p>{% endif %}
+</section>
+{% endblock %}

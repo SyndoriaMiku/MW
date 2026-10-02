@@ -883,6 +883,75 @@ class PlayerManagementTests(StudioTestCase):
         self.assertEqual(StudioChange.objects.filter(target_type='users.GameUser').count(), 1)
 
 
+class OperationsTests(StudioTestCase):
+    """Moderation pages: market, trades, parties, battles, boss clears and quest progress."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff.is_superuser = True
+        self.staff.save(update_fields=['is_superuser'])
+        self.seller = GameUser.objects.create_user(username='seller', email='seller@example.com', password='Pass-12345')
+        self.buyer = GameUser.objects.create_user(username='buyer', email='buyer@example.com', password='Pass-12345')
+        for user, name in ((self.seller, 'Seller'), (self.buyer, 'Buyer')):
+            user.character = Character.objects.create(name=name, job=self.fighter, character_class=self.warrior)
+            user.save(update_fields=['character'])
+        self.sword = ItemTemplate.objects.create(name='Sword', item_type='weapon', weapon_type='2hs')
+        self.item = InventoryItem.objects.create(owner=self.seller.character, template=self.sword)
+
+    def test_cancel_a_listing_keeps_the_item_with_the_seller(self):
+        from apps.market.models import Listing
+
+        listing = Listing.objects.create(seller=self.seller, item=self.item, price=100)
+        self.assertEqual(self.client.get(reverse('studio:ops-market')).context['listings'][0], listing)
+
+        self.client.post(reverse('studio:ops-market'), {'action': 'cancel_listing', 'pk': listing.pk, 'reason': 'giá ảo'})
+
+        listing.refresh_from_db()
+        self.assertFalse(listing.is_active)
+        self.assertTrue(InventoryItem.objects.filter(pk=self.item.pk, owner=self.seller.character).exists())
+        change = StudioChange.objects.get()
+        self.assertEqual((change.target_repr, change.changes), ('seller', {'Lý do': [None, 'giá ảo']}))
+
+    def test_cancel_a_pending_trade(self):
+        from apps.market.models import Trade
+
+        trade = Trade.objects.create(sender=self.seller, receiver=self.buyer)
+        self.client.post(reverse('studio:ops-market'), {'action': 'cancel_trade', 'pk': trade.pk})
+
+        trade.refresh_from_db()
+        self.assertEqual(trade.status, 'cancelled')
+        self.assertEqual(StudioChange.objects.count(), 2)  # one entry on each player's history
+        self.assertEqual(self.client.post(reverse('studio:ops-market'), {'action': 'cancel_trade', 'pk': trade.pk}).status_code, 404)
+
+    def test_pages_open_and_need_a_superuser(self):
+        from apps.battles.services import BattleService
+        from apps.party.models import Party, PartyMember
+        from apps.quests.models import CharacterQuest, QuestTemplate
+        from apps.world.models import BossDungeonTemplate, DungeonClearLog
+
+        character = self.seller.character
+        party = Party.objects.create(name='Duo', leader=character, max_size=2)
+        PartyMember.objects.create(party=party, character=character, position=1)
+        enemy = EnemyTemplate.objects.create(name='Boss', level=1, base_hp=500, base_mp=0, base_att=1, exp_reward=1,
+                                             lumis_reward_min=0, lumis_reward_max=0)
+        BattleService.start_combat(BattleService.create_combat_instance(party, [enemy]))
+        DungeonClearLog.objects.create(character=character, dungeon=BossDungeonTemplate.objects.create(name='Lair'))
+        CharacterQuest.objects.create(character=character, quest=QuestTemplate.objects.create(name='Q', description='d'))
+        urls = [reverse(name) for name in ('studio:ops-market', 'studio:ops-parties', 'studio:ops-battles',
+                                           'studio:ops-boss-clears', 'studio:ops-character-quests')]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+        battles = self.client.get(reverse('studio:ops-battles')).context['rows']
+        self.assertEqual(battles[0]['players'][0]['user'], self.seller)
+
+        self.staff.is_superuser = False
+        self.staff.save(update_fields=['is_superuser'])
+        for url in urls:
+            with self.subTest(url=url, role='staff'):
+                self.assertEqual(self.client.get(url).status_code, 403)
+
+
 class DashboardTests(StudioTestCase):
     def test_lists_configuration_problems(self):
         Job.objects.create(name='Wanderer', character_class=self.warrior)

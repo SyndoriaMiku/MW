@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import characters, content, dashboard, history, items, players, tables, tiers, world
+from .views import characters, content, dashboard, history, items, ops, players, tables, tiers, world
 
 app_name = 'studio'
 
@@ -19,6 +19,11 @@ urlpatterns = [
     path('history/', history.HistoryView.as_view(), name='history'),
     path('players/', players.PlayerListView.as_view(), name='player-list'),
     path('players/<int:pk>/', players.PlayerDetailView.as_view(), name='player-detail'),
+    path('ops/market/', ops.MarketView.as_view(), name='ops-market'),
+    path('ops/parties/', ops.PartyListView.as_view(), name='ops-parties'),
+    path('ops/battles/', ops.BattleListView.as_view(), name='ops-battles'),
+    path('ops/boss-clears/', ops.BossClearListView.as_view(), name='ops-boss-clears'),
+    path('ops/character-quests/', ops.CharacterQuestListView.as_view(), name='ops-character-quests'),
     path('settings/experience/', tables.ExperienceTableView.as_view(), name='experience-table'),
     path('settings/equipment-slots/', tables.EquipmentSlotTableView.as_view(), name='equipment-slots'),
     path('settings/effect-tags/', tables.SpecialEffectTagTableView.as_view(), name='effect-tags'),

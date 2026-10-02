@@ -1,0 +1,34 @@
+{% extends 'studio/base.html' %}
+{% block title %}Trận đang chạy{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Vận hành · chỉ superuser</p>
+    <h1>Trận đang chạy</h1>
+  </div>
+</header>
+<p class="help" style="margin-top:-8px;max-width:75ch">Xếp theo lần cuối có hoạt động, trận lâu không động tới ở trên cùng. Muốn gỡ một người chơi khỏi trận bị kẹt, mở trang người chơi và dùng "Gỡ trận bị kẹt".</p>
+<section class="card">
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Trận</th><th>Dungeon</th><th>Người chơi</th><th>Lượt</th><th>Pha</th><th>Hoạt động cuối</th></tr></thead>
+      <tbody>
+      {% for row in rows %}{% with battle=row.battle %}
+        <tr>
+          <td>{{ battle.pk }}</td>
+          <td>{{ row.dungeon.name|default:"—" }}</td>
+          <td>{% for player in row.players %}
+                {% if player.user %}<a class="tag {% if player.combatant.has_left %}bad{% endif %}" href="{% url 'studio:player-detail' player.user.pk %}">{{ player.character.name }}{% if player.combatant.has_left %} (đã rời){% elif player.combatant.current_hp <= 0 %} (gục){% endif %}</a>{% else %}<span class="tag">{{ player.character.name|default:"?" }}</span>{% endif %}
+              {% endfor %}</td>
+          <td>{{ battle.turn_count }}</td>
+          <td>{{ battle.get_turn_phase_display }}</td>
+          <td>{{ battle.updated_at|date:"d/m/Y H:i" }} <span class="help">({{ battle.updated_at|timesince }} trước)</span></td>
+        </tr>
+      {% endwith %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Không có trận nào đang chạy.</p>{% endif %}
+</section>
+{% endblock %}

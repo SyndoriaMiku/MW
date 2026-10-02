@@ -40,6 +40,12 @@
       {% if request.user.is_superuser %}
       <p class="nav-group">Người chơi</p>
       <a href="{% url 'studio:player-list' %}" class="{% if section == 'players' %}active{% endif %}">Tài khoản</a>
+      <p class="nav-group">Vận hành</p>
+      <a href="{% url 'studio:ops-market' %}" class="{% if section == 'market' %}active{% endif %}">Market &amp; trade</a>
+      <a href="{% url 'studio:ops-battles' %}" class="{% if section == 'battles' %}active{% endif %}">Trận đang chạy</a>
+      <a href="{% url 'studio:ops-parties' %}" class="{% if section == 'parties' %}active{% endif %}">Party</a>
+      <a href="{% url 'studio:ops-boss-clears' %}" class="{% if section == 'boss-clears' %}active{% endif %}">Clear boss</a>
+      <a href="{% url 'studio:ops-character-quests' %}" class="{% if section == 'character-quests' %}active{% endif %}">Quest nhân vật</a>
       {% endif %}
       <p class="nav-group">Theo dõi</p>
       <a href="{% url 'studio:history' %}" class="{% if section == 'history' %}active{% endif %}">Lịch sử</a>

@@ -1,0 +1,37 @@
+{% extends 'studio/base.html' %}
+{% block title %}Party{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">Vận hành · chỉ superuser</p>
+    <h1>Party</h1>
+  </div>
+</header>
+<section class="card">
+  <form method="get" class="toolbar">
+    <input class="input" type="search" name="q" value="{{ query }}" placeholder="Tên party hoặc nhân vật…">
+    <label class="check"><input type="checkbox" name="solo" value="1" {% if solo %}checked{% endif %}> Gồm cả party đánh một mình</label>
+    <button class="btn ghost" type="submit">Lọc</button>
+  </form>
+  {% if object_list %}
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th>Party</th><th>Trưởng nhóm</th><th>Thành viên</th><th>Tạo lúc</th></tr></thead>
+      <tbody>
+      {% for party in object_list %}
+        <tr>
+          <td><b>{{ party.name }}</b>{% if party.is_solo %} <span class="tag">một mình</span>{% endif %}</td>
+          <td>{{ party.leader.name }}</td>
+          <td>{% for member in party.party_members.all %}
+                {% if member.character.user %}<a class="tag" href="{% url 'studio:player-detail' member.character.user.pk %}">{{ member.position }}. {{ member.character.name }}</a>{% else %}<span class="tag">{{ member.position }}. {{ member.character.name }}</span>{% endif %}
+              {% endfor %} <span class="help">{{ party.party_members.all|length }}/{{ party.max_size }}</span></td>
+          <td>{{ party.created_at|date:"d/m/Y H:i" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'studio/partials/pager.html' %}
+  {% else %}<p class="empty">Không có party nào.</p>{% endif %}
+</section>
+{% endblock %}
