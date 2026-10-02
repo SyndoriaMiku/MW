@@ -31,6 +31,26 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
+# Reverse proxies in front of the app. 0 = clients connect directly, so the
+# client IP is REMOTE_ADDR and X-Forwarded-For (typed by the client) is
+# ignored. Behind one proxy (e.g. Render, nginx) set 1: the last address the
+# proxy appended is used. Login limits and throttles count by this IP.
+NUM_PROXIES = config('NUM_PROXIES', default=0, cast=int)
+
+# HTTPS. Hosts like Render end HTTPS at their proxy and pass requests on as
+# HTTP with X-Forwarded-Proto; without trusting it Django sees plain HTTP and
+# refuses every admin/Studio form ("CSRF: Origin checking failed").
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if NUM_PROXIES else None
+# Other origins (scheme + host) allowed to post forms, e.g. a custom domain.
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+# Cookies only over HTTPS outside development.
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=not DEBUG, cast=bool)
+# Opt-in: browsers remember HSTS, so start small (e.g. 3600) once HTTPS works.
+SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=0, cast=int)
+# Render already redirects HTTP to HTTPS at its edge; enable only where needed.
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+
 
 # Application definition
 
@@ -205,11 +225,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    # Reverse proxies in front of the app. 0 = clients connect directly, so the
-    # client IP is REMOTE_ADDR and X-Forwarded-For (typed by the client) is
-    # ignored. Behind one proxy (e.g. nginx) set 1: the last address the proxy
-    # appended is used. Login limits and throttles count by this IP.
-    'NUM_PROXIES': config('NUM_PROXIES', default=0, cast=int),
+    'NUM_PROXIES': NUM_PROXIES,  # see NUM_PROXIES above
     # Throttle counters use the cache, like the login limits.
     'DEFAULT_THROTTLE_RATES': {
         # Sign-up attempts per IP (apps.users.views.RegisterThrottle).
