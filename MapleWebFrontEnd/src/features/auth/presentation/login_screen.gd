@@ -7,15 +7,53 @@ extends Control
 @onready var loading_label: Label = %LoadingLabel
 @onready var server_label: Label = %ServerLabel
 @onready var create_account_button: Button = %CreateAccountButton
+@onready var retry_server_button: Button = %RetryServerButton
+
+const SERVER_OK_COLOR := Color(0.45, 0.85, 0.6)
+const SERVER_WAIT_COLOR := Color(0.95, 0.77, 0.36)
+const SERVER_DOWN_COLOR := Color(1, 0.48, 0.45)
+## After this long without an answer the server is probably waking up.
+const WAKE_HINT_DELAY := 4.0
+
+var _checking_server := false
 
 
 func _ready() -> void:
-	server_label.text = ApiClient.server_host()
 	login_button.pressed.connect(_on_login_pressed)
+	retry_server_button.pressed.connect(_check_server)
 	create_account_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.REGISTER))
 	username_input.text_submitted.connect(_focus_password)
 	password_input.text_submitted.connect(_submit_from_password)
 	username_input.grab_focus()
+	await _check_server()
+
+
+## Pings the backend so a sleeping (Render) server starts waking up while the
+## player types, and shows whether it is reachable.
+func _check_server() -> void:
+	if _checking_server:
+		return
+	_checking_server = true
+	retry_server_button.visible = false
+	_show_server_status("connecting...", SERVER_WAIT_COLOR)
+	get_tree().create_timer(WAKE_HINT_DELAY).timeout.connect(func():
+		if _checking_server:
+			_show_server_status("waking up the server, this can take up to a minute...", SERVER_WAIT_COLOR)
+	)
+	var online: bool = await ApiClient.ping()
+	_checking_server = false
+	if online:
+		_show_server_status("online", SERVER_OK_COLOR)
+	else:
+		_show_server_status("unreachable", SERVER_DOWN_COLOR)
+		retry_server_button.visible = true
+
+
+func _show_server_status(status: String, color: Color) -> void:
+	if not is_inside_tree():
+		return
+	server_label.text = "%s  •  %s" % [ApiClient.server_host(), status]
+	server_label.add_theme_color_override("font_color", color)
 
 
 func _focus_password(_value: String) -> void:

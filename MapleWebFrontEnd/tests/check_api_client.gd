@@ -23,7 +23,7 @@ func _ready() -> void:
 		return
 	ApiClient.base_url = _server.base_url(PORT)
 
-	if not _check_helpers():
+	if not _check_helpers() or not await _check_ping():
 		return
 	if not await _check_concurrent_refresh():
 		return
@@ -42,6 +42,12 @@ func _check_helpers() -> bool:
 		return _fail("ERROR_MESSAGE_FAILED")
 	if ApiClient.server_host() != "127.0.0.1:%d" % PORT:
 		return _fail("SERVER_HOST_FAILED %s" % ApiClient.server_host())
+	return true
+
+
+func _check_ping() -> bool:
+	if not await ApiClient.ping():
+		return _fail("PING_FAILED")
 	return true
 
 
@@ -113,6 +119,8 @@ func _handle(path: String, head: String, payload: Variant) -> Array:
 	elif path == "/api/users/logout/":
 		_logout_tokens.append(payload.get("refresh") if payload is Dictionary else null)
 		return [200, {}]
+	elif path == "/api/classes/":
+		return [200, {"count": 0, "results": []}]
 	elif head.contains("Authorization: Bearer access-2"):
 		return [200, {"name": "Tester"}]
 	return [401, {"detail": "Token is invalid or expired"}]

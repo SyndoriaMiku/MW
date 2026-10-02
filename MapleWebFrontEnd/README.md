@@ -13,23 +13,33 @@ Godot 4 client for the Maple World turn-based RPG backend (`../MapleWebBackEnd`)
 - Enhancement: Lumen Ascend with live rates, Aurora reveal, and Essence rerolls.
 - Pixel-art icon set for the current backend item templates under `assets/items/icons/`.
 
-## Run locally
+## Run
 
 1. Install Godot 4.7 or newer.
 2. Import `project.godot` from this directory.
-3. Start the Django backend at `http://127.0.0.1:8000`.
-4. Press `F5`, sign in, select a normal dungeon, and enter battle.
+3. Press `F5`, sign in (or create an account), select a normal dungeon, and enter battle.
+
+The client talks to the deployed backend at `https://maplewebbackend.onrender.com` by default.
+The login screen pings it on open and shows whether it is online. A sleeping Render
+instance can take up to a minute to wake up, so requests wait up to 60 seconds.
 
 Run `battle_screen.tscn` directly with `F6` to use the offline mock battle.
 
 ## Backend URL
 
 The API base URL comes from the project setting `maple_world/network/api_base_url`
-(default `http://127.0.0.1:8000/api`). Override it for one run with a user argument:
+(default `https://maplewebbackend.onrender.com/api`). To work against a local Django
+backend, override it for one run with a user argument:
 
 ```bash
-godot --path . -- --api-url=http://127.0.0.1:8765/api
+godot --path . -- --api-url=http://127.0.0.1:8000/api
 ```
+
+In the editor, the same argument goes in Project Settings → Editor → Run → Main Run Args
+(`-- --api-url=http://127.0.0.1:8000/api`).
+
+A Web (HTML5) export runs in a browser, so the backend must list the page's origin in
+`CORS_ALLOWED_ORIGINS`. Desktop builds are not affected by CORS.
 
 ## Project layout
 

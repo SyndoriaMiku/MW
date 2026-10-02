@@ -34,7 +34,7 @@ theme/custom="res://src/shared/ui/main_theme.tres"
 
 [maple_world]
 
-network/api_base_url="http://127.0.0.1:8000/api"
+network/api_base_url="https://maplewebbackend.onrender.com/api"
 
 [rendering]
 

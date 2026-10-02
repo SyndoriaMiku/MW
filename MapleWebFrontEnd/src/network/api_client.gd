@@ -7,10 +7,12 @@ extends Node
 signal session_expired
 signal _refresh_finished(success: bool)
 
-const DEFAULT_BASE_URL := "http://127.0.0.1:8000/api"
+const DEFAULT_BASE_URL := "https://maplewebbackend.onrender.com/api"
 const BASE_URL_SETTING := "maple_world/network/api_base_url"
 const BASE_URL_ARG := "--api-url="
-const REQUEST_TIMEOUT_SECONDS := 15.0
+## Long enough for a sleeping Render instance to wake up (up to about a minute).
+const REQUEST_TIMEOUT_SECONDS := 60.0
+const PING_PATH := "classes/"
 const REFRESH_PATH := "users/token/refresh/"
 const LOGOUT_PATH := "users/logout/"
 
@@ -36,6 +38,13 @@ static func _configured_base_url() -> String:
 ## Host and port of the backend, for display.
 func server_host() -> String:
 	return base_url.get_slice("://", 1).get_slice("/", 0)
+
+
+## True when the backend answers. A public, cheap endpoint, so it also wakes
+## a sleeping server before the player submits a form.
+func ping() -> bool:
+	var response := await _send(PING_PATH, HTTPClient.METHOD_GET, {}, "")
+	return response.get("ok", false)
 
 
 func set_tokens(access: String, refresh: String) -> void:
