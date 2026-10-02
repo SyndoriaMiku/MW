@@ -244,7 +244,9 @@ class LumenService:
         from apps.items.models import LumenModifierRule
 
         try:
-            target = InventoryItem.objects.select_for_update().select_related(
+            # lumen_tier is nullable, and PostgreSQL refuses FOR UPDATE on the
+            # nullable side of an outer join: lock only the item row.
+            target = InventoryItem.objects.select_for_update(of=('self',)).select_related(
                 'template__lumen_tier'
             ).get(id=target_item_id, owner__user=user)
             modifier = InventoryItem.objects.select_for_update().select_related(

@@ -200,10 +200,17 @@ func _send(path: String, method: int, payload: Dictionary, token: String) -> Dic
 	var text := response_body.get_string_from_utf8()
 	var parsed: Variant = {} if text.is_empty() else JSON.parse_string(text)
 	if parsed == null:
+		# A crash on the server answers with an HTML error page, not JSON.
+		if status_code >= 500:
+			return {
+				"ok": false,
+				"status": status_code,
+				"error": {"code": "SERVER_ERROR", "message": "The server hit an error (HTTP %d). Please try again later." % status_code},
+			}
 		return {
 			"ok": false,
 			"status": status_code,
-			"error": {"code": "INVALID_JSON", "message": "Server returned invalid JSON."},
+			"error": {"code": "INVALID_JSON", "message": "The server sent an unexpected response (HTTP %d)." % status_code},
 		}
 
 	if status_code >= 200 and status_code < 300:

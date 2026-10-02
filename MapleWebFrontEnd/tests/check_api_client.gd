@@ -48,6 +48,9 @@ func _check_helpers() -> bool:
 func _check_ping() -> bool:
 	if not await ApiClient.ping():
 		return _fail("PING_FAILED")
+	var crash: Dictionary = await ApiClient.get_json("crash/")
+	if crash.status != 500 or crash.error.code != "SERVER_ERROR" or not crash.error.message.contains("HTTP 500"):
+		return _fail("SERVER_ERROR_PAGE_FAILED %s" % crash)
 	return true
 
 
@@ -119,6 +122,8 @@ func _handle(path: String, head: String, payload: Variant) -> Array:
 	elif path == "/api/users/logout/":
 		_logout_tokens.append(payload.get("refresh") if payload is Dictionary else null)
 		return [200, {}]
+	elif path == "/api/crash/":
+		return [500, null, "<html><body><h1>Server Error (500)</h1></body></html>"]
 	elif path == "/api/classes/":
 		return [200, {"count": 0, "results": []}]
 	elif head.contains("Authorization: Bearer access-2"):

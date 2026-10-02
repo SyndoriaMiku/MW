@@ -2,7 +2,8 @@ class_name FakeHttpServer
 extends Node
 
 ## Minimal HTTP/1.1 server for tests. `handler` receives (path, head, payload)
-## and returns [status_code, reply_dictionary].
+## and returns [status_code, reply_dictionary], or [status_code, null, raw_body]
+## to answer with a non-JSON body such as an HTML error page.
 
 var handler: Callable = func(_path: String, _head: String, _payload: Variant) -> Array:
 	return [503, {"detail": "Fake server has no handler."}]
@@ -47,13 +48,14 @@ func _process(_delta: float) -> void:
 		var path := head.get_slice("\r\n", 0).get_slice(" ", 1)
 		var payload: Variant = JSON.parse_string(body) if not body.is_empty() else {}
 		var result: Array = handler.call(path, head, payload)
-		_reply(peer, int(result[0]), result[1])
+		_reply(peer, int(result[0]), result[1], str(result[2]) if result.size() > 2 else "")
 
 
-func _reply(peer: StreamPeerTCP, status: int, reply: Variant) -> void:
-	var json := JSON.stringify(reply)
-	var response := "HTTP/1.1 %d X\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [
-		status, json.to_utf8_buffer().size(), json,
+func _reply(peer: StreamPeerTCP, status: int, reply: Variant, raw_body: String) -> void:
+	var body := raw_body if not raw_body.is_empty() else JSON.stringify(reply)
+	var content_type := "text/html" if not raw_body.is_empty() else "application/json"
+	var response := "HTTP/1.1 %d X\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [
+		status, content_type, body.to_utf8_buffer().size(), body,
 	]
 	peer.put_data(response.to_utf8_buffer())
 	peer.disconnect_from_host()

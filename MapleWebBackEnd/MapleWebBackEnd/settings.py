@@ -208,6 +208,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 #Custom settings
+# Tests run on SQLite; this runner fails locking queries PostgreSQL would refuse.
+TEST_RUNNER = 'MapleWebBackEnd.test_runner.PostgresSafeTestRunner'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         # JWT that is refused once its session has ended (apps/users/sessions.py).

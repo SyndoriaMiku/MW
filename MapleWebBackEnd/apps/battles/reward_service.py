@@ -29,7 +29,9 @@ class RewardService:
         """
         Calculates and distributes rewards (EXP, Lumis, Items) for a victorious combat instance.
         """
-        combat_instance = CombatInstance.objects.select_for_update().select_related(
+        # PostgreSQL refuses FOR UPDATE on the nullable side of an outer join,
+        # so lock only this row; the joined rows are read-only here.
+        combat_instance = CombatInstance.objects.select_for_update(of=('self',)).select_related(
             'normal_dungeon', 'boss_dungeon'
         ).get(pk=combat_instance.pk)
         logs = {}

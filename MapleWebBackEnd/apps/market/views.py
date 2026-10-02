@@ -101,7 +101,7 @@ class ListingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Share the InventoryItem row lock with equip/trade/Aurora mutations so
         # an item cannot enter two states concurrently.
-        item = InventoryItem.objects.select_for_update().select_related(
+        item = InventoryItem.objects.select_for_update(of=('self',)).select_related(
             'template', 'owner__user'
         ).get(pk=serializer.validated_data['item'].pk)
         # Prevent listing untradeable items
@@ -203,7 +203,9 @@ class ListingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            item = InventoryItem.objects.select_for_update().select_related(
+            # owner__user is a reverse one-to-one (an outer join), which PostgreSQL
+            # cannot lock: lock only the item row.
+            item = InventoryItem.objects.select_for_update(of=('self',)).select_related(
                 'template', 'owner__user'
             ).get(pk=listing.item_id)
             owner_user = getattr(item.owner, 'user', None)
@@ -514,7 +516,9 @@ class TradeViewSet(viewsets.ModelViewSet):
                     )
 
                 trade_items = list(
-                    TradeItem.objects.select_for_update().select_related(
+                    # Lock the trade rows and their items, not the outer-joined users
+                    # (PostgreSQL refuses FOR UPDATE on the nullable side of a join).
+                    TradeItem.objects.select_for_update(of=('self', 'item')).select_related(
                         'item__template', 'item__owner__user'
                     ).filter(trade=trade)
                 )
