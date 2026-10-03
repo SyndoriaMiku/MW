@@ -53,12 +53,12 @@ func _load_inventory() -> void:
 		return
 	_set_loading(true, "Loading inventory...")
 	var selected_id := ApiClient.id_string(_selected_item.get("id"))
-	var inventory_response: Dictionary = await ApiClient.get_json("inventory/")
+	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
 	if not _accept_response(inventory_response):
 		return
 	_items = ApiClient.unwrap_list(inventory_response.get("data", []))
 
-	var equipped_response: Dictionary = await ApiClient.get_json("inventory/equipped/")
+	var equipped_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
 	if not _accept_response(equipped_response):
 		return
 	_equipped_item_ids.clear()

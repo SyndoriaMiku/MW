@@ -11,6 +11,7 @@ const BATTLE := "res://src/features/battle/presentation/battle_screen.tscn"
 const CHARACTER := "res://src/features/character/presentation/character_profile.tscn"
 const INVENTORY := "res://src/features/inventory/presentation/inventory_screen.tscn"
 const ENHANCEMENT := "res://src/features/enhancement/presentation/enhancement_screen.tscn"
+const SHOP := "res://src/features/shop/presentation/shop_screen.tscn"
 
 
 func _ready() -> void:

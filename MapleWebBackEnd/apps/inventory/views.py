@@ -5,12 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.utils import timezone
 
-from .models import InventoryItem
+from .models import AuroraLine, InventoryItem, SoldItem
 from .reservations import character_in_active_battle, exclude_expired, exclude_reserved
 from apps.request_params import parse_int
 from apps.characters.models import EquippedItem, EquipmentSlotConfig, Character
 from .serializers import (
-    EquipmentSlotConfigSerializer, EquippedItemSerializer, InventoryItemSerializer,
+    EquipmentSlotConfigSerializer, EquippedItemSerializer, InventoryItemSerializer, SoldItemSerializer,
 )
 
 
@@ -196,8 +196,36 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
                 return Response({'error': 'Expired items cannot be sold.'}, status=status.HTTP_400_BAD_REQUEST)
             if quantity > item.quantity or (not item.template.is_stackable and quantity != 1):
                 return Response({'error': 'Invalid quantity.'}, status=status.HTTP_400_BAD_REQUEST)
+            if hasattr(item, 'pending_aurora_roll'):
+                # Buy back restores the item, not an unconfirmed roll on it.
+                return Response(
+                    {'error': 'Keep or take the pending Aurora roll before selling this item.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             lumis_gained = max(0, item.template.sell_price) * quantity
+            sold = SoldItem.objects.create(
+                owner_id=request.user.character_id,
+                template=item.template,
+                quantity=quantity,
+                price=lumis_gained,
+                lumen_ascend_level=item.lumen_ascend_level,
+                aurora_level=item.aurora_level,
+                aurora_lines=[
+                    {
+                        'line_index': line.line_index, 'stat_type': line.stat_type,
+                        'line_type': line.line_type, 'value': line.value,
+                    }
+                    for line in item.aurora_lines.order_by('line_index')
+                ],
+                is_untrade=item.is_untrade,
+                expired_at=item.expired_at,
+            )
+            outdated = list(
+                SoldItem.objects.filter(owner_id=request.user.character_id)
+                .values_list('pk', flat=True)[SoldItem.BUYBACK_LIMIT:]
+            )
+            SoldItem.objects.filter(pk__in=outdated).delete()
             if quantity == item.quantity:
                 item.delete()
             else:
@@ -210,6 +238,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             'status': 'Item sold.',
             'lumis_gained': lumis_gained,
             'lumis': user.lumis,
+            'buyback_id': sold.pk,
         }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
@@ -233,6 +262,63 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             'remaining_quantity': remaining_quantity,
         }, status=status.HTTP_200_OK)
 
+
+
+class BuybackViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    GET  /api/inventory/buyback/                  -> the caller's latest sales, newest first
+    POST /api/inventory/buyback/{id}/repurchase/  -> buy one back for the price it sold for
+    """
+    serializer_class = SoldItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return SoldItem.objects.none()
+        return SoldItem.objects.filter(owner_id=self.request.user.character_id).select_related('template')
+
+    @action(detail=True, methods=['post'])
+    def repurchase(self, request, pk=None):
+        if not request.user.character_id:
+            return Response({'error': 'Create a character first.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.users.models import GameUser
+        from .grant_service import grant_item
+
+        with transaction.atomic():
+            user = GameUser.objects.select_for_update().get(pk=request.user.pk)
+            try:
+                sold = SoldItem.objects.select_for_update(of=('self',)).select_related('template').get(
+                    pk=pk, owner_id=user.character_id
+                )
+            except SoldItem.DoesNotExist:
+                return Response({'error': 'This item can no longer be bought back.'}, status=status.HTTP_404_NOT_FOUND)
+            if sold.expired_at and sold.expired_at <= timezone.now():
+                return Response({'error': 'This item has expired and cannot be bought back.'}, status=status.HTTP_400_BAD_REQUEST)
+            if user.lumis < sold.price:
+                return Response({'error': 'Not enough Lumis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            character = Character.objects.get(pk=user.character_id)
+            item = grant_item(
+                character, sold.template, sold.quantity,
+                is_untrade=sold.is_untrade, expired_at=sold.expired_at,
+            )[0]
+            if not sold.template.is_stackable:
+                item.lumen_ascend_level = sold.lumen_ascend_level
+                item.aurora_level = sold.aurora_level
+                item.save(update_fields=['lumen_ascend_level', 'aurora_level'])
+                AuroraLine.objects.bulk_create(
+                    AuroraLine(inventory_item=item, **line) for line in sold.aurora_lines
+                )
+            user.lumis -= sold.price
+            user.save(update_fields=['lumis'])
+            sold.delete()
+
+        return Response({
+            'status': 'Item bought back.',
+            'lumis': user.lumis,
+            'item': InventoryItemSerializer(item).data,
+        }, status=status.HTTP_200_OK)
 
 
 class EquippedItemViewSet(viewsets.ReadOnlyModelViewSet):

@@ -52,8 +52,8 @@ func _load_catalog() -> void:
 		SceneRouter.go_to(SceneRouter.LAUNCHER)
 		return
 
-	var classes_response: Dictionary = await ApiClient.get_json("classes/")
-	var jobs_response: Dictionary = await ApiClient.get_json("classes/jobs/")
+	var classes_response: Dictionary = await ApiClient.get_all("classes/")
+	var jobs_response: Dictionary = await ApiClient.get_all("classes/jobs/")
 	for response in [classes_response, jobs_response]:
 		if not response.get("ok", false):
 			retry_button.visible = true
@@ -108,7 +108,7 @@ func _select_job(job: Dictionary) -> void:
 		return
 
 	skill_list.text = "Loading skills..."
-	var response: Dictionary = await ApiClient.get_json("skills/?job=%s" % job_id.uri_encode())
+	var response: Dictionary = await ApiClient.get_all("skills/?job=%s" % job_id.uri_encode())
 	if not response.get("ok", false):
 		if ApiClient.id_string(_selected_job.get("id")) == job_id:
 			skill_list.text = "Skills could not be loaded."

@@ -69,6 +69,16 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "ENHANCE"
 
+[node name="ShopButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "SHOP"
+
+[node name="SettingsButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "SETTINGS"
+
 [node name="LogoutButton" type="Button" parent="Margin/Root/Header"]
 unique_name_in_owner = true
 layout_mode = 2

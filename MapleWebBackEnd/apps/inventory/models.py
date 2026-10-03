@@ -20,6 +20,32 @@ class InventoryItem(models.Model):
     def __str__(self):
         return self.template.name
 
+class SoldItem(models.Model):
+    """
+    A snapshot of an item sold to the NPC, kept so the player can buy it back
+    at the price it sold for. Only the latest BUYBACK_LIMIT sales per character
+    are kept.
+    """
+    BUYBACK_LIMIT = 10
+
+    owner = models.ForeignKey('characters.Character', on_delete=models.CASCADE, related_name='sold_items')
+    template = models.ForeignKey('items.ItemTemplate', on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price = models.PositiveIntegerField(help_text="Lumis paid for the sale, and charged to buy it back")
+    lumen_ascend_level = models.IntegerField(default=0)
+    aurora_level = models.IntegerField(default=0)
+    aurora_lines = models.JSONField(default=list, blank=True, help_text="[{line_index, stat_type, line_type, value}]")
+    is_untrade = models.BooleanField(default=False)
+    expired_at = models.DateTimeField(null=True, blank=True)
+    sold_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sold_at', '-id']
+
+    def __str__(self):
+        return f"{self.quantity}x {self.template.name} sold by {self.owner}"
+
+
 class AuroraLine(models.Model):
     """
     Aurora Line for an item

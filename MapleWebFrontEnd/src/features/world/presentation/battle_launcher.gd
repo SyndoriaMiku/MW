@@ -13,6 +13,8 @@ extends Control
 @onready var character_button: Button = %CharacterButton
 @onready var inventory_button: Button = %InventoryButton
 @onready var enhancement_button: Button = %EnhancementButton
+@onready var shop_button: Button = %ShopButton
+@onready var settings_button: Button = %SettingsButton
 @onready var logout_button: Button = %LogoutButton
 @onready var status_label: Label = %StatusLabel
 
@@ -27,6 +29,8 @@ func _ready() -> void:
 	character_button.pressed.connect(_on_character_pressed)
 	inventory_button.pressed.connect(_on_inventory_pressed)
 	enhancement_button.pressed.connect(_on_enhancement_pressed)
+	shop_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.SHOP))
+	settings_button.pressed.connect(func(): SettingsPanel.open(self))
 	logout_button.pressed.connect(_on_logout_pressed)
 	dungeon_picker.item_selected.connect(_on_dungeon_selected)
 	if not SceneRouter.require_session():
@@ -48,7 +52,7 @@ func _load_screen_data() -> void:
 	_render_character()
 	await _load_active_battle()
 
-	var dungeon_response: Dictionary = await ApiClient.get_json("world/normal-dungeons/")
+	var dungeon_response: Dictionary = await ApiClient.get_all("world/normal-dungeons/")
 	if not dungeon_response.get("ok", false):
 		_handle_api_error(dungeon_response)
 		return
@@ -176,5 +180,6 @@ func _set_loading(is_loading: bool, message: String) -> void:
 	character_button.disabled = is_loading
 	inventory_button.disabled = is_loading
 	enhancement_button.disabled = is_loading
+	shop_button.disabled = is_loading
 	dungeon_picker.disabled = is_loading
 	status_label.text = message

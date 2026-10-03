@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import InventoryItem, AuroraLine
+from .models import InventoryItem, AuroraLine, SoldItem
 from apps.characters.models import EquipmentSlotConfig, EquippedItem
 from apps.items.serializers import ItemTemplateSerializer
 
@@ -83,6 +83,19 @@ class EquippedItemSerializer(serializers.ModelSerializer):
         model = EquippedItem
         fields = [
             'id', 'item', 'slot_index', 'character', 'slot',
+        ]
+        read_only_fields = fields
+
+
+class SoldItemSerializer(serializers.ModelSerializer):
+    """An item sold to the NPC that can still be bought back for `price` Lumis."""
+    template = ItemTemplateSerializer(read_only=True)
+
+    class Meta:
+        model = SoldItem
+        fields = [
+            'id', 'template', 'quantity', 'price', 'lumen_ascend_level', 'aurora_level',
+            'aurora_lines', 'is_untrade', 'expired_at', 'sold_at',
         ]
         read_only_fields = fields
 

@@ -86,7 +86,7 @@ func _load_data() -> void:
 		return
 	currency_label.text = "LUMIS  %d" % int(profile_response.get("data", {}).get("lumis", 0))
 
-	var inventory_response: Dictionary = await ApiClient.get_json("inventory/")
+	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
 	if not _accept_http(inventory_response):
 		return
 	_items = ApiClient.unwrap_list(inventory_response.get("data", []))

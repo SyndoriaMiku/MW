@@ -5,12 +5,17 @@ from .models import InventoryItem
 from .reservations import exclude_reserved
 
 
+# Default for grant_item(expired_at=...): the template's time limit for a new copy.
+TEMPLATE_EXPIRY = object()
+
+
 @transaction.atomic
-def grant_item(character, template, quantity, *, is_untrade=False):
+def grant_item(character, template, quantity, *, is_untrade=False, expired_at=TEMPLATE_EXPIRY):
     """
     Give `quantity` of `template` to `character` and return the touched rows.
 
-    Copies get the template's time limit (ItemTemplate.new_copy_expiry).
+    Copies get the template's time limit (ItemTemplate.new_copy_expiry) unless
+    `expired_at` is given, e.g. to give back a sold item with its old expiry.
     Equipment always gets one row per copy. Stackable items merge into the
     oldest free stack with the same tradeability and the same expiry; a
     character may legitimately own several stacks (market splits, trades),
@@ -22,7 +27,8 @@ def grant_item(character, template, quantity, *, is_untrade=False):
     if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
         raise ValueError('quantity must be a positive integer.')
 
-    expired_at = template.new_copy_expiry()
+    if expired_at is TEMPLATE_EXPIRY:
+        expired_at = template.new_copy_expiry()
 
     if not template.is_stackable:
         return [

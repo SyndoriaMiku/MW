@@ -1,0 +1,174 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/features/settings/presentation/settings_panel.gd" id="1_script"]
+
+[node name="SettingsPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.02, 0.04, 0.78)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+
+[node name="Box" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "SETTINGS"
+
+[node name="DisplayTitle" type="Label" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "DISPLAY"
+
+[node name="DisplayGrid" type="GridContainer" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="ModeLabel" type="Label" parent="Center/Card/Box/DisplayGrid"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Window mode"
+
+[node name="ModeSelect" type="OptionButton" parent="Center/Card/Box/DisplayGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ResolutionLabel" type="Label" parent="Center/Card/Box/DisplayGrid"]
+layout_mode = 2
+text = "Resolution"
+
+[node name="ResolutionSelect" type="OptionButton" parent="Center/Card/Box/DisplayGrid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ResolutionHint" type="Label" parent="Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="Separator" type="HSeparator" parent="Center/Card/Box"]
+layout_mode = 2
+
+[node name="AudioTitle" type="Label" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "AUDIO"
+
+[node name="AudioGrid" type="GridContainer" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 12
+columns = 2
+
+[node name="BgmLabel" type="Label" parent="Center/Card/Box/AudioGrid"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Music (BGM)"
+
+[node name="BgmRow" type="HBoxContainer" parent="Center/Card/Box/AudioGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="BgmSlider" type="HSlider" parent="Center/Card/Box/AudioGrid/BgmRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+step = 1.0
+value = 80.0
+
+[node name="BgmValue" type="Label" parent="Center/Card/Box/AudioGrid/BgmRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+
+[node name="SfxLabel" type="Label" parent="Center/Card/Box/AudioGrid"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Sound effects (SFX)"
+
+[node name="SfxRow" type="HBoxContainer" parent="Center/Card/Box/AudioGrid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="SfxSlider" type="HSlider" parent="Center/Card/Box/AudioGrid/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+step = 1.0
+value = 80.0
+
+[node name="SfxValue" type="Label" parent="Center/Card/Box/AudioGrid/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+
+[node name="AudioHint" type="Label" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "Releasing the SFX slider plays a test tone."
+
+[node name="Actions" type="HBoxContainer" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResetButton" type="Button" parent="Center/Card/Box/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "RESET TO DEFAULTS"
+
+[node name="Spacer" type="Control" parent="Center/Card/Box/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseButton" type="Button" parent="Center/Card/Box/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "DONE"

@@ -36,6 +36,19 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.025, 0.045, 0.075, 1)
 
+[node name="SettingsButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -150.0
+offset_top = 20.0
+offset_right = -24.0
+offset_bottom = 60.0
+grow_horizontal = 0
+text = "SETTINGS"
+
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15

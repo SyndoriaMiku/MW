@@ -77,6 +77,22 @@ func post_json(path: String, payload: Dictionary = {}) -> Dictionary:
 	return await _request_json(path, HTTPClient.METHOD_POST, payload)
 
 
+## Every page of a paginated DRF list endpoint (PAGE_SIZE is 20 on the
+## backend), as {"ok", "status", "data": Array}.
+func get_all(path: String, max_pages: int = 50) -> Dictionary:
+	var items: Array = []
+	var separator := "&" if path.contains("?") else "?"
+	for page in range(1, max_pages + 1):
+		var response: Dictionary = await get_json(path if page == 1 else "%s%spage=%d" % [path, separator, page])
+		if not response.get("ok", false):
+			return response
+		var data: Variant = response.get("data")
+		items.append_array(unwrap_list(data))
+		if not (data is Dictionary and data.get("next") != null):
+			break
+	return {"ok": true, "status": 200, "data": items}
+
+
 ## DRF list endpoints return either a plain array or a paginated {"results": [...]}.
 static func unwrap_list(payload: Variant) -> Array:
 	if payload is Array:

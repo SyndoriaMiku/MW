@@ -1,0 +1,283 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/features/shop/presentation/shop_screen.gd" id="1_script"]
+
+[node name="ShopScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.045, 0.075, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 14
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "← ADVENTURE BOARD"
+
+[node name="Title" type="Label" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "SHOP"
+
+[node name="Spacer" type="Control" parent="Margin/Root/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CurrencyLabel" type="Label" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+text = "LUMIS  —"
+
+[node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REFRESH"
+
+[node name="Content" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="CategoryPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"CompactPanel"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/CategoryPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CategoryTitle" type="Label" parent="Margin/Root/Content/CategoryPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "CATEGORIES"
+
+[node name="CategoryScroll" type="ScrollContainer" parent="Margin/Root/Content/CategoryPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="CategoryList" type="VBoxContainer" parent="Margin/Root/Content/CategoryPanel/Box/CategoryScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CategorySeparator" type="HSeparator" parent="Margin/Root/Content/CategoryPanel/Box"]
+layout_mode = 2
+
+[node name="BuybackButton" type="Button" parent="Margin/Root/Content/CategoryPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+toggle_mode = true
+tooltip_text = "Buy back items you sold by mistake."
+text = "↺  BUY BACK"
+
+[node name="ShopPanel" type="PanelContainer" parent="Margin/Root/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"CompactPanel"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/ShopPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ShopTitle" type="Label" parent="Margin/Root/Content/ShopPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 15
+text = "—"
+
+[node name="ShopHint" type="Label" parent="Margin/Root/Content/ShopPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "Double-click an item to buy it."
+
+[node name="ShopScroll" type="ScrollContainer" parent="Margin/Root/Content/ShopPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ShopGrid" type="GridContainer" parent="Margin/Root/Content/ShopPanel/Box/ShopScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 4
+
+[node name="ShopEmpty" type="Label" parent="Margin/Root/Content/ShopPanel/Box"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+text = "Nothing here."
+horizontal_alignment = 1
+
+[node name="ShopActions" type="HBoxContainer" parent="Margin/Root/Content/ShopPanel/Box"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ShopDetail" type="Label" parent="Margin/Root/Content/ShopPanel/Box/ShopActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "Select an item."
+autowrap_mode = 3
+
+[node name="BuyButton" type="Button" parent="Margin/Root/Content/ShopPanel/Box/ShopActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"PrimaryButton"
+text = "BUY"
+
+[node name="BagPanel" type="PanelContainer" parent="Margin/Root/Content"]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 2
+theme_type_variation = &"CompactPanel"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Root/Content/BagPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BagTitle" type="Label" parent="Margin/Root/Content/BagPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 15
+text = "YOUR BAG"
+
+[node name="BagHint" type="Label" parent="Margin/Root/Content/BagPanel/Box"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_override_font_sizes/font_size = 12
+text = "Double-click an item to sell it."
+
+[node name="BagScroll" type="ScrollContainer" parent="Margin/Root/Content/BagPanel/Box"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="BagList" type="VBoxContainer" parent="Margin/Root/Content/BagPanel/Box/BagScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="BagEmpty" type="Label" parent="Margin/Root/Content/BagPanel/Box"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+text = "Your bag is empty."
+horizontal_alignment = 1
+
+[node name="SellButton" type="Button" parent="Margin/Root/Content/BagPanel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "SELL SELECTED"
+
+[node name="StatusLabel" type="Label" parent="Margin/Root"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+text = "Loading the shop..."
+text_overrun_behavior = 3
+
+[node name="TradeDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Buy"
+size = Vector2i(440, 230)
+ok_button_text = "Confirm"
+
+[node name="Box" type="VBoxContainer" parent="TradeDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 432.0
+offset_bottom = 181.0
+theme_override_constants/separation = 10
+
+[node name="DialogMessage" type="Label" parent="TradeDialog/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(400, 0)
+layout_mode = 2
+autowrap_mode = 3
+text = "-"
+
+[node name="QuantityRow" type="HBoxContainer" parent="TradeDialog/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuantityLabel" type="Label" parent="TradeDialog/Box/QuantityRow"]
+layout_mode = 2
+text = "Quantity"
+
+[node name="QuantitySlider" type="HSlider" parent="TradeDialog/Box/QuantityRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+min_value = 1.0
+value = 1.0
+
+[node name="QuantitySpin" type="SpinBox" parent="TradeDialog/Box/QuantityRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+min_value = 1.0
+value = 1.0
+
+[node name="MaxButton" type="Button" parent="TradeDialog/Box/QuantityRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MAX"
+
+[node name="DialogTotal" type="Label" parent="TradeDialog/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_override_font_sizes/font_size = 16
+text = "-"

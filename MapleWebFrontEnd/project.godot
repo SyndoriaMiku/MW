@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7")
 ApiClient="*res://src/network/api_client.gd"
 SessionStore="*res://src/session/session_store.gd"
 SceneRouter="*res://src/app/scene_router.gd"
+GameSettings="*res://src/app/game_settings.gd"
 
 [display]
 

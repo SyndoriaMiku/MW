@@ -20,7 +20,7 @@ from apps.users.models import GameUser
 from .consumption_service import MaterialConsumptionError, consume_materials
 from .grant_service import grant_item
 from .admin import InventoryItemAdmin
-from .models import InventoryItem
+from .models import AuroraLine, InventoryItem, PendingAuroraRoll, SoldItem
 from .serializers import InventoryItemSerializer
 
 
@@ -484,6 +484,93 @@ class SellToNpcTests(APITestCase):
         EquippedItem.objects.create(character=self.character, slot=slot, item=sword)
 
         self.assertEqual(self.sell(sword).status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class BuybackTests(APITestCase):
+    def setUp(self):
+        self.character = Character.objects.create(name='Rebuyer')
+        self.user = GameUser.objects.create_user(
+            username='rebuyer', email='rebuyer@example.com', password='test-pass-123'
+        )
+        self.user.character = self.character
+        self.user.save(update_fields=['character'])
+        self.client.force_authenticate(self.user)
+        self.potion = ItemTemplate.objects.create(name='Rebuy Potion', item_type='use', sell_price=5)
+        self.stack = InventoryItem.objects.create(owner=self.character, template=self.potion, quantity=10)
+
+    def sell(self, item, quantity=1):
+        return self.client.post(reverse('inventory-item-sell', args=[item.pk]), {'quantity': quantity}, format='json')
+
+    def repurchase(self, buyback_id):
+        return self.client.post(reverse('buyback-repurchase', args=[buyback_id]), format='json')
+
+    def test_a_sold_stack_can_be_bought_back_for_its_price(self):
+        buyback_id = self.sell(self.stack, 4).data['buyback_id']
+        listing = self.client.get(reverse('buyback-list')).data
+        entries = listing['results'] if isinstance(listing, dict) else listing
+        self.assertEqual([(e['id'], e['quantity'], e['price']) for e in entries], [(buyback_id, 4, 20)])
+
+        response = self.repurchase(buyback_id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.stack.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual((self.stack.quantity, self.user.lumis), (10, 0))
+        self.assertFalse(SoldItem.objects.exists())
+
+    def test_buying_back_equipment_restores_its_enhancements(self):
+        hammer = InventoryItem.objects.create(
+            owner=self.character, lumen_ascend_level=3, aurora_level=2,
+            template=ItemTemplate.objects.create(name='Rebuy Hammer', item_type='weapon', sell_price=40),
+        )
+        AuroraLine.objects.create(inventory_item=hammer, line_index=0, stat_type='att', line_type='percent', value=3.0)
+        AuroraLine.objects.create(inventory_item=hammer, line_index=1, stat_type='str', line_type='flat', value=5.0)
+        buyback_id = self.sell(hammer).data['buyback_id']
+        self.assertFalse(InventoryItem.objects.filter(pk=hammer.pk).exists())
+
+        restored = InventoryItem.objects.get(pk=self.repurchase(buyback_id).data['item']['id'])
+
+        self.assertEqual((restored.lumen_ascend_level, restored.aurora_level), (3, 2))
+        self.assertEqual(
+            list(restored.aurora_lines.order_by('line_index').values_list('stat_type', 'line_type', 'value')),
+            [('att', 'percent', 3.0), ('str', 'flat', 5.0)],
+        )
+
+    def test_buy_back_needs_enough_lumis_and_your_own_sale(self):
+        buyback_id = self.sell(self.stack, 2).data['buyback_id']
+        self.user.lumis = 3
+        self.user.save(update_fields=['lumis'])
+        self.assertEqual(self.repurchase(buyback_id).status_code, status.HTTP_400_BAD_REQUEST)
+
+        other = GameUser.objects.create_user(username='other-rebuyer', email='o@example.com', password='test-pass-123')
+        other.character = Character.objects.create(name='Other')
+        other.save(update_fields=['character'])
+        other.lumis = 1000
+        other.save(update_fields=['lumis'])
+        self.client.force_authenticate(other)
+        self.assertEqual(self.repurchase(buyback_id).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(SoldItem.objects.filter(pk=buyback_id).exists())
+
+    def test_only_the_latest_sales_are_kept(self):
+        for _ in range(SoldItem.BUYBACK_LIMIT + 2):
+            self.sell(self.stack, 1)
+
+        self.assertEqual(SoldItem.objects.filter(owner=self.character).count(), SoldItem.BUYBACK_LIMIT)
+
+    def test_items_with_a_pending_aurora_roll_cannot_be_sold(self):
+        cape = InventoryItem.objects.create(
+            owner=self.character, template=ItemTemplate.objects.create(name='Roll Cape', item_type='cape'),
+        )
+        PendingAuroraRoll.objects.create(inventory_item=cape, modifier_type='REROLL_CHOICE', generated_lines_data=[])
+
+        self.assertEqual(self.sell(cape).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(InventoryItem.objects.filter(pk=cape.pk).exists())
+
+    def test_expired_sales_cannot_be_bought_back(self):
+        buyback_id = self.sell(self.stack, 1).data['buyback_id']
+        SoldItem.objects.filter(pk=buyback_id).update(expired_at=timezone.now() - timedelta(minutes=1))
+
+        self.assertEqual(self.repurchase(buyback_id).status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class EquipmentSlotAPITests(APITestCase):

@@ -8,6 +8,7 @@ extends Control
 @onready var server_label: Label = %ServerLabel
 @onready var create_account_button: Button = %CreateAccountButton
 @onready var retry_server_button: Button = %RetryServerButton
+@onready var settings_button: Button = %SettingsButton
 
 const SERVER_OK_COLOR := Color(0.45, 0.85, 0.6)
 const SERVER_WAIT_COLOR := Color(0.95, 0.77, 0.36)
@@ -21,6 +22,7 @@ var _checking_server := false
 func _ready() -> void:
 	login_button.pressed.connect(_on_login_pressed)
 	retry_server_button.pressed.connect(_check_server)
+	settings_button.pressed.connect(func(): SettingsPanel.open(self))
 	create_account_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.REGISTER))
 	username_input.text_submitted.connect(_focus_password)
 	password_input.text_submitted.connect(_submit_from_password)

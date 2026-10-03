@@ -339,6 +339,45 @@ corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
+[sub_resource type="StyleBoxFlat" id="window_border"]
+bg_color = Color(0.063, 0.094, 0.141, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.23, 0.35, 0.46, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+expand_margin_left = 8.0
+expand_margin_top = 32.0
+expand_margin_right = 8.0
+expand_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="slider_track"]
+content_margin_top = 3.0
+content_margin_bottom = 3.0
+bg_color = Color(0.04, 0.065, 0.105, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.32, 0.46, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="slider_fill"]
+content_margin_top = 3.0
+content_margin_bottom = 3.0
+bg_color = Color(0.25, 0.6, 0.86, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [sub_resource type="StyleBoxEmpty" id="empty"]
 
 [resource]
@@ -373,6 +412,13 @@ CompactPanel/base_type = &"PanelContainer"
 CompactPanel/styles/panel = SubResource("card_compact")
 TabContainer/styles/panel = SubResource("empty")
 PopupPanel/styles/panel = SubResource("popup")
+AcceptDialog/styles/panel = SubResource("popup")
+HSlider/styles/slider = SubResource("slider_track")
+HSlider/styles/grabber_area = SubResource("slider_fill")
+HSlider/styles/grabber_area_highlight = SubResource("slider_fill")
+Window/styles/embedded_border = SubResource("window_border")
+Window/styles/embedded_unfocused_border = SubResource("window_border")
+Window/colors/title_color = Color(0.86, 0.91, 0.97, 1)
 PopupMenu/colors/font_color = Color(0.86, 0.91, 0.97, 1)
 PopupMenu/colors/font_hover_color = Color(1, 1, 1, 1)
 PopupMenu/styles/panel = SubResource("popup")

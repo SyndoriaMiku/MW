@@ -53,12 +53,15 @@ Sửa kèm khi làm Giai đoạn 2:
 
 ## Giai đoạn 4 — Kinh tế & phát triển nhân vật
 
-- [ ] Inventory: bán (`sell`), dùng (`use`) item
+- [x] Shop: mua theo danh mục (Lumis/Nova), double-click để mua, nhập số lượng cho item stack, giới hạn mua theo chu kỳ
+- [x] Bán item từ túi (hỏi xác nhận, nhập số lượng nếu là chồng) và **buy back** 10 lần bán gần nhất (backend: model `SoldItem`, `inventory/buyback/`), giữ nguyên Lumen/Aurora
+- [x] Tải đủ mọi trang của danh sách (`ApiClient.get_all`) — trước đây túi đồ quá 20 món bị thiếu
+- [ ] Inventory: dùng (`use`) item buff ngoài trận
 - [ ] Lấy số slot từ `inventory/slots/` thay cho hardcode ring=4 / pendant=2
 - [ ] Khôi phục Aurora roll đang chờ khi quay lại màn Enhancement (hiện chỉ giữ trong RAM; backend lưu ở model `PendingAuroraRoll`)
 - [ ] Nhận diện Essence theo field backend thay vì tên chứa chữ "essence"
 - [ ] Học / nâng cấp skill (`skills/learnable/`, `characters/my/skills/<id>/upgrade/`)
-- [ ] Shop (`shops/`), lịch sử Nova (`users/nova/history/`)
+- [ ] Special shop (đổi vật liệu lấy item, `shops/special/`), lịch sử Nova (`users/nova/history/`)
 
 ## Giai đoạn 5 — Nội dung & xã hội
 
@@ -72,6 +75,7 @@ Sửa kèm khi làm Giai đoạn 2:
 
 - [x] Test runner headless chạy toàn bộ `tests/` bằng 1 lệnh (`tools/run_tests.sh`)
 - [ ] CI chạy test tự động
-- [ ] Âm thanh, hiệu ứng chuyển cảnh
+- [x] Settings: chế độ cửa sổ (windowed / borderless fullscreen), độ phân giải, âm lượng BGM và SFX
+- [ ] Nhạc nền và hiệu ứng âm thanh (bus `BGM`/`SFX` đã sẵn sàng), hiệu ứng chuyển cảnh
 - [ ] Đa ngôn ngữ (VI/EN) qua `TranslationServer`
 - [ ] Preset export (Windows/Web) + build script

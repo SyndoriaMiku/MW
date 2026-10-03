@@ -102,17 +102,17 @@ func _load_profile() -> void:
 	_character = character_response.get("data", {})
 	SessionStore.character = _character
 
-	var classes_response: Dictionary = await ApiClient.get_json("classes/")
+	var classes_response: Dictionary = await ApiClient.get_all("classes/")
 	if not _accept_response(classes_response):
 		return
 	_classes = ApiClient.unwrap_list(classes_response.get("data", []))
 
-	var jobs_response: Dictionary = await ApiClient.get_json("classes/jobs/")
+	var jobs_response: Dictionary = await ApiClient.get_all("classes/jobs/")
 	if not _accept_response(jobs_response):
 		return
 	_jobs = ApiClient.unwrap_list(jobs_response.get("data", []))
 
-	var equipment_response: Dictionary = await ApiClient.get_json("inventory/equipped/")
+	var equipment_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
 	if not _accept_response(equipment_response):
 		return
 	_equipped_items = ApiClient.unwrap_list(equipment_response.get("data", []))
