@@ -1,5 +1,13 @@
 extends Control
 
+## Inventory. Double click (or the action button) equips/unequips equipment,
+## uses buff items and opens enhancement for essences. Hovering shows the item;
+## equipment is compared with the equipped item in the same slot, and a middle
+## click cycles through the equipped copies of multi-slot items (rings, pendants).
+
+## Used when the backend's slot configuration cannot be loaded.
+const DEFAULT_SLOT_CAPACITY := {"ring": 4, "pendant": 2}
+
 @onready var back_button: Button = %BackButton
 @onready var refresh_button: Button = %RefreshButton
 @onready var enhancement_button: Button = %EnhancementButton
@@ -18,22 +26,28 @@ extends Control
 @onready var status_label: Label = %StatusLabel
 
 var _items: Array = []
+var _equipped: Array = []
 var _equipped_item_ids: Dictionary = {}
-var _equipped_slot_indices_by_type: Dictionary = {}
+var _slot_capacity: Dictionary = DEFAULT_SLOT_CAPACITY.duplicate()
 var _selected_item: Dictionary = {}
+var _hovered_item: Dictionary = {}
+var _compare_index := 0
 var _is_loading := false
+var _tooltip := ItemHoverTooltip.new()
 
 
 func _ready() -> void:
+	add_child(_tooltip)
 	back_button.pressed.connect(_on_back_pressed)
 	refresh_button.pressed.connect(_load_inventory)
 	enhancement_button.pressed.connect(_on_enhancement_pressed)
 	search_input.text_changed.connect(_on_filter_changed)
 	category_filter.item_selected.connect(_on_category_changed)
-	action_button.pressed.connect(_on_action_pressed)
+	action_button.pressed.connect(func(): _activate(_selected_item))
 	_setup_categories()
 	if not SceneRouter.require_session():
 		return
+	await _load_slot_capacity()
 	await _load_inventory()
 
 
@@ -48,6 +62,19 @@ func _setup_categories() -> void:
 		category_filter.set_item_metadata(category_filter.item_count - 1, entry.value)
 
 
+## How many of each item type can be worn at once, from the backend's slots.
+func _load_slot_capacity() -> void:
+	var response: Dictionary = await ApiClient.get_all("inventory/slots/")
+	if not response.get("ok", false):
+		return
+	var capacity := {}
+	for slot in response.data:
+		for item_type in slot.get("allowed_item_types", []):
+			capacity[str(item_type)] = int(slot.get("max_count", 1))
+	if not capacity.is_empty():
+		_slot_capacity = capacity
+
+
 func _load_inventory() -> void:
 	if _is_loading:
 		return
@@ -56,32 +83,126 @@ func _load_inventory() -> void:
 	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
 	if not _accept_response(inventory_response):
 		return
-	_items = ApiClient.unwrap_list(inventory_response.get("data", []))
-
 	var equipped_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
 	if not _accept_response(equipped_response):
 		return
-	_equipped_item_ids.clear()
-	_equipped_slot_indices_by_type.clear()
-	for equipped in ApiClient.unwrap_list(equipped_response.get("data", [])):
-		var equipped_item: Dictionary = equipped.get("item", {})
-		_equipped_item_ids[ApiClient.id_string(equipped_item.get("id"))] = true
-		var equipped_type := str(equipped_item.get("template", {}).get("item_type", ""))
-		if not _equipped_slot_indices_by_type.has(equipped_type):
-			_equipped_slot_indices_by_type[equipped_type] = {}
-		var type_slots: Dictionary = _equipped_slot_indices_by_type[equipped_type]
-		type_slots[int(equipped.get("slot_index", 0))] = true
-
+	_items = inventory_response.data
+	set_equipped(equipped_response.data)
 	_selected_item = _find_item_by_id(selected_id)
 	if _selected_item.is_empty() and not _items.is_empty():
 		_selected_item = _items[0]
 	_render_inventory()
 	_render_details()
-	_set_loading(false, "Inventory synchronized with the server.")
+	_set_loading(false, "Inventory synchronized. Double-click an item to equip or use it; hover to compare.")
+
+
+func set_equipped(entries: Array) -> void:
+	_equipped = entries.filter(func(entry): return entry is Dictionary)
+	_equipped.sort_custom(func(a, b): return int(a.get("slot_index", 0)) < int(b.get("slot_index", 0)))
+	_equipped_item_ids.clear()
+	for entry in _equipped:
+		_equipped_item_ids[ApiClient.id_string(entry.get("item", {}).get("id"))] = true
+
+
+## Equipped entries ({slot, slot_index, item}) holding this item type, by slot index.
+func equipped_for_type(item_type: String) -> Array:
+	return _equipped.filter(func(entry): return str(entry.get("item", {}).get("template", {}).get("item_type", "")) == item_type)
+
+
+func capacity_for(item_type: String) -> int:
+	return int(_slot_capacity.get(item_type, 1))
+
+
+## Where equipping goes: the first free slot, otherwise the slot being compared.
+func target_slot_index(item_type: String, compare_index: int) -> int:
+	var worn := equipped_for_type(item_type)
+	var used := {}
+	for entry in worn:
+		used[int(entry.get("slot_index", 0))] = true
+	for index in capacity_for(item_type):
+		if not used.has(index):
+			return index
+	if worn.is_empty():
+		return 0
+	return int(worn[posmod(compare_index, worn.size())].get("slot_index", 0))
+
+
+## What a double click does with this item: {"kind", "label"}.
+func item_action(item: Dictionary) -> Dictionary:
+	var template: Dictionary = item.get("template", {})
+	if ItemTypes.is_equipment(str(template.get("item_type", ""))):
+		if _equipped_item_ids.has(ApiClient.id_string(item.get("id"))):
+			return {"kind": "unequip", "label": "UNEQUIP"}
+		if bool(item.get("is_destroyed", false)):
+			return {"kind": "none", "label": "DESTROYED"}
+		return {"kind": "equip", "label": "EQUIP"}
+	match str(template.get("use_kind", "")):
+		"aurora_modifier":
+			return {"kind": "aurora", "label": "USE ON EQUIPMENT (AURORA)"}
+		"lumen_modifier":
+			return {"kind": "lumen", "label": "OPEN LUMEN ENHANCEMENT"}
+		"timed_buff":
+			return {"kind": "use", "label": "USE"}
+		"battle":
+			return {"kind": "battle", "label": "USE IN BATTLE"}
+		"fragment_restore":
+			return {"kind": "restore", "label": "RESTORES DESTROYED ITEMS"}
+	return {"kind": "none", "label": "NO ACTION"}
+
+
+func _activate(item: Dictionary) -> void:
+	if item.is_empty() or _is_loading:
+		return
+	var item_id := ApiClient.id_string(item.get("id"))
+	var template: Dictionary = item.get("template", {})
+	match str(item_action(item).kind):
+		"equip":
+			var item_type := str(template.get("item_type", ""))
+			var compare := _compare_index if ApiClient.id_string(_hovered_item.get("id")) == item_id else 0
+			await _change_equipment("inventory/%s/equip/" % item_id, {"slot_index": target_slot_index(item_type, compare)}, "Equipping...")
+		"unequip":
+			await _change_equipment("inventory/%s/unequip/" % item_id, {}, "Unequipping...")
+		"aurora":
+			SceneRouter.go_to(SceneRouter.ENHANCEMENT, {"tab": "aurora", "essence_id": item_id})
+		"lumen":
+			SceneRouter.go_to(SceneRouter.ENHANCEMENT, {"tab": "lumen"})
+		"use":
+			await _use_item(item)
+		"battle":
+			status_label.text = "Use %s during a battle with the ITEM button." % str(template.get("name", "this item"))
+		"restore":
+			status_label.text = "%s restores a destroyed item; restoring is not in the client yet." % str(template.get("name", "This item"))
+		_:
+			status_label.text = "%s has no direct use; it is a material for enhancement and crafting." % str(template.get("name", "This item"))
+
+
+func _change_equipment(path: String, payload: Dictionary, message: String) -> void:
+	_tooltip.hide_tooltip()
+	_set_loading(true, message)
+	var response: Dictionary = await ApiClient.post_json(path, payload)
+	if not _accept_response(response):
+		return
+	var result := str(response.data.get("status", "Equipment updated."))
+	_is_loading = false
+	await _load_inventory()
+	status_label.text = result
+
+
+func _use_item(item: Dictionary) -> void:
+	_tooltip.hide_tooltip()
+	_set_loading(true, "Using %s..." % str(item.get("template", {}).get("name", "item")))
+	var response: Dictionary = await ApiClient.post_json("inventory/%s/use/" % ApiClient.id_string(item.get("id")))
+	if not _accept_response(response):
+		return
+	_is_loading = false
+	await _load_inventory()
+	status_label.text = str(response.data.get("status", "Item used."))
 
 
 func _render_inventory() -> void:
-	_clear_children(item_grid)
+	for child in item_grid.get_children():
+		item_grid.remove_child(child)
+		child.queue_free()
 	var visible_items := _filtered_items()
 	item_count.text = "%d ITEM%s" % [_items.size(), "" if _items.size() == 1 else "S"]
 	empty_label.visible = visible_items.is_empty()
@@ -89,70 +210,82 @@ func _render_inventory() -> void:
 		item_grid.add_child(_create_item_card(item))
 
 
-func _create_item_card(item: Dictionary) -> Control:
-	var template: Dictionary = item.get("template", {})
+func _create_item_card(item: Dictionary) -> InventoryItemCard:
 	var item_id := ApiClient.id_string(item.get("id"))
-	var is_selected := item_id == ApiClient.id_string(_selected_item.get("id"))
-	var is_equipped := _equipped_item_ids.has(item_id)
-
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(112, 132)
-	card.tooltip_text = str(template.get("name", "Unknown Item"))
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("101a29")
-	style.border_color = Color("53d985") if is_selected else (Color("42a7d6") if is_equipped else Color("2d435e"))
-	style.set_border_width_all(2 if is_selected or is_equipped else 1)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(7)
-	card.add_theme_stylebox_override("panel", style)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	card.add_child(box)
-	var icon_host := Control.new()
-	icon_host.custom_minimum_size = Vector2(0, 82)
-	box.add_child(icon_host)
-
-	var texture := ItemIcons.for_template(template)
-	if texture != null:
-		var icon := TextureRect.new()
-		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
-		icon.texture = texture
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon_host.add_child(icon)
-	else:
-		var placeholder := Label.new()
-		placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		placeholder.text = _item_initials(str(template.get("name", "?")))
-		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		placeholder.add_theme_color_override("font_color", Color("607089"))
-		placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon_host.add_child(placeholder)
-
-	var click_target := Button.new()
-	click_target.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	click_target.flat = true
-	click_target.tooltip_text = card.tooltip_text
-	click_target.pressed.connect(_on_item_selected.bind(item))
-	icon_host.add_child(click_target)
-
-	var name_label := Label.new()
-	name_label.text = str(template.get("name", "Unknown Item"))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.add_theme_font_size_override("font_size", 12)
-	box.add_child(name_label)
-	var meta_label := Label.new()
-	meta_label.text = "EQUIPPED" if is_equipped else "x%d" % int(item.get("quantity", 1))
-	meta_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	meta_label.add_theme_font_size_override("font_size", 10)
-	meta_label.add_theme_color_override("font_color", Color("53d985") if is_equipped else Color("8295aa"))
-	box.add_child(meta_label)
+	var card := InventoryItemCard.new(item, item_id == ApiClient.id_string(_selected_item.get("id")), _equipped_item_ids.has(item_id))
+	card.selected.connect(func(clicked: InventoryItemCard): _on_item_selected(clicked.item))
+	card.activated.connect(func(clicked: InventoryItemCard): _activate(clicked.item))
+	card.compare_cycled.connect(func(clicked: InventoryItemCard): _cycle_compare(clicked.item))
+	card.hover_started.connect(func(hovered: InventoryItemCard): _on_hover_started(hovered.item))
+	card.hover_moved.connect(func(_hovered): _tooltip.follow(get_global_mouse_position()))
+	card.hover_ended.connect(func(hovered: InventoryItemCard): _on_hover_ended(hovered.item))
 	return card
+
+
+func _on_hover_started(item: Dictionary) -> void:
+	if ApiClient.id_string(item.get("id")) != ApiClient.id_string(_hovered_item.get("id")):
+		_compare_index = 0
+	_hovered_item = item
+	_show_tooltip()
+
+
+func _on_hover_ended(item: Dictionary) -> void:
+	if ApiClient.id_string(item.get("id")) == ApiClient.id_string(_hovered_item.get("id")):
+		_hovered_item = {}
+		_tooltip.hide_tooltip()
+
+
+## Middle click on a ring or pendant: compare with the next equipped copy.
+func _cycle_compare(item: Dictionary) -> void:
+	_hovered_item = item
+	var worn := equipped_for_type(str(item.get("template", {}).get("item_type", "")))
+	if worn.size() > 1:
+		_compare_index = posmod(_compare_index + 1, worn.size())
+	_show_tooltip()
+
+
+## The equipped entry the hovered item is compared with, or {}.
+func compare_entry(item: Dictionary) -> Dictionary:
+	var worn := equipped_for_type(str(item.get("template", {}).get("item_type", "")))
+	if worn.is_empty() or _equipped_item_ids.has(ApiClient.id_string(item.get("id"))):
+		return {}
+	return worn[posmod(_compare_index, worn.size())]
+
+
+func _show_tooltip() -> void:
+	if _hovered_item.is_empty():
+		_tooltip.hide_tooltip()
+		return
+	var template: Dictionary = _hovered_item.get("template", {})
+	var item_type := str(template.get("item_type", ""))
+	var action := item_action(_hovered_item)
+	var hint := "Double-click: %s" % str(action.label).to_lower() if action.kind != "none" else ""
+	if not ItemTypes.is_equipment(item_type):
+		_tooltip.show_simple(_hovered_item, hint)
+	elif _equipped_item_ids.has(ApiClient.id_string(_hovered_item.get("id"))):
+		_tooltip.show_equipment(_hovered_item, {}, "", "", {}, _equipped, hint)
+	else:
+		var worn := equipped_for_type(item_type)
+		var entry := compare_entry(_hovered_item)
+		var capacity := capacity_for(item_type)
+		var slot_name := item_type.replace("_", " ")
+		var caption := slot_name.to_upper()
+		if capacity > 1 and not entry.is_empty():
+			caption = "%s %d / %d" % [slot_name.to_upper(), int(entry.get("slot_index", 0)) + 1, capacity]
+		if worn.size() > 1:
+			hint += "\nMiddle-click: compare with the next equipped %s (%d/%d)" % [slot_name, posmod(_compare_index, worn.size()) + 1, worn.size()]
+		# Say what a double click really does: fill a free slot or replace the compared one.
+		var target := target_slot_index(item_type, _compare_index)
+		var replaced := {}
+		var outcome := "goes into the empty %s slot" % slot_name
+		for worn_entry in worn:
+			if int(worn_entry.get("slot_index", 0)) == target:
+				replaced = worn_entry.get("item", {})
+				outcome = "replaces %s" % str(replaced.get("template", {}).get("name", slot_name))
+		if replaced.is_empty() and capacity > 1:
+			outcome = "goes into free %s slot %d / %d" % [slot_name, target + 1, capacity]
+		_tooltip.show_equipment(_hovered_item, entry.get("item", {}), caption, outcome, replaced, _equipped, hint)
+	_tooltip.follow(get_global_mouse_position())
 
 
 func _render_details() -> void:
@@ -169,7 +302,6 @@ func _render_details() -> void:
 
 	var template: Dictionary = _selected_item.get("template", {})
 	var item_type := str(template.get("item_type", "etc"))
-	var is_equipment := ItemTypes.is_equipment(item_type)
 	var is_equipped := _equipped_item_ids.has(ApiClient.id_string(_selected_item.get("id")))
 	detail_name.text = str(template.get("name", "Unknown Item"))
 	detail_type.text = "%s  •  Required level %d" % [item_type.replace("_", " ").capitalize(), int(template.get("minimum_level", 1))]
@@ -177,12 +309,9 @@ func _render_details() -> void:
 	detail_state.text = _item_state_text(_selected_item, is_equipped)
 	detail_stats.text = _item_stats_text(_selected_item)
 	detail_description.text = str(template.get("description", "No description available."))
-	if is_equipment:
-		action_button.text = "UNEQUIP" if is_equipped else "EQUIP"
-		action_button.disabled = bool(_selected_item.get("is_destroyed", false)) or _is_loading
-	else:
-		action_button.text = "NO ACTION AVAILABLE"
-		action_button.disabled = true
+	var action := item_action(_selected_item)
+	action_button.text = str(action.label)
+	action_button.disabled = _is_loading or action.kind in ["none", "battle", "restore"]
 
 
 func _item_state_text(item: Dictionary, is_equipped: bool) -> String:
@@ -212,7 +341,7 @@ func _item_stats_text(item: Dictionary) -> String:
 		lines.append("DROP RATE  +%.1f%%" % drop_rate)
 	for line in item.get("aurora_lines", []):
 		var suffix := "%" if str(line.get("line_type", "flat")) == "percent" else ""
-		lines.append("AURORA  %s +%s%s" % [str(line.get("stat_type", "")).to_upper(), str(line.get("value", 0)), suffix])
+		lines.append("AURORA  %s +%s%s" % [str(line.get("stat_type", "")).to_upper(), ItemTooltip.plain_number(float(line.get("value", 0))), suffix])
 	if lines.is_empty():
 		lines.append("No combat stat bonuses")
 	return "\n".join(lines)
@@ -240,70 +369,6 @@ func _on_item_selected(item: Dictionary) -> void:
 	_render_details()
 
 
-func _on_action_pressed() -> void:
-	if _selected_item.is_empty() or _is_loading:
-		return
-	var item_id := ApiClient.id_string(_selected_item.get("id"))
-	var is_equipped := _equipped_item_ids.has(item_id)
-	_set_loading(true, "Updating equipment...")
-	var response: Dictionary
-	if is_equipped:
-		response = await ApiClient.post_json("inventory/%s/unequip/" % item_id)
-	else:
-		var item_type := str(_selected_item.get("template", {}).get("item_type", ""))
-		response = await ApiClient.post_json(
-			"inventory/%s/equip/" % item_id,
-			{"slot_index": _next_available_slot_index(item_type)}
-		)
-	if not _accept_response(response):
-		return
-	var action_message := str(response.get("data", {}).get(
-		"status",
-		"Item unequipped." if is_equipped else "Item equipped."
-	))
-	_apply_equipment_response(response.get("data", {}), item_id, is_equipped)
-	_render_inventory()
-	_render_details()
-	await _load_inventory_after_action()
-	status_label.text = action_message
-
-
-func _next_available_slot_index(item_type: String) -> int:
-	var max_slots := 1
-	if item_type == "ring":
-		max_slots = 4
-	elif item_type == "pendant":
-		max_slots = 2
-	var used: Dictionary = _equipped_slot_indices_by_type.get(item_type, {})
-	for index in range(max_slots):
-		if not used.has(index):
-			return index
-	return 0
-
-
-func _apply_equipment_response(payload: Dictionary, item_id: String, was_equipped: bool) -> void:
-	if was_equipped:
-		_equipped_item_ids.erase(item_id)
-		var returned_item: Variant = payload.get("item", {})
-		if returned_item is Dictionary and not returned_item.is_empty():
-			_selected_item = returned_item
-		return
-	var replaced_item_id := ApiClient.id_string(payload.get("replaced_item_id"))
-	if not replaced_item_id.is_empty():
-		_equipped_item_ids.erase(replaced_item_id)
-	_equipped_item_ids[item_id] = true
-	var equipped: Variant = payload.get("equipped", {})
-	if equipped is Dictionary:
-		var returned_item: Variant = equipped.get("item", {})
-		if returned_item is Dictionary and not returned_item.is_empty():
-			_selected_item = returned_item
-
-
-func _load_inventory_after_action() -> void:
-	_is_loading = false
-	await _load_inventory()
-
-
 func _on_filter_changed(_value: String) -> void:
 	_render_inventory()
 
@@ -319,13 +384,6 @@ func _find_item_by_id(item_id: String) -> Dictionary:
 		if ApiClient.id_string(item.get("id")) == item_id:
 			return item
 	return {}
-
-
-func _item_initials(item_name: String) -> String:
-	var initials := ""
-	for word in item_name.split(" ", false):
-		initials += word.left(1).to_upper()
-	return initials.left(3)
 
 
 func _accept_response(response: Dictionary) -> bool:
@@ -344,11 +402,6 @@ func _set_loading(is_loading: bool, message: String) -> void:
 	category_filter.disabled = is_loading
 	status_label.text = message
 	_render_details()
-
-
-func _clear_children(parent: Node) -> void:
-	for child in parent.get_children():
-		child.queue_free()
 
 
 func _on_back_pressed() -> void:

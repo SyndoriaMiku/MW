@@ -56,10 +56,12 @@ Sửa kèm khi làm Giai đoạn 2:
 - [x] Shop: mua theo danh mục (Lumis/Nova), double-click để mua, nhập số lượng cho item stack, giới hạn mua theo chu kỳ
 - [x] Bán item từ túi (hỏi xác nhận, nhập số lượng nếu là chồng) và **buy back** 10 lần bán gần nhất (backend: model `SoldItem`, `inventory/buyback/`), giữ nguyên Lumen/Aurora
 - [x] Tải đủ mọi trang của danh sách (`ApiClient.get_all`) — trước đây túi đồ quá 20 món bị thiếu
-- [ ] Inventory: dùng (`use`) item buff ngoài trận
-- [ ] Lấy số slot từ `inventory/slots/` thay cho hardcode ring=4 / pendant=2
-- [ ] Khôi phục Aurora roll đang chờ khi quay lại màn Enhancement (hiện chỉ giữ trong RAM; backend lưu ở model `PendingAuroraRoll`)
-- [ ] Nhận diện Essence theo field backend thay vì tên chứa chữ "essence"
+- [x] Inventory: double-click để equip/unequip (vào ô trống, hoặc thay ô đang so sánh), dùng bùa buff, mở Enhancement tab Aurora với essence đã chọn
+- [x] Tooltip khi hover: mô tả item; trang bị so sánh với món cùng ô kèm chênh lệch chỉ số; middle-click đổi ô so sánh với Ring/Pendant
+- [x] Lấy số slot từ `inventory/slots/` thay cho hardcode ring=4 / pendant=2
+- [x] Hộp chọn Aurora bắt buộc: roll đang chờ được lấy từ server (`pending_aurora_roll` trong inventory API) và mở lại mỗi khi vào Enhancement; so sánh dòng cũ/mới, chọn dòng cho triple choice
+- [x] Roll có tăng cấp Aurora phải lấy dòng mới (backend từ chối `keep_old`)
+- [x] Nhận diện Essence theo field backend (`use_kind`) thay vì tên chứa chữ "essence"
 - [ ] Học / nâng cấp skill (`skills/learnable/`, `characters/my/skills/<id>/upgrade/`)
 - [ ] Special shop (đổi vật liệu lấy item, `shops/special/`), lịch sử Nova (`users/nova/history/`)
 
