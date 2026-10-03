@@ -11,7 +11,7 @@ func _ready() -> void:
 	var expected_nodes := [
 		"%LumenMenuButton", "%AuroraMenuButton", "%SystemPages", "%TargetIcon",
 		"%LumenButton", "%LumenRates", "%LumenCost", "%LumenEventInfo",
-		"%EssenceSelect", "%RerollButton", "%PendingPanel", "%ResultEffectLayer",
+		"%EssenceSelect", "%RerollButton", "%AuroraChoicePanel", "%ResultEffectLayer",
 		"%ResultCard", "%ResultTitle", "%ResultSubtitle",
 	]
 	for node_path in expected_nodes:

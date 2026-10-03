@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://src/features/enhancement/presentation/enhancement_screen.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://src/features/enhancement/presentation/aurora_choice_panel.tscn" id="2_choice"]
 
 [sub_resource type="StyleBoxFlat" id="StyleShowcase"]
 bg_color = Color(0.09, 0.15, 0.19, 0.94)
@@ -341,39 +342,6 @@ layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "USE ESSENCE"
 
-[node name="PendingPanel" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="Title" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.34, 1)
-text = "NEW AURORA ROLL"
-horizontal_alignment = 1
-
-[node name="PendingLines" type="Label" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-text = ""
-horizontal_alignment = 1
-
-[node name="Actions" type="HBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 10
-
-[node name="KeepOldButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel/Actions"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "KEEP OLD"
-
-[node name="TakeNewButton" type="Button" parent="Margin/Root/Content/MainPanel/Main/SystemPages/Aurora/PendingPanel/Actions"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "TAKE NEW"
-
 [node name="Future" type="VBoxContainer" parent="Margin/Root/Content/MainPanel/Main/SystemPages"]
 layout_mode = 2
 alignment = 1
@@ -463,3 +431,7 @@ theme_override_font_sizes/font_size = 15
 text = "Upgrade result"
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="AuroraChoicePanel" parent="." instance=ExtResource("2_choice")]
+unique_name_in_owner = true
+layout_mode = 1

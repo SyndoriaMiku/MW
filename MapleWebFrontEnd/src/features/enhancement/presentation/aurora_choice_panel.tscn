@@ -1,0 +1,134 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/features/enhancement/presentation/aurora_choice_panel.gd" id="1_script"]
+
+[node name="AuroraChoicePanel" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.02, 0.04, 0.85)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(780, 0)
+layout_mode = 2
+
+[node name="Box" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ChoiceTitle" type="Label" parent="Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "CHOOSE YOUR AURORA LINES"
+horizontal_alignment = 1
+
+[node name="ChoiceSubtitle" type="Label" parent="Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.66, 0.74, 1)
+text = "-"
+horizontal_alignment = 1
+
+[node name="ChoiceNotice" type="Label" parent="Center/Card/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.77, 0.32, 1)
+text = "-"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Columns" type="HBoxContainer" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="CurrentPanel" type="PanelContainer" parent="Center/Card/Box/Columns"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+theme_type_variation = &"CompactPanel"
+
+[node name="Box" type="VBoxContainer" parent="Center/Card/Box/Columns/CurrentPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CurrentTitle" type="Label" parent="Center/Card/Box/Columns/CurrentPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_override_font_sizes/font_size = 13
+text = "CURRENT"
+
+[node name="CurrentLines" type="VBoxContainer" parent="Center/Card/Box/Columns/CurrentPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NewPanel" type="PanelContainer" parent="Center/Card/Box/Columns"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"CompactPanel"
+
+[node name="Box" type="VBoxContainer" parent="Center/Card/Box/Columns/NewPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NewTitle" type="Label" parent="Center/Card/Box/Columns/NewPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.89, 0.65, 1)
+theme_override_font_sizes/font_size = 13
+text = "NEW"
+
+[node name="NewLines" type="GridContainer" parent="Center/Card/Box/Columns/NewPanel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
+
+[node name="ChoiceError" type="Label" parent="Center/Card/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="Center/Card/Box"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="KeepButton" type="Button" parent="Center/Card/Box/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "KEEP CURRENT LINES"
+
+[node name="TakeButton" type="Button" parent="Center/Card/Box/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "TAKE NEW LINES"

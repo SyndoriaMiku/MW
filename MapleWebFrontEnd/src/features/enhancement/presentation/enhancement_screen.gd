@@ -24,11 +24,8 @@ extends Control
 @onready var essence_select: OptionButton = %EssenceSelect
 @onready var reveal_button: Button = %RevealButton
 @onready var reroll_button: Button = %RerollButton
-@onready var pending_panel: VBoxContainer = %PendingPanel
-@onready var pending_lines: Label = %PendingLines
-@onready var keep_old_button: Button = %KeepOldButton
-@onready var take_new_button: Button = %TakeNewButton
 @onready var status_label: Label = %StatusLabel
+@onready var aurora_choice_panel: AuroraChoicePanel = %AuroraChoicePanel
 @onready var result_effect_layer: Control = %ResultEffectLayer
 @onready var result_backdrop: ColorRect = %ResultBackdrop
 @onready var result_card: PanelContainer = %ResultCard
@@ -42,9 +39,8 @@ var _essences: Array = []
 var _selected_item: Dictionary = {}
 var _lumen_preview: Dictionary = {}
 var _lumen_preview_error := ""
-var _pending_roll: Dictionary = {}
-var _pending_target_id := ""
 var _is_loading := false
+var _requested_essence_id := ""
 
 
 func _ready() -> void:
@@ -58,11 +54,13 @@ func _ready() -> void:
 	lumen_button.pressed.connect(_on_lumen_pressed)
 	reveal_button.pressed.connect(_on_reveal_pressed)
 	reroll_button.pressed.connect(_on_reroll_pressed)
-	keep_old_button.pressed.connect(_on_confirm_roll.bind("keep_old"))
-	take_new_button.pressed.connect(_on_confirm_roll.bind("take_new"))
+	aurora_choice_panel.decided.connect(_on_roll_decided)
 	for button in [lumen_menu_button, aurora_menu_button, future_menu_button]:
 		button.toggle_mode = true
-	_select_system(0)
+	# Opened from the inventory: {"tab": "aurora" | "lumen", "essence_id": ...}.
+	var args := SceneRouter.take_args()
+	_select_system(1 if args.get("tab") == "aurora" else 0)
+	_requested_essence_id = ApiClient.id_string(args.get("essence_id"))
 	if not SceneRouter.require_session():
 		return
 	await _load_data()
@@ -81,6 +79,9 @@ func _load_data() -> void:
 	_set_loading(true, "Loading enhancement data...")
 	var selected_id := ApiClient.id_string(_selected_item.get("id"))
 	var selected_essence_id := _selected_option_id(essence_select)
+	if not _requested_essence_id.is_empty():
+		selected_essence_id = _requested_essence_id
+		_requested_essence_id = ""
 	var profile_response: Dictionary = await ApiClient.get_json("users/profile/")
 	if not _accept_http(profile_response):
 		return
@@ -100,7 +101,7 @@ func _load_data() -> void:
 		var item_type := str(template.get("item_type", ""))
 		if ItemTypes.is_equipment(item_type):
 			_equipment.append(item)
-		elif item_type == "use" and str(template.get("name", "")).to_lower().contains("essence"):
+		elif is_aurora_modifier(template):
 			_essences.append(item)
 
 	_populate_target_select(selected_id)
@@ -109,6 +110,7 @@ func _load_data() -> void:
 	_is_loading = false
 	await _load_lumen_preview()
 	_set_loading(false, "Enhancement data synchronized with the server.")
+	_show_pending_roll()
 
 
 func _populate_target_select(preferred_id: String) -> void:
@@ -132,6 +134,14 @@ func _populate_target_select(preferred_id: String) -> void:
 		selected_index = 0
 	target_select.select(selected_index)
 	_selected_item = _find_item(str(target_select.get_item_metadata(selected_index)))
+
+
+## Aurora modifiers (essences) by the backend's use_kind; older backends only
+## tell them apart by name.
+static func is_aurora_modifier(template: Dictionary) -> bool:
+	if template.has("use_kind"):
+		return template.get("use_kind") == "aurora_modifier"
+	return str(template.get("item_type", "")) == "use" and str(template.get("name", "")).to_lower().contains("essence")
 
 
 func _populate_essence_select(preferred_id: String) -> void:
@@ -195,7 +205,6 @@ func _render_selected_item() -> void:
 	var preview_cost: Dictionary = _lumen_preview.get("cost", {})
 	var lumen_can_ascend := supports_lumen and not is_destroyed and (max_lumen <= 0 or current_lumen < max_lumen) and bool(_lumen_preview.get("success", false)) and bool(preview_cost.get("can_afford", false))
 	_set_action_availability(lumen_can_ascend, supports_aurora and lines.is_empty() and not is_destroyed, supports_aurora and not lines.is_empty() and not is_destroyed)
-	_render_pending_roll()
 
 
 func _load_lumen_preview() -> void:
@@ -281,21 +290,9 @@ func _set_action_availability(can_lumen: bool, can_reveal: bool, can_reroll: boo
 	reveal_button.visible = can_reveal
 	reveal_button.disabled = _is_loading or not can_reveal
 	reroll_button.visible = not can_reveal
-	reroll_button.disabled = _is_loading or not can_reroll or essence_select.item_count == 0 or not _pending_roll.is_empty()
-	essence_select.disabled = _is_loading or essence_select.item_count == 0 or not _pending_roll.is_empty()
-
-
-func _render_pending_roll() -> void:
-	var is_for_target := not _pending_roll.is_empty() and _pending_target_id == ApiClient.id_string(_selected_item.get("id"))
-	pending_panel.visible = is_for_target
-	if not is_for_target:
-		return
-	var lines: Variant = _pending_roll.get("new_lines", _pending_roll.get("choices", []))
-	pending_lines.text = _format_aurora_lines(lines if lines is Array else [])
-	var requires_specific_selection := _pending_roll.has("choices")
-	take_new_button.disabled = requires_specific_selection or _is_loading
-	take_new_button.text = "SELECT LINES — SOON" if requires_specific_selection else "TAKE NEW"
-	keep_old_button.disabled = _is_loading
+	var has_pending_roll: bool = _selected_item.get("pending_aurora_roll") is Dictionary
+	reroll_button.disabled = _is_loading or not can_reroll or essence_select.item_count == 0 or has_pending_roll
+	essence_select.disabled = _is_loading or essence_select.item_count == 0 or has_pending_roll
 
 
 func _on_lumen_pressed() -> void:
@@ -445,28 +442,48 @@ func _on_reroll_pressed() -> void:
 	if not _accept_mutation(response):
 		return
 	var data: Dictionary = response.get("data", {})
-	if bool(data.get("pending", false)):
-		_pending_roll = data
-		_pending_target_id = ApiClient.id_string(_selected_item.get("id"))
 	var message := str(data.get("message", "Aurora reroll completed."))
 	_is_loading = false
 	await _load_data()
-	status_label.text = message
+	# A pending roll opened the choice, which sets its own instructions.
+	if not aurora_choice_panel.is_open():
+		status_label.text = message
 
 
-func _on_confirm_roll(action: String) -> void:
-	if _pending_roll.is_empty() or _is_loading:
+## Opens the blocking Aurora choice when an item has an unconfirmed roll (the
+## server keeps it, so this also happens after leaving and coming back).
+func _show_pending_roll() -> void:
+	var pending_item := {}
+	for item in _items:
+		if item is Dictionary and item.get("pending_aurora_roll") is Dictionary:
+			pending_item = item
+			break
+	if pending_item.is_empty():
+		aurora_choice_panel.close()
 		return
-	_set_loading(true, "Confirming Aurora roll...")
-	var response: Dictionary = await ApiClient.post_json(
-		"items/essence/confirm/",
-		{"inventory_item_id": int(_pending_target_id), "action": action}
-	)
-	if not _accept_mutation(response):
+	var pending_id := ApiClient.id_string(pending_item.get("id"))
+	for index in target_select.item_count:
+		if str(target_select.get_item_metadata(index)) == pending_id:
+			target_select.select(index)
+	_selected_item = pending_item
+	_select_system(1)
+	_render_selected_item()
+	aurora_choice_panel.show_roll(pending_item)
+	status_label.text = "Tier up! Take the new Aurora lines to continue." if aurora_choice_panel.must_take_new() else "Choose your Aurora lines to continue."
+
+
+func _on_roll_decided(action: String, selected_temp_ids: Array) -> void:
+	var payload := {"inventory_item_id": int(_selected_item.get("id", 0)), "action": action}
+	if action == "select_specific":
+		payload["selected_temp_ids"] = selected_temp_ids
+	var response: Dictionary = await ApiClient.post_json("items/essence/confirm/", payload)
+	var data: Variant = response.get("data", {})
+	if not response.get("ok", false) or (data is Dictionary and data.has("success") and not bool(data.success)):
+		var fallback := str(data.get("message", "The choice was not saved.")) if data is Dictionary else "The choice was not saved."
+		aurora_choice_panel.show_error(ApiClient.error_message(response, fallback) if not response.get("ok", false) else fallback)
 		return
-	var message := str(response.get("data", {}).get("message", "Aurora roll confirmed."))
-	_pending_roll = {}
-	_pending_target_id = ""
+	var message := str(data.get("message", "Aurora lines updated."))
+	aurora_choice_panel.close()
 	_is_loading = false
 	await _load_data()
 	status_label.text = message

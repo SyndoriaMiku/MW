@@ -18,10 +18,23 @@ func _ready() -> void:
 	ApiClient.session_expired.connect(go_to_login)
 
 
+## What the next scene should open with (e.g. {"tab": "aurora"}); read once
+## with take_args().
+var _args: Dictionary = {}
+
+
 ## Deferred so it is safe to call from a scene's _ready, while the tree is still
 ## adding that scene.
-func go_to(scene_path: String) -> void:
+func go_to(scene_path: String, args: Dictionary = {}) -> void:
+	_args = args
 	get_tree().change_scene_to_file.call_deferred(scene_path)
+
+
+## The arguments passed to go_to for the current scene, cleared after reading.
+func take_args() -> Dictionary:
+	var args := _args
+	_args = {}
+	return args
 
 
 func go_to_login() -> void:
