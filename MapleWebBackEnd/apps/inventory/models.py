@@ -74,6 +74,10 @@ class PendingAuroraRoll(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def raises_level(self):
+        """A tier-up: the rolled lines come with a higher Aurora level, so they must be taken."""
+        return self.new_aurora_level is not None and self.new_aurora_level > self.inventory_item.aurora_level
+
     class Meta:
         verbose_name = "Pending Aurora Roll"
         verbose_name_plural = "Pending Aurora Rolls"

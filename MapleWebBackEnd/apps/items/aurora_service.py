@@ -339,7 +339,10 @@ class AuroraService:
             msg = "Roll generated. Please choose to keep old or select new."
             if tier_up_occurred:
                 msg = "TIER UP! " + msg
-            return {"success": True, "message": msg, "pending": True, "new_lines": new_lines, "tier_up": tier_up_occurred}
+            return {
+                "success": True, "message": msg, "pending": True, "new_lines": new_lines,
+                "tier_up": tier_up_occurred, "must_take_new": tier_up_occurred, "new_aurora_level": new_level,
+            }
 
         elif mod_type == 'REROLL_TRIPLE_CHOICE':
             new_lines = AuroraService._generate_lines_for_item(
@@ -361,7 +364,10 @@ class AuroraService:
             msg = "Select your desired lines."
             if tier_up_occurred:
                 msg = "TIER UP! " + msg
-            return {"success": True, "message": msg, "pending": True, "choices": new_lines, "tier_up": tier_up_occurred}
+            return {
+                "success": True, "message": msg, "pending": True, "choices": new_lines,
+                "tier_up": tier_up_occurred, "must_take_new": tier_up_occurred, "new_aurora_level": new_level,
+            }
 
         elif mod_type == 'REROLL_SINGLE':
             new_line = AuroraService._generate_random_line(target_item.template.aurora_tier, target_item.template.item_type, target_item.aurora_level, target_line_index)
@@ -448,6 +454,14 @@ class AuroraService:
             return {"success": False, "message": blocked_reason}
 
         if action == 'keep_old':
+            if pending.raises_level():
+                # The higher level only comes with the new lines; keeping the
+                # old ones would throw the tier-up away.
+                return {
+                    "success": False,
+                    "message": "Tier up! Choose the new lines to keep the new Aurora level.",
+                    "must_take_new": True,
+                }
             pending.delete()
             return {"success": True, "message": "Kept old lines."}
 

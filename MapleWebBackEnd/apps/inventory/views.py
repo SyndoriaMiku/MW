@@ -23,7 +23,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             return InventoryItem.objects.none()
         # Expired items are out of play until purge_expired_items deletes them.
         return exclude_expired(self.request.user.character.inventory_items).select_related(
-            'template__lumen_tier', 'template__aurora_tier'
+            'template__lumen_tier', 'template__aurora_tier', 'pending_aurora_roll'
         ).prefetch_related(
             'aurora_lines',
             'template__lumen_tier__ascend_rules',

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import InventoryItem, AuroraLine, SoldItem
+from .models import InventoryItem, AuroraLine, PendingAuroraRoll, SoldItem
 from apps.characters.models import EquipmentSlotConfig, EquippedItem
 from apps.items.serializers import ItemTemplateSerializer
 
@@ -20,6 +20,7 @@ class AuroraLineSerializer(serializers.ModelSerializer):
 
 class InventoryItemSerializer(serializers.ModelSerializer):
     aurora_lines = AuroraLineSerializer(many=True, read_only=True)
+    pending_aurora_roll = serializers.SerializerMethodField()
     template = ItemTemplateSerializer(read_only=True)
     lumen_breakdown = serializers.SerializerMethodField()
     # Lumis price of an Aurora reroll right now; null when not available.
@@ -67,12 +68,40 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             'total': total,
         }
 
+    def get_pending_aurora_roll(self, obj):
+        """
+        The unconfirmed Aurora roll on this item, or None. The player has to
+        settle it before using another modifier; must_take_new is set when the
+        roll raised the Aurora level, which only comes with the new lines.
+        """
+        try:
+            pending = obj.pending_aurora_roll
+        except PendingAuroraRoll.DoesNotExist:
+            return None
+        from apps.items.aurora_service import AuroraService
+
+        must_take_new = pending.raises_level()
+        data = {
+            'modifier_type': pending.modifier_type,
+            'current_aurora_level': obj.aurora_level,
+            'new_aurora_level': pending.new_aurora_level if pending.new_aurora_level is not None else obj.aurora_level,
+            'tier_up': must_take_new,
+            'must_take_new': must_take_new,
+            'created_at': pending.created_at,
+        }
+        if pending.modifier_type == 'REROLL_TRIPLE_CHOICE':
+            data['choices'] = pending.generated_lines_data
+            data['select_count'] = AuroraService.get_max_lines_for_item(obj.template)
+        else:
+            data['new_lines'] = pending.generated_lines_data
+        return data
+
     class Meta:
         model = InventoryItem
         fields = [
             'id', 'aurora_lines', 'template', 'lumen_breakdown', 'aurora_lumis_reroll_cost',
             'lumen_ascend_level', 'aurora_level', 'quantity', 'is_untrade',
-            'expired_at', 'is_destroyed', 'owner',
+            'expired_at', 'is_destroyed', 'owner', 'pending_aurora_roll',
         ]
         read_only_fields = fields
 

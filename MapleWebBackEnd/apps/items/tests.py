@@ -579,17 +579,55 @@ class AuroraTierUpTests(EssenceFixture):
         self.target.refresh_from_db()
         return self.target.aurora_level, list(self.target.aurora_lines.values_list('value', flat=True))
 
-    def test_keeping_old_lines_discards_the_tier_up(self):
+    def test_a_tier_up_roll_must_be_taken(self):
         self.use_rule('REROLL_CHOICE')
 
         rolled = self.modify()
-        pending_state = self.target_state()
-        self.confirm('keep_old')
+        kept = self.confirm('keep_old')
 
         self.assertTrue(rolled.data['tier_up'])
+        self.assertTrue(rolled.data['must_take_new'])
         self.assertEqual(rolled.data['new_lines'][0]['value'], 4)
-        self.assertEqual(pending_state, (1, [1]))
+        self.assertEqual(kept.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(kept.data['must_take_new'])
         self.assertEqual(self.target_state(), (1, [1]))
+        self.assertTrue(PendingAuroraRoll.objects.filter(inventory_item=self.target).exists())
+
+        self.confirm('take_new')
+        self.assertEqual(self.target_state(), (2, [4]))
+
+    def test_old_lines_can_be_kept_without_a_tier_up(self):
+        self.use_rule('REROLL_CHOICE', tier_up_chance=0.0)
+
+        self.modify()
+        kept = self.confirm('keep_old')
+
+        self.assertEqual(kept.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.target_state(), (1, [1]))
+
+    def test_inventory_shows_the_pending_roll(self):
+        self.use_rule('REROLL_CHOICE')
+        self.modify()
+
+        pending = self.client.get(reverse('inventory-item-detail', args=[self.target.pk])).data['pending_aurora_roll']
+
+        self.assertEqual(pending['modifier_type'], 'REROLL_CHOICE')
+        self.assertEqual((pending['current_aurora_level'], pending['new_aurora_level']), (1, 2))
+        self.assertTrue(pending['must_take_new'])
+        self.assertEqual([line['value'] for line in pending['new_lines']], [4])
+
+    def test_inventory_shows_triple_choices_and_how_many_to_pick(self):
+        self.use_rule('REROLL_TRIPLE_CHOICE')
+        self.modify()
+
+        listing = self.client.get(reverse('inventory-item-list')).data
+        items = listing['results'] if isinstance(listing, dict) else listing
+        pending = next(item for item in items if item['id'] == self.target.id)['pending_aurora_roll']
+
+        self.assertEqual(pending['select_count'], 1)
+        self.assertEqual(len(pending['choices']), 3)
+        self.assertNotIn('new_lines', pending)
+        self.assertEqual(self.confirm('keep_old').status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_taking_new_lines_applies_the_tier_up(self):
         self.use_rule('REROLL_CHOICE')
