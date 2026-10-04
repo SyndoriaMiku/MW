@@ -11,16 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.03, 0.045, 0.07, 1)
-
 [node name="SafeArea" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -56,7 +46,7 @@ theme_override_constants/separation = 0
 [node name="TurnLabel" type="Label" parent="SafeArea/VBox/Header/TurnBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_type_variation = &"GoldLabel"
 theme_override_font_sizes/font_size = 22
 text = "TURN 01"
 horizontal_alignment = 1
@@ -64,7 +54,7 @@ horizontal_alignment = 1
 [node name="PhaseLabel" type="Label" parent="SafeArea/VBox/Header/TurnBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 theme_override_font_sizes/font_size = 12
 text = "PLAYER PHASE"
 horizontal_alignment = 1
@@ -76,8 +66,8 @@ size_flags_horizontal = 3
 [node name="ConnectionStatus" type="Label" parent="SafeArea/VBox/Header"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"AccentLabel"
 size_flags_vertical = 4
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
 theme_override_font_sizes/font_size = 12
 text = "LOADING"
 
@@ -107,7 +97,7 @@ theme_override_constants/separation = 8
 
 [node name="PartyTitle" type="Label" parent="SafeArea/VBox/Arena/PartyColumn"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "YOUR PARTY"
 
@@ -124,7 +114,7 @@ theme_override_constants/separation = 8
 
 [node name="EnemyTitle" type="Label" parent="SafeArea/VBox/Arena/EnemyColumn"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.6, 0.56, 1)
+theme_type_variation = &"ErrorLabel"
 theme_override_font_sizes/font_size = 13
 text = "ENEMIES  •  CLICK ONE TO TARGET IT"
 
@@ -164,7 +154,7 @@ theme_override_constants/separation = 8
 [node name="TargetLabel" type="Label" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.96, 0.77, 0.32, 1)
+theme_type_variation = &"GoldLabel"
 text = "TARGET  —"
 text_overrun_behavior = 3
 
@@ -199,8 +189,8 @@ text = "ITEM"
 [node name="HintLabel" type="Label" parent="SafeArea/VBox/Bottom/ActionPanel/ActionBox"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"MutedLabel"
 size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
 theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 
@@ -237,7 +227,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.01, 0.02, 0.04, 0.78)
+color = Color(0, 0, 0, 0.32)
 
 [node name="Center" type="CenterContainer" parent="ResultOverlay"]
 layout_mode = 1
@@ -250,6 +240,7 @@ grow_vertical = 2
 [node name="Card" type="PanelContainer" parent="ResultOverlay/Center"]
 custom_minimum_size = Vector2(460, 0)
 layout_mode = 2
+theme_type_variation = &"DialogPanel"
 
 [node name="Box" type="VBoxContainer" parent="ResultOverlay/Center/Card"]
 layout_mode = 2
@@ -265,7 +256,7 @@ horizontal_alignment = 1
 [node name="ResultSubtitle" type="Label" parent="ResultOverlay/Center/Card/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 text = "-"
 horizontal_alignment = 1
 
@@ -282,7 +273,7 @@ autowrap_mode = 3
 [node name="ResultError" type="Label" parent="ResultOverlay/Center/Card/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+theme_type_variation = &"ErrorLabel"
 horizontal_alignment = 1
 autowrap_mode = 3
 

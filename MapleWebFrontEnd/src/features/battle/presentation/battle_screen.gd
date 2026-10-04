@@ -21,10 +21,10 @@ const TARGET_TYPE_LABELS := {
 	"E_AREA": "All enemies", "A_AREA": "All allies", "GLOBAL": "Everyone",
 }
 const HIT_COLORS := {
-	"damage": Color("ff6b6b"), "heal": Color("73e2a7"), "mp": Color("6fa8ff"), "blocked": Color("c8d4e3"),
+	"damage": M3.ENEMY_HP, "heal": M3.HP, "mp": M3.MP, "blocked": M3.ON_SURFACE_VARIANT,
 }
-const LOG_COLOR := Color("c8d4e3")
-const ERROR_COLOR := Color("ff7b72")
+const LOG_COLOR := M3.ON_SURFACE_VARIANT
+const ERROR_COLOR := M3.ERROR
 
 @onready var encounter_label: Label = %EncounterLabel
 @onready var turn_label: Label = %TurnLabel
@@ -316,8 +316,8 @@ func _show_hit(hit: Dictionary) -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.custom_minimum_size = Vector2(160, 0)
 	label.add_theme_font_size_override("font_size", 28)
-	label.add_theme_color_override("font_color", HIT_COLORS.get(str(hit.kind), Color.WHITE))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	label.add_theme_color_override("font_color", HIT_COLORS.get(str(hit.kind), M3.ON_SURFACE))
+	label.add_theme_color_override("font_outline_color", M3.SURFACE_CONTAINER_LOWEST)
 	label.add_theme_constant_override("outline_size", 6)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	effect_layer.add_child(label)
@@ -480,7 +480,7 @@ func _on_again_pressed() -> void:
 func _leave_to_board() -> void:
 	if _battle == null or not _battle.is_in_progress():
 		SessionStore.active_battle_id = ""
-	SceneRouter.go_to(SceneRouter.LAUNCHER)
+	SceneRouter.go_to(SceneRouter.HUB)
 
 
 func _set_screen_state(next_state: ScreenState) -> void:
@@ -552,7 +552,7 @@ func _setup_choice_popup() -> void:
 	root.add_theme_constant_override("separation", 8)
 	margin.add_child(root)
 	_choice_title = Label.new()
-	_choice_title.add_theme_color_override("font_color", Color("66c9f5"))
+	_choice_title.add_theme_color_override("font_color", M3.PRIMARY)
 	_choice_title.add_theme_font_size_override("font_size", 14)
 	root.add_child(_choice_title)
 	var scroll := ScrollContainer.new()
@@ -576,7 +576,7 @@ func _open_choices(title: String, entries: Array, anchor: Control, empty_text: S
 	if entries.is_empty():
 		var empty := Label.new()
 		empty.text = empty_text
-		empty.add_theme_color_override("font_color", Color("7f8d9d"))
+		empty.add_theme_color_override("font_color", M3.ON_SURFACE_VARIANT)
 		_choice_list.add_child(empty)
 	for entry in entries:
 		var button := Button.new()

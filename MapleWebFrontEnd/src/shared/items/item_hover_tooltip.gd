@@ -17,12 +17,10 @@ func _init() -> void:
 	z_index = 100
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.13, 0.17, 0.22, 0.97)
-	style.border_color = Color("536272")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(14)
+	var style := M3.box(M3.SURFACE_CONTAINER, M3.CORNER_MEDIUM, 16.0)
+	style.shadow_color = M3.with_alpha(Color.BLACK, 0.2)
+	style.shadow_size = 8
+	style.shadow_offset = Vector2(0, 3)
 	add_theme_stylebox_override("panel", style)
 	_content.add_theme_constant_override("separation", 10)
 	add_child(_content)
@@ -43,7 +41,7 @@ func show_equipment(item: Dictionary, compare: Dictionary, compare_caption: Stri
 		columns.add_child(_equipment_column(compare, compare_caption, "CURRENTLY EQUIPPED", equipped_items))
 	if not outcome.is_empty():
 		_content.add_child(HSeparator.new())
-		_content.add_child(ItemTooltip.label("IF YOU EQUIP IT  (%s)" % outcome, 13, Color("b8c2cc")))
+		_content.add_child(ItemTooltip.label("IF YOU EQUIP IT  (%s)" % outcome, 13, M3.ON_SURFACE_VARIANT))
 		var changes := RichTextLabel.new()
 		changes.bbcode_enabled = true
 		changes.fit_content = true
@@ -88,7 +86,7 @@ func _equipment_column(item: Dictionary, caption: String, header: String, equipp
 	column.custom_minimum_size = Vector2(COLUMN_WIDTH, 0)
 	column.add_theme_constant_override("separation", 7)
 	if not caption.is_empty():
-		column.add_child(ItemTooltip.label(caption, 12, Color("66c9f5"), HORIZONTAL_ALIGNMENT_CENTER))
+		column.add_child(ItemTooltip.label(caption, 12, M3.PRIMARY, HORIZONTAL_ALIGNMENT_CENTER))
 	ItemTooltip.fill_equipment(column, item, equipped_items, header)
 	return column
 
@@ -96,7 +94,7 @@ func _equipment_column(item: Dictionary, caption: String, header: String, equipp
 func _add_hint(hint: String) -> void:
 	if hint.is_empty():
 		return
-	_content.add_child(ItemTooltip.label(hint, 12, Color("8295aa")))
+	_content.add_child(ItemTooltip.label(hint, 12, M3.ON_SURFACE_VARIANT))
 
 
 func _clear() -> void:

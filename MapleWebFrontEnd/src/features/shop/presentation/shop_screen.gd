@@ -47,8 +47,12 @@ var _dialog_total_format := ""
 
 
 func _ready() -> void:
-	back_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.LAUNCHER))
-	refresh_button.pressed.connect(_load_all)
+	HubEmbed.adapt(self, [back_button], $Margin)
+	back_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.HUB))
+	refresh_button.pressed.connect(func():
+		GameCache.clear_all()
+		_load_all()
+	)
 	buyback_button.button_group = _category_group
 	buyback_button.pressed.connect(_show_buyback)
 	buy_button.pressed.connect(func(): _activate_shop_entry(_selected_shop))
@@ -63,17 +67,22 @@ func _ready() -> void:
 	await _load_all()
 
 
+## Called by the hub each time this page is shown again.
+func reload_page() -> void:
+	await _load_all()
+
+
 func _load_all() -> void:
 	if _busy:
 		return
 	_set_busy(true, "Loading the shop...")
-	var character_response: Dictionary = await ApiClient.get_json("characters/my/")
+	var character_response: Dictionary = await GameCache.get_json("characters/my/")
 	if character_response.get("ok", false):
 		SessionStore.character = character_response.data
 		_character_level = int(character_response.data.get("level", 1))
 	if not await _load_profile() or not await _load_bag() or not await _load_buyback():
 		return
-	var categories_response: Dictionary = await ApiClient.get_all("shops/categories/")
+	var categories_response: Dictionary = await GameCache.get_all("shops/categories/")
 	if not _accept(categories_response, "Unable to load the shop."):
 		return
 	_categories = categories_response.data.filter(func(category): return bool(category.get("is_active", true)))
@@ -90,7 +99,7 @@ func _load_all() -> void:
 
 
 func _load_profile() -> bool:
-	var response: Dictionary = await ApiClient.get_json("users/profile/")
+	var response: Dictionary = await GameCache.get_json("users/profile/")
 	if not _accept(response, "Unable to load your wallet."):
 		return false
 	_profile = response.data
@@ -102,10 +111,10 @@ func _load_profile() -> bool:
 
 
 func _load_bag() -> bool:
-	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
+	var inventory_response: Dictionary = await GameCache.get_all("inventory/")
 	if not _accept(inventory_response, "Unable to load your bag."):
 		return false
-	var equipped_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
+	var equipped_response: Dictionary = await GameCache.get_all("inventory/equipped/")
 	if not _accept(equipped_response, "Unable to load your equipment."):
 		return false
 	_bag = inventory_response.data
@@ -118,7 +127,7 @@ func _load_bag() -> bool:
 
 
 func _load_buyback() -> bool:
-	var response: Dictionary = await ApiClient.get_all("inventory/buyback/")
+	var response: Dictionary = await GameCache.get_all("inventory/buyback/")
 	# A backend without buy back still lets the player buy and sell.
 	var supported := int(response.get("status", 0)) != 404
 	buyback_button.disabled = not supported
@@ -138,6 +147,7 @@ func _render_categories() -> void:
 	for category in _categories:
 		var button := Button.new()
 		button.toggle_mode = true
+		button.theme_type_variation = &"ListItemButton"
 		button.button_group = _category_group
 		button.custom_minimum_size = Vector2(0, 46)
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -157,7 +167,7 @@ func _show_category(category: Dictionary) -> void:
 		button.set_pressed_no_signal(button.get_meta("category_id", "") == ApiClient.id_string(category.get("id")))
 	shop_title.text = "%s  •  PAYS WITH %s" % [str(category.get("name", "Shop")).to_upper(), ShopRules.currency_label(ShopRules.currency(category)).to_upper()]
 	shop_hint.text = "Double-click an item to buy it. Stackable items ask how many you want."
-	var response: Dictionary = await ApiClient.get_all("shops/items/?category=%s" % ApiClient.id_string(category.get("id")))
+	var response: Dictionary = await GameCache.get_all("shops/items/?category=%s" % ApiClient.id_string(category.get("id")))
 	if not _accept(response, "Unable to load this category."):
 		return
 	_shop_items = response.data

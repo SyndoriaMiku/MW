@@ -1,8 +1,9 @@
 class_name SettingsPanel
 extends Control
 
-## Options overlay: window mode, resolution, BGM and SFX volume. Changes apply
-## immediately; closing the panel saves them.
+## Options: window mode, resolution, BGM and SFX volume. Changes apply and save
+## immediately. Opens as an overlay (login screen) or, with the meta
+## "embedded", as the hub's Settings page.
 
 const SCENE := preload("res://src/features/settings/presentation/settings_panel.tscn")
 const MODE_LABELS := {"windowed": "Windowed", "borderless": "Borderless fullscreen"}
@@ -35,15 +36,24 @@ func _ready() -> void:
 	resolution_select.item_selected.connect(_on_resolution_selected)
 	bgm_slider.value_changed.connect(_on_bgm_changed)
 	sfx_slider.value_changed.connect(_on_sfx_changed)
-	sfx_slider.drag_ended.connect(func(_changed): GameSettings.play_sfx_preview())
+	sfx_slider.drag_ended.connect(func(_changed):
+		GameSettings.play_sfx_preview()
+		GameSettings.save_settings()
+	)
+	bgm_slider.drag_ended.connect(func(_changed): GameSettings.save_settings())
 	reset_button.pressed.connect(_on_reset_pressed)
 	close_button.pressed.connect(close)
+	if has_meta("embedded"):
+		%Backdrop.visible = false
+		%Title.visible = false
+		close_button.visible = false
 	_render()
-	close_button.grab_focus()
+	if not has_meta("embedded"):
+		close_button.grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
+	if not has_meta("embedded") and is_visible_in_tree() and event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close()
 
@@ -51,6 +61,50 @@ func _unhandled_input(event: InputEvent) -> void:
 func close() -> void:
 	GameSettings.save_settings()
 	queue_free()
+
+
+## Adds the account block (hub Settings page): who is signed in and a sign out
+## button that asks first.
+func add_account_section(username: String, on_sign_out: Callable) -> void:
+	var box: VBoxContainer = %Box
+	var actions: Control = %Actions
+	var separator := HSeparator.new()
+	box.add_child(separator)
+	box.move_child(separator, actions.get_index())
+	var title := Label.new()
+	title.text = "Account"
+	title.theme_type_variation = &"AccentLabel"
+	title.add_theme_font_size_override("font_size", 13)
+	box.add_child(title)
+	box.move_child(title, actions.get_index())
+	var row := HBoxContainer.new()
+	row.name = "AccountRow"
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	box.move_child(row, actions.get_index())
+	var signed_in := Label.new()
+	signed_in.text = "Signed in as %s" % username
+	signed_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	signed_in.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(signed_in)
+	var sign_out := Button.new()
+	sign_out.name = "SignOutButton"
+	sign_out.text = "Sign out"
+	sign_out.theme_type_variation = &"OutlinedButton"
+	sign_out.icon = IconTexture.make("logout", M3.PRIMARY, 20)
+	row.add_child(sign_out)
+	var confirm := ConfirmationDialog.new()
+	confirm.name = "SignOutDialog"
+	confirm.title = "Sign out?"
+	confirm.dialog_text = "You will need to sign in again to keep playing."
+	confirm.ok_button_text = "Sign out"
+	confirm.cancel_button_text = "Cancel"
+	add_child(confirm)
+	sign_out.pressed.connect(func(): confirm.popup_centered(Vector2i(380, 0)))
+	confirm.confirmed.connect(func():
+		sign_out.disabled = true
+		on_sign_out.call()
+	)
 
 
 func _render() -> void:
@@ -78,12 +132,14 @@ static func volume_text(value: float) -> String:
 
 func _on_mode_selected(index: int) -> void:
 	GameSettings.set_window_mode(str(mode_select.get_item_metadata(index)))
+	GameSettings.save_settings()
 	_render()
 
 
 func _on_resolution_selected(index: int) -> void:
 	if index >= 0 and index < _resolutions.size():
 		GameSettings.set_resolution(_resolutions[index])
+		GameSettings.save_settings()
 
 
 func _on_bgm_changed(value: float) -> void:
@@ -98,4 +154,5 @@ func _on_sfx_changed(value: float) -> void:
 
 func _on_reset_pressed() -> void:
 	GameSettings.reset_to_defaults()
+	GameSettings.save_settings()
 	_render()

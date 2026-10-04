@@ -6,13 +6,14 @@ extends PanelContainer
 
 signal pressed(combatant_id: int)
 
-const PLAYER_PORTRAIT := Color(0.12, 0.37, 0.62)
-const ENEMY_PORTRAIT := Color(0.48, 0.18, 0.23)
-const SELECTED_BORDER := Color("f5c451")
-const TURN_BORDER := Color("63d7ef")
+const PLAYER_PORTRAIT := M3.PRIMARY_CONTAINER
+const ENEMY_PORTRAIT := M3.ERROR_CONTAINER
+const SELECTED_BORDER := M3.TERTIARY
+const TURN_BORDER := M3.PRIMARY
+const BASE_BORDER := M3.OUTLINE_VARIANT
 
 var combatant_id := 0
-var _base_border := Color(0.19, 0.3, 0.44)
+var _base_border := BASE_BORDER
 var _style := StyleBoxFlat.new()
 var _name_label := Label.new()
 var _badge_label := Label.new()
@@ -33,11 +34,7 @@ func _init(is_player: bool) -> void:
 	custom_minimum_size = Vector2(0, 168 if is_player else 196)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_ARROW if is_player else Control.CURSOR_POINTING_HAND
-	_style.bg_color = Color(0.065, 0.095, 0.145, 0.98)
-	_style.border_color = Color(0.19, 0.3, 0.44)
-	_style.set_border_width_all(2)
-	_style.set_corner_radius_all(12)
-	_style.set_content_margin_all(12)
+	_style = M3.box(M3.SURFACE_CONTAINER_LOWEST, M3.CORNER_CARD, 12.0, BASE_BORDER, 2)
 	add_theme_stylebox_override("panel", _style)
 
 	var box := VBoxContainer.new()
@@ -64,14 +61,14 @@ func _init(is_player: bool) -> void:
 	_portrait_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_portrait_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_portrait_label.add_theme_font_size_override("font_size", 20)
-	_portrait_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	_portrait_label.add_theme_color_override("font_color", M3.ON_PRIMARY_CONTAINER if is_player else M3.ON_ERROR_CONTAINER)
 	_portrait.add_child(_portrait_label)
 
 	box.add_child(_bar_row(_hp_bar, _hp_label, &"HPBar" if is_player else &"EnemyHPBar"))
 	if is_player:
 		box.add_child(_bar_row(_mp_bar, _mp_label, &"MPBar"))
 	_effects_label.add_theme_font_size_override("font_size", 11)
-	_effects_label.add_theme_color_override("font_color", Color("c9a7ff"))
+	_effects_label.add_theme_color_override("font_color", M3.EPIC)
 	_effects_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(_effects_label)
 
@@ -88,8 +85,8 @@ func bind(combatant: CombatantState, is_local: bool, has_turn: bool) -> void:
 	var effects := combatant.effect_names()
 	_effects_label.text = "  ".join(effects)
 	_effects_label.tooltip_text = "\n".join(effects)
-	modulate = Color(1, 1, 1, 1) if combatant.is_alive() else Color(1, 1, 1, 0.38)
-	_base_border = TURN_BORDER if has_turn else Color(0.19, 0.3, 0.44)
+	modulate.a = 1.0 if combatant.is_alive() else M3.DISABLED_CONTENT_OPACITY
+	_base_border = TURN_BORDER if has_turn else BASE_BORDER
 	_style.border_color = _base_border
 
 

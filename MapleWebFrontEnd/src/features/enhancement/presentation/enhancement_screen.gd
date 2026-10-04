@@ -44,9 +44,23 @@ var _requested_essence_id := ""
 
 
 func _ready() -> void:
-	back_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.LAUNCHER))
+	HubEmbed.adapt(self, [back_button], $Margin)
+	if HubEmbed.is_embedded(self):
+		# A smaller showcase keeps the action buttons in view in the hub.
+		target_icon.custom_minimum_size.y = 64
+		# The roll must be decided before anything else, so in the hub the
+		# dialog covers the whole window, navigation bar included.
+		var modal_layer := CanvasLayer.new()
+		modal_layer.layer = 10
+		add_child(modal_layer)
+		aurora_choice_panel.reparent(modal_layer, false)
+		aurora_choice_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	back_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.HUB))
 	inventory_button.pressed.connect(SceneRouter.go_to.bind(SceneRouter.INVENTORY))
-	refresh_button.pressed.connect(_load_data)
+	refresh_button.pressed.connect(func():
+		GameCache.clear_all()
+		_load_data()
+	)
 	lumen_menu_button.pressed.connect(_select_system.bind(0))
 	aurora_menu_button.pressed.connect(_select_system.bind(1))
 	future_menu_button.pressed.connect(_select_system.bind(2))
@@ -57,13 +71,28 @@ func _ready() -> void:
 	aurora_choice_panel.decided.connect(_on_roll_decided)
 	for button in [lumen_menu_button, aurora_menu_button, future_menu_button]:
 		button.toggle_mode = true
+		button.theme_type_variation = &"ListItemButton"
 	# Opened from the inventory: {"tab": "aurora" | "lumen", "essence_id": ...}.
-	var args := SceneRouter.take_args()
-	_select_system(1 if args.get("tab") == "aurora" else 0)
-	_requested_essence_id = ApiClient.id_string(args.get("essence_id"))
+	_read_args(SceneRouter.take_args())
 	if not SceneRouter.require_session():
 		return
 	await _load_data()
+
+
+## Called by the hub when this page is opened again with arguments.
+func apply_args(args: Dictionary) -> void:
+	_read_args(args)
+	await _load_data()
+
+
+## Called by the hub each time this page is shown again.
+func reload_page() -> void:
+	await _load_data()
+
+
+func _read_args(args: Dictionary) -> void:
+	_select_system(1 if args.get("tab") == "aurora" else 0)
+	_requested_essence_id = ApiClient.id_string(args.get("essence_id"))
 
 
 func _select_system(index: int) -> void:
@@ -82,12 +111,12 @@ func _load_data() -> void:
 	if not _requested_essence_id.is_empty():
 		selected_essence_id = _requested_essence_id
 		_requested_essence_id = ""
-	var profile_response: Dictionary = await ApiClient.get_json("users/profile/")
+	var profile_response: Dictionary = await GameCache.get_json("users/profile/")
 	if not _accept_http(profile_response):
 		return
 	currency_label.text = "LUMIS  %d" % int(profile_response.get("data", {}).get("lumis", 0))
 
-	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
+	var inventory_response: Dictionary = await GameCache.get_all("inventory/")
 	if not _accept_http(inventory_response):
 		return
 	_items = ApiClient.unwrap_list(inventory_response.get("data", []))
@@ -233,7 +262,7 @@ func _load_lumen_preview() -> void:
 	lumen_cost.text = ""
 	lumen_event_info.text = ""
 	lumen_button.disabled = true
-	var response: Dictionary = await ApiClient.get_json(
+	var response: Dictionary = await GameCache.get_json(
 		"items/lumen/preview/?inventory_item_id=%s" % requested_item_id.uri_encode()
 	)
 	if requested_item_id != ApiClient.id_string(_selected_item.get("id")):
@@ -315,35 +344,29 @@ func _on_lumen_pressed() -> void:
 
 func _play_lumen_result(result: String, message: String) -> void:
 	var visual := _lumen_result_visual(result)
-	var accent: Color = visual.get("accent", Color.WHITE)
-	var backdrop_rgb: Color = visual.get("backdrop", Color("07101a"))
+	var accent: Color = visual.get("accent", M3.PRIMARY)
 	result_symbol.text = str(visual.get("symbol", "✦"))
 	result_title.text = str(visual.get("title", "LUMEN RESULT"))
 	result_subtitle.text = message
 	result_symbol.add_theme_color_override("font_color", accent)
 	result_title.add_theme_color_override("font_color", accent)
-	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = Color(0.035, 0.065, 0.09, 0.97)
-	card_style.border_color = accent
-	card_style.set_border_width_all(3)
-	card_style.set_corner_radius_all(14)
-	card_style.shadow_color = Color(accent, 0.35)
+	var card_style := M3.box(M3.SURFACE_CONTAINER_HIGH, M3.CORNER_EXTRA_LARGE, 24.0, accent, 3)
+	card_style.shadow_color = M3.with_alpha(accent, 0.35)
 	card_style.shadow_size = 18
-	card_style.set_content_margin_all(22)
 	result_card.add_theme_stylebox_override("panel", card_style)
-	result_backdrop.color = Color(backdrop_rgb, 0.0)
+	result_backdrop.color = M3.with_alpha(M3.SCRIM, 0.0)
 	result_effect_layer.visible = true
-	result_card.modulate = Color(1, 1, 1, 0)
+	result_card.modulate.a = 0.0
 	result_card.scale = Vector2(0.72, 0.72)
 	await get_tree().process_frame
 	result_card.pivot_offset = result_card.size * 0.5
 	_spawn_result_sparks(accent, 28 if result == "success" else (22 if result == "heavy_failure" else 10), result == "heavy_failure")
 
 	var intro := create_tween().set_parallel(true)
-	intro.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	M3.ease_tween(intro)
 	intro.tween_property(result_card, "scale", Vector2.ONE, 0.32)
 	intro.tween_property(result_card, "modulate:a", 1.0, 0.18)
-	intro.tween_property(result_backdrop, "color:a", 0.72 if result == "heavy_failure" else 0.58, 0.18)
+	intro.tween_property(result_backdrop, "color:a", 0.5 if result == "heavy_failure" else 0.32, 0.18)
 	await intro.finished
 
 	if result == "failure":
@@ -351,8 +374,8 @@ func _play_lumen_result(result: String, message: String) -> void:
 	elif result == "heavy_failure":
 		await _shake_result_card(18.0, 9)
 		var danger_flash := create_tween()
-		danger_flash.tween_property(result_backdrop, "color:a", 0.92, 0.08)
-		danger_flash.tween_property(result_backdrop, "color:a", 0.62, 0.16)
+		danger_flash.tween_property(result_backdrop, "color:a", 0.65, 0.08)
+		danger_flash.tween_property(result_backdrop, "color:a", 0.45, 0.16)
 		await danger_flash.finished
 	else:
 		var success_pulse := create_tween()
@@ -369,7 +392,7 @@ func _play_lumen_result(result: String, message: String) -> void:
 	await outro.finished
 	result_effect_layer.visible = false
 	result_card.scale = Vector2.ONE
-	result_card.modulate = Color.WHITE
+	result_card.modulate.a = 1.0
 
 
 func _shake_result_card(strength: float, repetitions: int) -> void:
@@ -410,11 +433,11 @@ func _spawn_result_sparks(color: Color, count: int, broken: bool) -> void:
 func _lumen_result_visual(result: String) -> Dictionary:
 	match result:
 		"success":
-			return {"title": "LUMEN ASCEND SUCCESS", "symbol": "✦", "accent": Color("65f0c5"), "backdrop": Color("06372f")}
+			return {"title": "LUMEN ASCEND SUCCESS", "symbol": "✦", "accent": M3.PRIMARY}
 		"heavy_failure":
-			return {"title": "HEAVY FAILURE", "symbol": "⚠", "accent": Color("ff6675"), "backdrop": Color("4a0912")}
+			return {"title": "HEAVY FAILURE", "symbol": "⚠", "accent": M3.ERROR}
 		_:
-			return {"title": "ASCEND FAILED", "symbol": "×", "accent": Color("9aabc0"), "backdrop": Color("101927")}
+			return {"title": "ASCEND FAILED", "symbol": "×", "accent": M3.ON_SURFACE_VARIANT}
 
 
 func _on_reveal_pressed() -> void:

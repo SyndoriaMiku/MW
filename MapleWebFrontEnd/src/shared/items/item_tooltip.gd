@@ -9,8 +9,8 @@ const STAT_DEFINITIONS := [
 	["att", "ATT"], ["hp", "HP"], ["mp", "MP"],
 	["all_stats", "ALL STATS"],
 ]
-const UP_COLOR := Color("79dfa3")
-const DOWN_COLOR := Color("ff8a80")
+const UP_COLOR := M3.SUCCESS
+const DOWN_COLOR := M3.ERROR
 
 
 ## Fills `box` with an equipment description; `header` is shown next to the
@@ -18,9 +18,9 @@ const DOWN_COLOR := Color("ff8a80")
 static func fill_equipment(box: VBoxContainer, item: Dictionary, equipped_items: Array, header: String) -> void:
 	var template: Dictionary = item.get("template", {})
 	_add_lumen_summary(box, item)
-	box.add_child(label(str(template.get("name", "Unknown Item")), 20, Color("f5f7fb"), HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(label(str(template.get("name", "Unknown Item")), 20, M3.ON_SURFACE, HORIZONTAL_ALIGNMENT_CENTER))
 	var trade_text := "Untradeable" if bool(item.get("is_untrade", false)) or not bool(template.get("is_tradeable", true)) else "Tradeable"
-	box.add_child(label(trade_text, 13, Color("e49a55"), HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(label(trade_text, 13, M3.GOLD, HORIZONTAL_ALIGNMENT_CENTER))
 	box.add_child(HSeparator.new())
 
 	var overview := HBoxContainer.new()
@@ -30,14 +30,14 @@ static func fill_equipment(box: VBoxContainer, item: Dictionary, equipped_items:
 	var summary := VBoxContainer.new()
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	summary.alignment = BoxContainer.ALIGNMENT_CENTER
-	summary.add_child(label(header, 17, Color("d7dee7"), HORIZONTAL_ALIGNMENT_RIGHT))
-	summary.add_child(label(str(template.get("item_type", "equipment")).replace("_", " ").capitalize(), 14, Color("aebbc9"), HORIZONTAL_ALIGNMENT_RIGHT))
-	summary.add_child(label("Required Level  %d" % int(template.get("minimum_level", 1)), 14, Color("eef2f6"), HORIZONTAL_ALIGNMENT_RIGHT))
+	summary.add_child(label(header, 17, M3.ON_SURFACE, HORIZONTAL_ALIGNMENT_RIGHT))
+	summary.add_child(label(str(template.get("item_type", "equipment")).replace("_", " ").capitalize(), 14, M3.ON_SURFACE_VARIANT, HORIZONTAL_ALIGNMENT_RIGHT))
+	summary.add_child(label("Required Level  %d" % int(template.get("minimum_level", 1)), 14, M3.ON_SURFACE, HORIZONTAL_ALIGNMENT_RIGHT))
 	overview.add_child(summary)
 
 	_add_set_effect_section(box, template, item, equipped_items)
 	box.add_child(HSeparator.new())
-	box.add_child(label("STAT BOOSTS", 13, Color("b8c2cc")))
+	box.add_child(label("STAT BOOSTS", 13, M3.ON_SURFACE_VARIANT))
 	var stats := RichTextLabel.new()
 	stats.bbcode_enabled = true
 	stats.fit_content = true
@@ -59,14 +59,14 @@ static func fill_simple(box: VBoxContainer, item: Dictionary, hint: String) -> v
 	var summary := VBoxContainer.new()
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	summary.alignment = BoxContainer.ALIGNMENT_CENTER
-	summary.add_child(label(str(template.get("name", "Unknown Item")), 18, Color("f5f7fb")))
-	summary.add_child(label("%s  •  ×%d" % [str(template.get("item_type", "etc")).replace("_", " ").capitalize(), int(item.get("quantity", 1))], 13, Color("aebbc9")))
+	summary.add_child(label(str(template.get("name", "Unknown Item")), 18, M3.ON_SURFACE))
+	summary.add_child(label("%s  •  ×%d" % [str(template.get("item_type", "etc")).replace("_", " ").capitalize(), int(item.get("quantity", 1))], 13, M3.ON_SURFACE_VARIANT))
 	overview.add_child(summary)
 	var description := str(template.get("description", ""))
 	box.add_child(HSeparator.new())
-	box.add_child(label(description if not description.is_empty() else "No description.", 14, Color("d7dee7")))
+	box.add_child(label(description if not description.is_empty() else "No description.", 14, M3.ON_SURFACE))
 	if not hint.is_empty():
-		box.add_child(label(hint, 12, Color("66c9f5")))
+		box.add_child(label(hint, 12, M3.PRIMARY))
 
 
 ## Stat totals of one item by stat key (base + Lumen + flat Aurora + other).
@@ -105,12 +105,12 @@ static func stat_changes(candidate: Dictionary, current: Dictionary) -> Array:
 
 static func stat_changes_bbcode(changes: Array) -> String:
 	if changes.is_empty():
-		return "[color=#8e9aa7]No stat change[/color]"
+		return "[color=#%s]No stat change[/color]" % M3.ON_SURFACE_VARIANT.to_html(false)
 	var lines := PackedStringArray()
 	for change in changes:
 		var color := UP_COLOR if float(change[1]) > 0.0 else DOWN_COLOR
 		var suffix := "%" if change[0] == "DROP RATE" else ""
-		lines.append("[color=#edf2f7]%s[/color]  [color=#%s]%s%s[/color]" % [change[0], color.to_html(false), signed_number(float(change[1])), suffix])
+		lines.append("[color=#%s]%s[/color]  [color=#%s]%s%s[/color]" % [M3.ON_SURFACE.to_html(false), change[0], color.to_html(false), signed_number(float(change[1])), suffix])
 	return "\n".join(lines)
 
 
@@ -136,22 +136,22 @@ static func stat_bbcode(template: Dictionary, item: Dictionary) -> String:
 		var components := PackedStringArray()
 		var has_non_base_component := not is_zero_approx(lumen_value) or not is_zero_approx(aurora_value) or not is_zero_approx(future_value)
 		if has_non_base_component:
-			components.append("[color=#ffffff]%s[/color]" % plain_number(base_value))
+			components.append(_colored(plain_number(base_value), M3.ON_SURFACE))
 		if not is_zero_approx(lumen_value):
-			components.append("[color=#63d7ef]%s[/color]" % plain_number(lumen_value))
+			components.append(_colored(plain_number(lumen_value), M3.PRIMARY))
 		if not is_zero_approx(aurora_value):
-			components.append("[color=#c48cff]%s[/color]" % plain_number(aurora_value))
+			components.append(_colored(plain_number(aurora_value), M3.EPIC))
 		if not is_zero_approx(future_value):
-			components.append("[color=#73dda1]%s[/color]" % plain_number(future_value))
-		var stat_text := "[color=#edf2f7]%s:[/color]  [color=#59c9f5]%s[/color]" % [stat_name, plain_number(total)]
+			components.append(_colored(plain_number(future_value), M3.SUCCESS))
+		var stat_text := "%s  %s" % [_colored(stat_name + ":", M3.ON_SURFACE_VARIANT), _colored(plain_number(total), M3.ON_SURFACE)]
 		if has_non_base_component:
 			stat_text += "  (%s)" % " + ".join(components)
 		output.append(stat_text)
 	var drop_rate := float(template.get("drop_rate_boost", 0.0))
 	if not is_zero_approx(drop_rate):
-		output.append("[color=#edf2f7]DROP RATE:[/color]  [color=#59c9f5]%s%%[/color]  ([color=#ffffff]%s%%[/color])" % [plain_number(drop_rate), plain_number(drop_rate)])
+		output.append("%s  %s" % [_colored("DROP RATE:", M3.ON_SURFACE_VARIANT), _colored(plain_number(drop_rate) + "%", M3.ON_SURFACE)])
 	if output.is_empty():
-		return "[color=#8e9aa7]No direct stat boosts[/color]"
+		return _colored("No direct stat boosts", M3.ON_SURFACE_VARIANT)
 	return "\n".join(output)
 
 
@@ -194,6 +194,10 @@ static func label(text: String, font_size: int, color: Color, alignment := HORIZ
 	return result
 
 
+static func _colored(text: String, color: Color) -> String:
+	return "[color=#%s]%s[/color]" % [color.to_html(false), text]
+
+
 static func signed_number(value: float) -> String:
 	if is_equal_approx(value, round(value)):
 		return "%+d" % int(value)
@@ -209,13 +213,7 @@ static func plain_number(value: float) -> String:
 static func _icon_panel(template: Dictionary, size: int) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(size, size)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("56616d")
-	style.border_color = Color("8a96a2")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(5)
-	style.set_content_margin_all(7)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", M3.box(M3.SURFACE_CONTAINER_HIGHEST, M3.CORNER_MEDIUM, 7.0))
 	var icon := TextureRect.new()
 	icon.texture = ItemIcons.for_template(template)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -233,13 +231,13 @@ static func _add_set_effect_section(box: VBoxContainer, template: Dictionary, it
 	if visible_sets.is_empty():
 		return
 	box.add_child(HSeparator.new())
-	box.add_child(label("SET EFFECT", 12, Color("9ca8b4")))
+	box.add_child(label("SET EFFECT", 12, M3.ON_SURFACE_VARIANT))
 	for set_data in visible_sets:
 		var active_count := equipped_set_piece_count(set_data, equipped_items)
 		var members: Variant = set_data.get("items", [])
 		var member_count: int = members.size() if members is Array else 0
 		var count_text := "  %d/%d" % [active_count, member_count] if member_count > 0 else ""
-		box.add_child(label(str(set_data.get("name", "Equipment Set")) + count_text, 13, Color("e0c66d")))
+		box.add_child(label(str(set_data.get("name", "Equipment Set")) + count_text, 13, M3.GOLD))
 		var effects: Variant = set_data.get("effects", [])
 		if not effects is Array:
 			continue
@@ -251,7 +249,7 @@ static func _add_set_effect_section(box: VBoxContainer, template: Dictionary, it
 			box.add_child(label(
 				"%s  %d SET  %s" % ["●" if is_active else "○", required_count, set_effect_stats_text(effect)],
 				12,
-				UP_COLOR if is_active else Color("7d8995")
+				UP_COLOR if is_active else M3.ON_SURFACE_VARIANT
 			))
 
 
@@ -277,7 +275,7 @@ static func _add_lumen_summary(box: VBoxContainer, item: Dictionary) -> void:
 	if lumen_breakdown is Dictionary and lumen_breakdown.get("tier") is Dictionary:
 		max_level = int(lumen_breakdown.tier.get("max_level", 0))
 	var level_text := "%d/%d" % [lumen_level, max_level] if max_level > 0 else str(lumen_level)
-	box.add_child(label("Lumen Ascend %s" % level_text, 14, Color("63d7ef"), HORIZONTAL_ALIGNMENT_CENTER))
+	box.add_child(label("Lumen Ascend %s" % level_text, 14, M3.PRIMARY, HORIZONTAL_ALIGNMENT_CENTER))
 
 
 static func _aurora_flat_stats(item: Dictionary) -> Dictionary:
@@ -290,12 +288,12 @@ static func _aurora_flat_stats(item: Dictionary) -> Dictionary:
 
 
 static func _add_aurora_section(box: VBoxContainer, item: Dictionary) -> void:
-	box.add_child(label("AURORA  +%d" % int(item.get("aurora_level", 0)), 14, Color("c48cff")))
+	box.add_child(label("AURORA  +%d" % int(item.get("aurora_level", 0)), 14, M3.EPIC))
 	var lines: Variant = item.get("aurora_lines", [])
 	if not lines is Array or lines.is_empty():
-		box.add_child(label("No Aurora lines", 12, Color("8e9aa7")))
+		box.add_child(label("No Aurora lines", 12, M3.ON_SURFACE_VARIANT))
 		return
 	for line in lines:
 		if line is Dictionary:
 			var suffix := "%" if str(line.get("line_type", "flat")) == "percent" else ""
-			box.add_child(label("◆  %s  +%s%s" % [str(line.get("stat_type", "")).replace("_", " ").to_upper(), plain_number(float(line.get("value", 0))), suffix], 13, Color("d9a7ff")))
+			box.add_child(label("◆  %s  +%s%s" % [str(line.get("stat_type", "")).replace("_", " ").to_upper(), plain_number(float(line.get("value", 0))), suffix], 13, M3.EPIC))

@@ -6,12 +6,12 @@ extends RefCounted
 ## "battle_result") and turns them into log lines, floating numbers and the
 ## battle outcome.
 
-const COLOR_PLAYER := Color("8fd3ff")
-const COLOR_ENEMY := Color("ff9a8f")
-const COLOR_INFO := Color("c8d4e3")
-const COLOR_WARNING := Color("f2c46d")
-const COLOR_VICTORY := Color("73e2a7")
-const COLOR_DEFEAT := Color("ff7b72")
+const COLOR_PLAYER := M3.PRIMARY
+const COLOR_ENEMY := M3.ERROR
+const COLOR_INFO := M3.ON_SURFACE_VARIANT
+const COLOR_WARNING := M3.GOLD
+const COLOR_VICTORY := M3.SUCCESS
+const COLOR_DEFEAT := M3.ERROR
 
 
 ## [{"text": String, "color": Color}] for the combat log.

@@ -80,39 +80,49 @@ const SLOT_ID_TO_TYPE := {
 
 
 func _ready() -> void:
+	# In the hub the header already shows the character, so the portrait goes.
+	HubEmbed.adapt(self, [back_button, %Portrait], $Margin)
 	_setup_item_tooltip()
 	back_button.pressed.connect(_on_back_pressed)
-	refresh_button.pressed.connect(_load_profile)
+	refresh_button.pressed.connect(func():
+		GameCache.clear_all()
+		_load_profile()
+	)
 	skill_list.item_selected.connect(_on_skill_selected)
 	if not SceneRouter.require_session():
 		return
 	await _load_profile()
 
 
+## Called by the hub each time this page is shown again.
+func reload_page() -> void:
+	await _load_profile()
+
+
 func _load_profile() -> void:
 	_set_loading(true, "Loading character profile...")
-	var profile_response: Dictionary = await ApiClient.get_json("users/profile/")
+	var profile_response: Dictionary = await GameCache.get_json("users/profile/")
 	if not _accept_response(profile_response):
 		return
 	_profile = profile_response.get("data", {})
 
-	var character_response: Dictionary = await ApiClient.get_json("characters/my/")
+	var character_response: Dictionary = await GameCache.get_json("characters/my/")
 	if not _accept_response(character_response):
 		return
 	_character = character_response.get("data", {})
 	SessionStore.character = _character
 
-	var classes_response: Dictionary = await ApiClient.get_all("classes/")
+	var classes_response: Dictionary = await GameCache.get_all("classes/")
 	if not _accept_response(classes_response):
 		return
 	_classes = ApiClient.unwrap_list(classes_response.get("data", []))
 
-	var jobs_response: Dictionary = await ApiClient.get_all("classes/jobs/")
+	var jobs_response: Dictionary = await GameCache.get_all("classes/jobs/")
 	if not _accept_response(jobs_response):
 		return
 	_jobs = ApiClient.unwrap_list(jobs_response.get("data", []))
 
-	var equipment_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
+	var equipment_response: Dictionary = await GameCache.get_all("inventory/equipped/")
 	if not _accept_response(equipment_response):
 		return
 	_equipped_items = ApiClient.unwrap_list(equipment_response.get("data", []))
@@ -191,12 +201,7 @@ func _create_slot_button(slot: Dictionary, size: Vector2) -> Control:
 	panel.custom_minimum_size = size
 	panel.tooltip_text = "%s — Empty" % slot.name
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("111a29")
-	style.border_color = Color("34465e")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(5)
-	style.set_content_margin_all(4)
+	var style := M3.box(M3.SURFACE_CONTAINER_LOWEST, M3.CORNER_MEDIUM, 4.0, M3.OUTLINE_VARIANT)
 	panel.add_theme_stylebox_override("panel", style)
 
 	var center := CenterContainer.new()
@@ -206,7 +211,7 @@ func _create_slot_button(slot: Dictionary, size: Vector2) -> Control:
 	empty_label.text = str(slot.short)
 	empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	empty_label.add_theme_color_override("font_color", Color("607089"))
+	empty_label.add_theme_color_override("font_color", M3.ON_SURFACE_VARIANT)
 	empty_label.add_theme_font_size_override("font_size", 11)
 	empty_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(empty_label)
@@ -228,7 +233,8 @@ func _create_slot_button(slot: Dictionary, size: Vector2) -> Control:
 		texture_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		center.add_child(texture_rect)
-		style.border_color = Color("53d985")
+		style.bg_color = M3.SECONDARY_CONTAINER
+		style.border_color = M3.PRIMARY
 		style.set_border_width_all(2)
 	panel.tooltip_text = ""
 	panel.mouse_entered.connect(_show_item_tooltip.bind(equipped, panel))
@@ -240,11 +246,9 @@ func _setup_item_tooltip() -> void:
 	_item_tooltip = PopupPanel.new()
 	_item_tooltip.name = "EquipmentTooltip"
 	_item_tooltip.unresizable = true
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("26313d")
-	style.border_color = Color("536272")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(7)
+	var style := M3.box(M3.SURFACE_CONTAINER, M3.CORNER_MEDIUM, 0.0)
+	style.shadow_color = M3.with_alpha(Color.BLACK, 0.2)
+	style.shadow_size = 8
 	_item_tooltip.add_theme_stylebox_override("panel", style)
 	add_child(_item_tooltip)
 
@@ -349,7 +353,7 @@ func _lookup_name(items: Array, target_id: Variant) -> String:
 	if target_id == null:
 		return "Unassigned"
 	for item in items:
-		if ApiClient.id_string(item.get("id")) == str(target_id):
+		if ApiClient.id_string(item.get("id")) == ApiClient.id_string(target_id):
 			return str(item.get("name", "Unknown"))
 	return "Unknown"
 
@@ -367,4 +371,4 @@ func _set_loading(is_loading: bool, message: String) -> void:
 
 
 func _on_back_pressed() -> void:
-	SceneRouter.go_to(SceneRouter.LAUNCHER)
+	SceneRouter.go_to(SceneRouter.HUB)

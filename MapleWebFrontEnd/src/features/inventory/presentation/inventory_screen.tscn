@@ -1,18 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://src/features/inventory/presentation/inventory_screen.gd" id="1_script"]
-
-[sub_resource type="StyleBoxFlat" id="StyleIcon"]
-bg_color = Color(0.04, 0.065, 0.105, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.2, 0.32, 0.46, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
 
 [node name="InventoryScreen" type="Control"]
 layout_mode = 3
@@ -22,15 +10,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
-
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.025, 0.045, 0.075, 1)
 
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -59,7 +38,6 @@ text = "← ADVENTURE BOARD"
 
 [node name="Title" type="Label" parent="Margin/Root/Header"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.97, 1, 1)
 theme_override_font_sizes/font_size = 28
 text = "INVENTORY"
 
@@ -70,7 +48,7 @@ size_flags_horizontal = 3
 [node name="ItemCount" type="Label" parent="Margin/Root/Header"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.75, 0.85, 1)
+theme_type_variation = &"MutedLabel"
 text = "0 ITEMS"
 vertical_alignment = 1
 
@@ -101,8 +79,8 @@ layout_mode = 2
 
 [node name="Hint" type="Label" parent="Margin/Root/Toolbar"]
 layout_mode = 2
+theme_type_variation = &"MutedLabel"
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.48, 0.6, 0.73, 1)
 text = "Select an item to view its details"
 horizontal_alignment = 2
 vertical_alignment = 1
@@ -122,7 +100,7 @@ theme_override_constants/separation = 12
 
 [node name="SectionTitle" type="Label" parent="Margin/Root/Content/InventoryPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 16
 text = "ITEM SLOTS"
 
@@ -143,8 +121,8 @@ columns = 6
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_type_variation = &"MutedLabel"
 size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.55, 0.65, 0.76, 1)
 text = "No items match this filter."
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -159,13 +137,13 @@ theme_override_constants/separation = 10
 
 [node name="SectionTitle" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 text = "ITEM DETAILS"
 
 [node name="DetailName" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.34, 1)
+theme_type_variation = &"GoldLabel"
 theme_override_font_sizes/font_size = 23
 text = "Select an item"
 autowrap_mode = 2
@@ -173,13 +151,14 @@ autowrap_mode = 2
 [node name="DetailType" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.62, 0.73, 0.86, 1)
+theme_type_variation = &"MutedLabel"
 text = "—"
 
 [node name="IconPanel" type="PanelContainer" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 205)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleIcon")
+theme_type_variation = &"IconPanel"
 
 [node name="DetailIcon" type="TextureRect" parent="Margin/Root/Content/DetailsPanel/DetailBox/IconPanel"]
 unique_name_in_owner = true
@@ -191,21 +170,20 @@ stretch_mode = 5
 [node name="DetailState" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.43, 0.88, 0.66, 1)
+theme_type_variation = &"SuccessLabel"
 text = ""
 
 [node name="DetailStats" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.82, 0.87, 0.93, 1)
 text = "Choose an inventory slot to inspect its stats."
 autowrap_mode = 2
 
 [node name="DetailDescription" type="Label" parent="Margin/Root/Content/DetailsPanel/DetailBox"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"MutedLabel"
 size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.62, 0.7, 0.8, 1)
 text = ""
 autowrap_mode = 2
 
@@ -221,5 +199,5 @@ text = "SELECT AN ITEM"
 [node name="StatusLabel" type="Label" parent="Margin/Root"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.48, 0.76, 0.9, 1)
+theme_type_variation = &"MutedLabel"
 text = "Loading inventory..."

@@ -11,15 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.025, 0.045, 0.075, 1)
-
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -52,7 +43,7 @@ text = "CREATE YOUR CHARACTER"
 
 [node name="Subtitle" type="Label" parent="Margin/Root/Header/Titles"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 text = "Pick a job and a name. Jobs cannot be changed later, so choose carefully."
 
 [node name="RetryButton" type="Button" parent="Margin/Root/Header"]
@@ -83,7 +74,7 @@ theme_override_constants/separation = 12
 
 [node name="SectionTitle" type="Label" parent="Margin/Root/Content/JobPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 text = "CHOOSE YOUR JOB"
 
 [node name="Scroll" type="ScrollContainer" parent="Margin/Root/Content/JobPanel/Box"]
@@ -108,27 +99,26 @@ theme_override_constants/separation = 8
 [node name="JobName" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_type_variation = &"GoldLabel"
 theme_override_font_sizes/font_size = 28
 text = "Choose a job"
 
 [node name="ClassLine" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 text = "—"
 
 [node name="JobStats" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.84, 0.89, 0.95, 1)
 
 [node name="SkillsSeparator" type="HSeparator" parent="Margin/Root/Content/DetailPanel/Box"]
 layout_mode = 2
 
 [node name="SkillsTitle" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "JOB SKILLS"
 
@@ -141,7 +131,6 @@ horizontal_scroll_mode = 0
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.84, 0.89, 0.95, 1)
 autowrap_mode = 3
 
 [node name="NameSeparator" type="HSeparator" parent="Margin/Root/Content/DetailPanel/Box"]
@@ -149,7 +138,7 @@ layout_mode = 2
 
 [node name="NameTitle" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "CHARACTER NAME"
 
@@ -170,7 +159,7 @@ clear_button_enabled = true
 unique_name_in_owner = true
 custom_minimum_size = Vector2(64, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 text = "0 / 12"
 horizontal_alignment = 2
 
@@ -184,7 +173,7 @@ autowrap_mode = 3
 [node name="FormError" type="Label" parent="Margin/Root/Content/DetailPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+theme_type_variation = &"ErrorLabel"
 autowrap_mode = 3
 
 [node name="CreateButton" type="Button" parent="Margin/Root/Content/DetailPanel/Box"]
@@ -198,5 +187,5 @@ text = "CREATE CHARACTER"
 [node name="StatusLabel" type="Label" parent="Margin/Root"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 text = "Loading..."

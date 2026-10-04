@@ -9,6 +9,7 @@ var active_battle_id: String = ""
 
 func begin_session(login_name: String, access: String, refresh: String) -> void:
 	username = login_name
+	GameCache.clear_player()
 	ApiClient.set_tokens(access, refresh)
 
 
@@ -17,6 +18,7 @@ func clear_session() -> void:
 	username = ""
 	character = {}
 	active_battle_id = ""
+	GameCache.clear_player()
 	ApiClient.clear_tokens()
 
 

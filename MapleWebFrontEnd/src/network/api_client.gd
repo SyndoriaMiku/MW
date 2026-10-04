@@ -5,6 +5,9 @@ extends Node
 ## session_expired is emitted when the session cannot be recovered.
 
 signal session_expired
+## A POST got an answer from the server (whatever its status): the data it
+## touches may have changed. GameCache drops what it cached for it.
+signal posted(path: String, response: Dictionary)
 signal _refresh_finished(success: bool)
 
 const DEFAULT_BASE_URL := "https://maplewebbackend.onrender.com/api"
@@ -44,6 +47,10 @@ func server_host() -> String:
 ## a sleeping server before the player submits a form.
 func ping() -> bool:
 	var response := await _send(PING_PATH, HTTPClient.METHOD_GET, {}, "")
+	var data: Variant = response.get("data")
+	# The class list is reference data the game needs later; keep it.
+	if response.get("ok", false) and data is Dictionary and data.get("next") == null:
+		GameCache.store(PING_PATH, unwrap_list(data), true)
 	return response.get("ok", false)
 
 
@@ -74,7 +81,10 @@ func get_json(path: String) -> Dictionary:
 
 
 func post_json(path: String, payload: Dictionary = {}) -> Dictionary:
-	return await _request_json(path, HTTPClient.METHOD_POST, payload)
+	var response := await _request_json(path, HTTPClient.METHOD_POST, payload)
+	if int(response.get("status", 0)) != 0:
+		posted.emit(path, response)
+	return response
 
 
 ## Every page of a paginated DRF list endpoint (PAGE_SIZE is 20 on the

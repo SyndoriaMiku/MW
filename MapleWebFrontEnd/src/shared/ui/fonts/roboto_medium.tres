@@ -1,0 +1,10 @@
+[gd_resource type="FontVariation" format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-latin-400.woff2" id="1_wseh4"]
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-latin-ext-400.woff2" id="2_77nks"]
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-vietnamese-400.woff2" id="3_tnxvl"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_77nks"), ExtResource("3_tnxvl")])
+base_font = ExtResource("1_wseh4")
+variation_embolden = 0.45

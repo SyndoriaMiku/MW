@@ -21,13 +21,12 @@ func _init(inventory_item: Dictionary, is_selected: bool, is_equipped: bool) -> 
 	custom_minimum_size = Vector2(112, 132)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("101a29")
-	style.border_color = Color("53d985") if is_selected else (Color("42a7d6") if is_equipped else Color("2d435e"))
-	style.set_border_width_all(2 if is_selected or is_equipped else 1)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(7)
+	var style := M3.box(M3.SECONDARY_CONTAINER if is_selected else M3.SURFACE_CONTAINER_LOWEST, M3.CORNER_MEDIUM, 7.0)
+	if is_selected or is_equipped:
+		style.border_color = M3.PRIMARY if is_selected else M3.OUTLINE_VARIANT
+		style.set_border_width_all(2)
 	add_theme_stylebox_override("panel", style)
+	UiFeedback.attach(self, M3.ON_SURFACE)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
@@ -53,7 +52,7 @@ func _init(inventory_item: Dictionary, is_selected: bool, is_equipped: bool) -> 
 		placeholder.text = _initials(str(template.get("name", "?")))
 		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		placeholder.add_theme_color_override("font_color", Color("607089"))
+		placeholder.add_theme_color_override("font_color", M3.ON_SURFACE_VARIANT)
 		placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_host.add_child(placeholder)
 
@@ -68,7 +67,7 @@ func _init(inventory_item: Dictionary, is_selected: bool, is_equipped: bool) -> 
 	meta_label.text = "EQUIPPED" if is_equipped else "x%d" % int(item.get("quantity", 1))
 	meta_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	meta_label.add_theme_font_size_override("font_size", 10)
-	meta_label.add_theme_color_override("font_color", Color("53d985") if is_equipped else Color("8295aa"))
+	meta_label.add_theme_color_override("font_color", M3.PRIMARY if is_equipped else M3.ON_SURFACE_VARIANT)
 	meta_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(meta_label)
 

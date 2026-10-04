@@ -37,9 +37,15 @@ var _tooltip := ItemHoverTooltip.new()
 
 
 func _ready() -> void:
+	HubEmbed.adapt(self, [back_button], $Margin)
+	if HubEmbed.is_embedded(self):
+		%IconPanel.custom_minimum_size.y = 120
 	add_child(_tooltip)
 	back_button.pressed.connect(_on_back_pressed)
-	refresh_button.pressed.connect(_load_inventory)
+	refresh_button.pressed.connect(func():
+		GameCache.clear_all()
+		_load_inventory()
+	)
 	enhancement_button.pressed.connect(_on_enhancement_pressed)
 	search_input.text_changed.connect(_on_filter_changed)
 	category_filter.item_selected.connect(_on_category_changed)
@@ -48,6 +54,11 @@ func _ready() -> void:
 	if not SceneRouter.require_session():
 		return
 	await _load_slot_capacity()
+	await _load_inventory()
+
+
+## Called by the hub each time this page is shown again.
+func reload_page() -> void:
 	await _load_inventory()
 
 
@@ -64,7 +75,7 @@ func _setup_categories() -> void:
 
 ## How many of each item type can be worn at once, from the backend's slots.
 func _load_slot_capacity() -> void:
-	var response: Dictionary = await ApiClient.get_all("inventory/slots/")
+	var response: Dictionary = await GameCache.get_all("inventory/slots/")
 	if not response.get("ok", false):
 		return
 	var capacity := {}
@@ -80,10 +91,10 @@ func _load_inventory() -> void:
 		return
 	_set_loading(true, "Loading inventory...")
 	var selected_id := ApiClient.id_string(_selected_item.get("id"))
-	var inventory_response: Dictionary = await ApiClient.get_all("inventory/")
+	var inventory_response: Dictionary = await GameCache.get_all("inventory/")
 	if not _accept_response(inventory_response):
 		return
-	var equipped_response: Dictionary = await ApiClient.get_all("inventory/equipped/")
+	var equipped_response: Dictionary = await GameCache.get_all("inventory/equipped/")
 	if not _accept_response(equipped_response):
 		return
 	_items = inventory_response.data
@@ -405,7 +416,7 @@ func _set_loading(is_loading: bool, message: String) -> void:
 
 
 func _on_back_pressed() -> void:
-	SceneRouter.go_to(SceneRouter.LAUNCHER)
+	SceneRouter.go_to(SceneRouter.HUB)
 
 
 func _on_enhancement_pressed() -> void:

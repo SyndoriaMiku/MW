@@ -11,15 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.025, 0.045, 0.075, 1)
-
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -57,8 +48,8 @@ size_flags_horizontal = 3
 [node name="CurrencyLabel" type="Label" parent="Margin/Root/Header"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"GoldLabel"
 size_flags_vertical = 4
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
 text = "LUMIS  —"
 
 [node name="RefreshButton" type="Button" parent="Margin/Root/Header"]
@@ -82,7 +73,7 @@ theme_override_constants/separation = 8
 
 [node name="CategoryTitle" type="Label" parent="Margin/Root/Content/CategoryPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "CATEGORIES"
 
@@ -105,6 +96,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 toggle_mode = true
+theme_type_variation = &"ListItemButton"
 tooltip_text = "Buy back items you sold by mistake."
 text = "↺  BUY BACK"
 
@@ -120,14 +112,14 @@ theme_override_constants/separation = 8
 [node name="ShopTitle" type="Label" parent="Margin/Root/Content/ShopPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 15
 text = "—"
 
 [node name="ShopHint" type="Label" parent="Margin/Root/Content/ShopPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 theme_override_font_sizes/font_size = 12
 text = "Double-click an item to buy it."
 
@@ -148,7 +140,7 @@ columns = 4
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 text = "Nothing here."
 horizontal_alignment = 1
 
@@ -184,13 +176,13 @@ theme_override_constants/separation = 8
 [node name="BagTitle" type="Label" parent="Margin/Root/Content/BagPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 15
 text = "YOUR BAG"
 
 [node name="BagHint" type="Label" parent="Margin/Root/Content/BagPanel/Box"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 theme_override_font_sizes/font_size = 12
 text = "Double-click an item to sell it."
 
@@ -209,7 +201,7 @@ theme_override_constants/separation = 6
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.56, 0.64, 1)
+theme_type_variation = &"MutedLabel"
 text = "Your bag is empty."
 horizontal_alignment = 1
 
@@ -222,7 +214,7 @@ text = "SELL SELECTED"
 [node name="StatusLabel" type="Label" parent="Margin/Root"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 text = "Loading the shop..."
 text_overrun_behavior = 3
 
@@ -278,6 +270,6 @@ text = "MAX"
 [node name="DialogTotal" type="Label" parent="TradeDialog/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
+theme_type_variation = &"GoldLabel"
 theme_override_font_sizes/font_size = 16
 text = "-"

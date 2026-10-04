@@ -19,7 +19,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.01, 0.02, 0.04, 0.85)
+color = Color(0, 0, 0, 0.32)
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -32,6 +32,7 @@ grow_vertical = 2
 [node name="Card" type="PanelContainer" parent="Center"]
 custom_minimum_size = Vector2(780, 0)
 layout_mode = 2
+theme_type_variation = &"DialogPanel"
 
 [node name="Box" type="VBoxContainer" parent="Center/Card"]
 layout_mode = 2
@@ -47,7 +48,7 @@ horizontal_alignment = 1
 [node name="ChoiceSubtitle" type="Label" parent="Center/Card/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.66, 0.74, 1)
+theme_type_variation = &"MutedLabel"
 text = "-"
 horizontal_alignment = 1
 
@@ -55,7 +56,7 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(700, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.96, 0.77, 0.32, 1)
+theme_type_variation = &"GoldLabel"
 text = "-"
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -76,7 +77,7 @@ theme_override_constants/separation = 8
 [node name="CurrentTitle" type="Label" parent="Center/Card/Box/Columns/CurrentPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.39, 0.78, 0.98, 1)
+theme_type_variation = &"AccentLabel"
 theme_override_font_sizes/font_size = 13
 text = "CURRENT"
 
@@ -97,7 +98,7 @@ theme_override_constants/separation = 8
 [node name="NewTitle" type="Label" parent="Center/Card/Box/Columns/NewPanel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.45, 0.89, 0.65, 1)
+theme_type_variation = &"SuccessLabel"
 theme_override_font_sizes/font_size = 13
 text = "NEW"
 
@@ -110,7 +111,7 @@ theme_override_constants/v_separation = 6
 [node name="ChoiceError" type="Label" parent="Center/Card/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.48, 0.45, 1)
+theme_type_variation = &"ErrorLabel"
 horizontal_alignment = 1
 autowrap_mode = 3
 

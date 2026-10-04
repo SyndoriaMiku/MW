@@ -10,9 +10,9 @@ extends Control
 @onready var retry_server_button: Button = %RetryServerButton
 @onready var settings_button: Button = %SettingsButton
 
-const SERVER_OK_COLOR := Color(0.45, 0.85, 0.6)
-const SERVER_WAIT_COLOR := Color(0.95, 0.77, 0.36)
-const SERVER_DOWN_COLOR := Color(1, 0.48, 0.45)
+const SERVER_OK_COLOR := M3.SUCCESS
+const SERVER_WAIT_COLOR := M3.GOLD
+const SERVER_DOWN_COLOR := M3.ERROR
 ## After this long without an answer the server is probably waking up.
 const WAKE_HINT_DELAY := 4.0
 
@@ -92,7 +92,7 @@ func _on_login_pressed() -> void:
 		return
 
 	SessionStore.begin_session(username, access, refresh)
-	SceneRouter.go_to(SceneRouter.LAUNCHER)
+	SceneRouter.go_to(SceneRouter.HUB)
 
 
 func _set_loading(is_loading: bool) -> void:

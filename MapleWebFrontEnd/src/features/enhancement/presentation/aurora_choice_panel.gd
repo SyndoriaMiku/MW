@@ -12,8 +12,8 @@ extends Control
 signal decided(action: String, selected_temp_ids: Array)
 
 const TRIPLE_CHOICE := "REROLL_TRIPLE_CHOICE"
-const NEW_COLOR := Color("73e2a7")
-const TIER_UP_COLOR := Color("f5c451")
+const NEW_COLOR := M3.SUCCESS
+const TIER_UP_COLOR := M3.GOLD
 
 @onready var title_label: Label = %ChoiceTitle
 @onready var subtitle_label: Label = %ChoiceSubtitle
@@ -62,7 +62,7 @@ func show_roll(item: Dictionary) -> void:
 	var tier_up := must_take_new()
 
 	title_label.text = "AURORA TIER UP!" if tier_up else "CHOOSE YOUR AURORA LINES"
-	title_label.add_theme_color_override("font_color", TIER_UP_COLOR if tier_up else Color("f5f7fb"))
+	title_label.add_theme_color_override("font_color", TIER_UP_COLOR if tier_up else M3.ON_SURFACE)
 	subtitle_label.text = "%s  •  Aurora %d%s" % [str(template.get("name", "Item")), current_level, "  →  %d" % new_level if new_level != current_level else ""]
 	if tier_up:
 		notice_label.text = "The higher Aurora level only comes with the new lines, so they must be taken."
@@ -72,7 +72,7 @@ func show_roll(item: Dictionary) -> void:
 		notice_label.text = "Keep the current lines or take the new ones. You must decide before doing anything else."
 
 	current_title.text = "CURRENT  •  AURORA %d" % current_level
-	_fill_lines(current_lines, item.get("aurora_lines", []), Color("d7dee7"))
+	_fill_lines(current_lines, item.get("aurora_lines", []), M3.ON_SURFACE)
 	for child in new_lines.get_children():
 		new_lines.remove_child(child)
 		child.queue_free()
@@ -172,6 +172,7 @@ func _decide(action: String) -> void:
 func _choice_button(choice: Dictionary) -> Button:
 	var button := Button.new()
 	button.toggle_mode = true
+	button.theme_type_variation = &"ChipButton"
 	button.custom_minimum_size = Vector2(150, 40)
 	button.text = line_text(choice)
 	button.add_theme_font_size_override("font_size", 13)
@@ -185,7 +186,7 @@ func _fill_lines(container: VBoxContainer, lines: Array, color: Color) -> void:
 		container.remove_child(child)
 		child.queue_free()
 	if lines.is_empty():
-		container.add_child(_line_label("No lines", Color("7f8d9d")))
+		container.add_child(_line_label("No lines", M3.ON_SURFACE_VARIANT))
 	for line in lines:
 		if line is Dictionary:
 			container.add_child(_line_label(line_text(line), color))

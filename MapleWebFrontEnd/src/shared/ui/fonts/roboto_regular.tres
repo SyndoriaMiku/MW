@@ -1,0 +1,9 @@
+[gd_resource type="FontVariation" format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-latin-400.woff2" id="1_fc0g3"]
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-latin-ext-400.woff2" id="2_qujjj"]
+[ext_resource type="FontFile" path="res://assets/fonts/roboto-vietnamese-400.woff2" id="3_1iv81"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_qujjj"), ExtResource("3_1iv81")])
+base_font = ExtResource("1_fc0g3")

@@ -7,8 +7,6 @@ extends PanelContainer
 signal selected(card: ShopCard)
 signal activated(card: ShopCard)
 
-const BORDER := Color(0.19, 0.3, 0.44)
-const SELECTED_BORDER := Color("f5c451")
 
 ## The shop item, inventory item or sold item this card shows.
 var data: Dictionary = {}
@@ -20,13 +18,10 @@ func _init(icon: Texture2D, title: String, lines: PackedStringArray, compact: bo
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	custom_minimum_size = Vector2(0, 54) if compact else Vector2(156, 176)
-	_style.bg_color = Color(0.063, 0.1, 0.16)
-	_style.border_color = BORDER
-	_style.set_border_width_all(1)
-	_style.set_corner_radius_all(8)
-	_style.set_content_margin_all(6)
+	_style = M3.box(M3.SURFACE_CONTAINER_LOWEST, M3.CORNER_MEDIUM, 8.0)
 	add_theme_stylebox_override("panel", _style)
-	modulate = Color(1, 1, 1, 0.5) if dimmed else Color.WHITE
+	modulate.a = 0.5 if dimmed else 1.0
+	UiFeedback.attach(self, M3.ON_SURFACE)
 
 	var box: BoxContainer = HBoxContainer.new() if compact else VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8 if compact else 3)
@@ -46,7 +41,7 @@ func _init(icon: Texture2D, title: String, lines: PackedStringArray, compact: bo
 		initials.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		initials.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		initials.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		initials.add_theme_color_override("font_color", Color("607089"))
+		initials.add_theme_color_override("font_color", M3.ON_SURFACE_VARIANT)
 		icon_rect.add_child(initials)
 
 	var text_box := VBoxContainer.new()
@@ -67,13 +62,14 @@ func _init(icon: Texture2D, title: String, lines: PackedStringArray, compact: bo
 		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		line.horizontal_alignment = title_label.horizontal_alignment
 		line.add_theme_font_size_override("font_size", 11)
-		line.add_theme_color_override("font_color", Color("f5c451") if index == 0 else Color("8295aa"))
+		line.add_theme_color_override("font_color", M3.GOLD if index == 0 else M3.ON_SURFACE_VARIANT)
 		text_box.add_child(line)
 
 
 func set_selected(value: bool) -> void:
-	_style.border_color = SELECTED_BORDER if value else BORDER
-	_style.set_border_width_all(2 if value else 1)
+	_style.bg_color = M3.SECONDARY_CONTAINER if value else M3.SURFACE_CONTAINER_LOWEST
+	_style.border_color = M3.PRIMARY
+	_style.set_border_width_all(2 if value else 0)
 
 
 func _gui_input(event: InputEvent) -> void:

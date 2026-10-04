@@ -1,0 +1,187 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/features/hub/presentation/hub_screen.gd" id="1_hub"]
+[ext_resource type="Script" path="res://src/features/hub/presentation/stamina_bar.gd" id="2_stamina"]
+[ext_resource type="Script" path="res://src/features/hub/presentation/nav_bar.gd" id="3_nav"]
+
+[node name="HubScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hub")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="Body" type="MarginContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="Column" type="VBoxContainer" parent="Layout/Body"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Layout/Body/Column"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Avatar" type="PanelContainer" parent="Layout/Body/Column/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="AvatarInitials" type="Label" parent="Layout/Body/Column/Header/Avatar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+theme_override_font_sizes/font_size = 32
+text = "?"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NameBox" type="VBoxContainer" parent="Layout/Body/Column/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="CharacterName" type="Label" parent="Layout/Body/Column/Header/NameBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Character Name"
+text_overrun_behavior = 3
+
+[node name="Meta" type="HBoxContainer" parent="Layout/Body/Column/Header/NameBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CharacterDetails" type="Label" parent="Layout/Body/Column/Header/NameBox/Meta"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Lv. 1"
+
+[node name="Gap" type="Control" parent="Layout/Body/Column/Header/NameBox/Meta"]
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+
+[node name="LumisIcon" type="CenterContainer" parent="Layout/Body/Column/Header/NameBox/Meta"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+tooltip_text = "Lumis"
+
+[node name="LumisLabel" type="Label" parent="Layout/Body/Column/Header/NameBox/Meta"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "0"
+
+[node name="Gap2" type="Control" parent="Layout/Body/Column/Header/NameBox/Meta"]
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+
+[node name="NovaIcon" type="CenterContainer" parent="Layout/Body/Column/Header/NameBox/Meta"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+tooltip_text = "Nova"
+
+[node name="NovaLabel" type="Label" parent="Layout/Body/Column/Header/NameBox/Meta"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "0"
+
+[node name="StaminaBox" type="PanelContainer" parent="Layout/Body/Column/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(600, 80)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="Margin" type="MarginContainer" parent="Layout/Body/Column/Header/StaminaBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 4
+
+[node name="Row" type="HBoxContainer" parent="Layout/Body/Column/Header/StaminaBox/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="StaminaIcon" type="CenterContainer" parent="Layout/Body/Column/Header/StaminaBox/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 44)
+layout_mode = 2
+
+[node name="StaminaLabel" type="Label" parent="Layout/Body/Column/Header/StaminaBox/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Stamina 0/0"
+vertical_alignment = 1
+
+[node name="Track" type="VBoxContainer" parent="Layout/Body/Column/Header/StaminaBox/Margin/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="StaminaBar" type="Control" parent="Layout/Body/Column/Header/StaminaBox/Margin/Row/Track"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 12)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("2_stamina")
+
+[node name="StaminaHint" type="Label" parent="Layout/Body/Column/Header/StaminaBox/Margin/Row/Track"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+theme_override_font_sizes/font_size = 12
+text = "Full"
+horizontal_alignment = 2
+
+[node name="ContentBox" type="PanelContainer" parent="Layout/Body/Column"]
+unique_name_in_owner = true
+clip_contents = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Pages" type="Control" parent="Layout/Body/Column/ContentBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LoadingLabel" type="Label" parent="Layout/Body/Column/ContentBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"MutedLabel"
+theme_override_font_sizes/font_size = 16
+text = "Loading..."
+vertical_alignment = 1
+horizontal_alignment = 1
+
+[node name="NavBar" type="PanelContainer" parent="Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+script = ExtResource("3_nav")

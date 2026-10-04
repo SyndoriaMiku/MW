@@ -17,9 +17,11 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 ApiClient="*res://src/network/api_client.gd"
+GameCache="*res://src/network/game_cache.gd"
 SessionStore="*res://src/session/session_store.gd"
 SceneRouter="*res://src/app/scene_router.gd"
 GameSettings="*res://src/app/game_settings.gd"
+UiFeedback="*res://src/shared/ui/ui_feedback.gd"
 
 [display]
 
@@ -42,6 +44,5 @@ network/api_base_url="https://maplewebbackend.onrender.com/api"
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.035, 0.055, 0.09, 1)
+environment/defaults/default_clear_color=Color(0.980392, 0.972549, 1, 1)
 2d/snap/snap_2d_transforms_to_pixel=true
-2d/snap/snap_2d_vertices_to_pixel=true

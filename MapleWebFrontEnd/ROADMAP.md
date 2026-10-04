@@ -1,6 +1,6 @@
 # Maple World Frontend — Roadmap
 
-Cập nhật: 2026-10-01 (chiều). Đánh dấu `[x]` khi xong từng mục.
+Cập nhật: 2026-10-03. Đánh dấu `[x]` khi xong từng mục.
 
 ## Giai đoạn 0 — Dọn nền ✅
 
@@ -21,14 +21,21 @@ Cập nhật: 2026-10-01 (chiều). Đánh dấu `[x]` khi xong từng mục.
 - [x] Request có timeout 15 giây
 - [x] Theme `main_theme.tres` cho toàn project; scene dùng biến thể `PrimaryButton`, `CompactPanel`, `HPBar`, `MPBar`, `EnemyHPBar`, `EXPBar`
 - [x] `tools/run_tests.sh` chạy toàn bộ test; thêm `check_api_client` (server HTTP giả kiểm tra refresh/logout)
+- [x] `GameCache`: cache GET dùng chung cho mọi màn — dữ liệu tham chiếu 6 giờ (lưu đĩa với server thật), dữ liệu người chơi 5 phút và tự xoá khi có POST liên quan; gộp request trùng; header Hub tự cập nhật khi dữ liệu đổi
 - [ ] (Tuỳ chọn) Lưu refresh token xuống `user://` để khỏi đăng nhập lại mỗi lần mở game
-- [ ] StyleBoxFlat còn tạo trong code (ô trang bị, thẻ item, popup skill, tooltip) — chuyển sang theme khi làm lại các màn đó
+- [x] Theme Material 3 Expressive, bảng màu sáng từ màu gốc `#336DFF`: màu theo role trong `M3`, theme sinh từ `tools/build_theme.gd`, font Roboto + icon Material Symbols Rounded, ripple + thu nhỏ khi bấm cho mọi nút
+- [x] Bỏ màu hardcode trong scene/script — StyleBox còn tạo trong code đều lấy màu từ `M3`
+- [ ] Đổi chữ IN HOA trên các nút cũ sang sentence case theo M3
 
 ## Giai đoạn 2 — Onboarding đầy đủ
 
 - [x] Màn đăng ký (`users/register/`): kiểm tra form ở client, lỗi server hiện dưới từng ô, đăng ký xong vào thẳng màn tạo nhân vật
 - [x] Màn tạo nhân vật: chọn job (class suy ra từ job), xem chỉ số và skill của job, luật tên giống backend (`CharacterNameRules`); launcher tự chuyển tới đây khi `characters/my/` trả 404
-- [ ] Dùng `session/bootstrap/` để launcher tải dữ liệu một lần thay vì gọi tuần tự
+- [x] Màn Hub thay launcher: header (avatar, tên, Lumis/Nova, thanh stamina hồi theo thời gian thực), ô nội dung, thanh điều hướng 7 mục; Back (Esc / nút back chuột) chạy ngược hiệu ứng chuyển trang
+- [x] Hub tải một lần bằng `session/bootstrap/` (có fallback cho server cũ)
+- [x] Home: ảnh nền (vẽ tạm, thay bằng `assets/ui/home_background.png`), sự kiện rate đang chạy, nút Adventure / Resume battle
+- [x] Adventure: danh sách dungeon theo thứ tự kéo thả trong Studio (`order`), khoá theo level / stamina / trận đang dở, kèm lý do
+- [ ] Ảnh nền thật cho Home và ảnh đại diện theo job
 
 Sửa kèm khi làm Giai đoạn 2:
 

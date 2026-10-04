@@ -46,14 +46,14 @@ func _load_catalog() -> void:
 	retry_button.visible = false
 
 	# A player who already has a character belongs on the adventure board.
-	var character_response: Dictionary = await ApiClient.get_json("characters/my/")
+	var character_response: Dictionary = await GameCache.get_json("characters/my/")
 	if character_response.get("ok", false):
 		SessionStore.character = character_response.get("data", {})
-		SceneRouter.go_to(SceneRouter.LAUNCHER)
+		SceneRouter.go_to(SceneRouter.HUB)
 		return
 
-	var classes_response: Dictionary = await ApiClient.get_all("classes/")
-	var jobs_response: Dictionary = await ApiClient.get_all("classes/jobs/")
+	var classes_response: Dictionary = await GameCache.get_all("classes/")
+	var jobs_response: Dictionary = await GameCache.get_all("classes/jobs/")
 	for response in [classes_response, jobs_response]:
 		if not response.get("ok", false):
 			retry_button.visible = true
@@ -83,6 +83,7 @@ func set_jobs(jobs: Array) -> void:
 func _create_job_button(job: Dictionary) -> Button:
 	var button := Button.new()
 	button.toggle_mode = true
+	button.theme_type_variation = &"ChipButton"
 	button.button_group = _job_buttons
 	button.custom_minimum_size = Vector2(0, 64)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -108,7 +109,7 @@ func _select_job(job: Dictionary) -> void:
 		return
 
 	skill_list.text = "Loading skills..."
-	var response: Dictionary = await ApiClient.get_all("skills/?job=%s" % job_id.uri_encode())
+	var response: Dictionary = await GameCache.get_all("skills/?job=%s" % job_id.uri_encode())
 	if not response.get("ok", false):
 		if ApiClient.id_string(_selected_job.get("id")) == job_id:
 			skill_list.text = "Skills could not be loaded."
@@ -163,7 +164,7 @@ func _on_name_changed(_value: String) -> void:
 	name_width.text = "%s / %d" % ["?" if width < 0 else str(width), CharacterNameRules.MAX_WIDTH]
 	var problem := CharacterNameRules.validate(name) if not name.is_empty() else ""
 	name_feedback.text = problem if not problem.is_empty() else CharacterNameRules.RULE_MESSAGE
-	name_feedback.add_theme_color_override("font_color", Color("ff7b72") if not problem.is_empty() else Color("7f8d9d"))
+	name_feedback.add_theme_color_override("font_color", M3.ERROR if not problem.is_empty() else M3.ON_SURFACE_VARIANT)
 	_refresh_create_button()
 
 
@@ -179,7 +180,7 @@ func _on_create_pressed() -> void:
 	)
 	if response.get("ok", false):
 		SessionStore.character = response.get("data", {})
-		SceneRouter.go_to(SceneRouter.LAUNCHER)
+		SceneRouter.go_to(SceneRouter.HUB)
 		return
 
 	_set_busy(false, "The character was not created.")
@@ -187,13 +188,13 @@ func _on_create_pressed() -> void:
 	if field_errors.is_empty():
 		var message := ApiClient.error_message(response, "Unable to create the character.")
 		if message.contains("already has a character"):
-			SceneRouter.go_to(SceneRouter.LAUNCHER)
+			SceneRouter.go_to(SceneRouter.HUB)
 			return
 		form_error.text = message
 		return
 	if field_errors.has("name"):
 		name_feedback.text = str(field_errors["name"])
-		name_feedback.add_theme_color_override("font_color", Color("ff7b72"))
+		name_feedback.add_theme_color_override("font_color", M3.ERROR)
 		name_input.grab_focus()
 		field_errors.erase("name")
 	form_error.text = "\n".join(PackedStringArray(field_errors.values()))
