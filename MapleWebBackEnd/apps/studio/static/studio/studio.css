@@ -157,6 +157,17 @@ table.grid td div[id^="id_"] { display: flex; flex-wrap: wrap; gap: 4px; min-wid
 table.grid td div[id^="id_"] label { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; }
 table.grid td div[id^="id_"] label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 .formset .btn[data-add-row] { margin-top: 8px; }
+/* Drag-to-reorder lists (data-sortable). */
+.sort-col { width: 1%; white-space: nowrap; }
+.drag-handle { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px; cursor: grab; touch-action: none; border-radius: 6px; }
+.drag-handle:hover, .drag-handle:focus-visible { color: var(--accent); background: var(--accent-soft); }
+.sort-index { display: inline-block; min-width: 2ch; color: var(--muted); font-variant-numeric: tabular-nums; }
+table.grid tr.is-dragging td { background: var(--accent-soft); }
+table.grid tr.is-dragging .drag-handle { cursor: grabbing; }
+form[data-sortable]:has(tr.is-dragging) { user-select: none; cursor: grabbing; }
+.sort-bar { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
+.sort-bar [data-sort-status] { margin-right: auto; }
+form.is-dirty [data-sort-status] { color: var(--warn); font-weight: 600; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .toolbar .input { width: auto; min-width: 160px; }
 .pager { display: flex; gap: 10px; align-items: center; margin-top: 12px; color: var(--muted); }

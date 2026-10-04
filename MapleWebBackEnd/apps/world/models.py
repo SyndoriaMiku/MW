@@ -98,13 +98,23 @@ class BaseStageTemplate(models.Model):
     # Reward
     exp_reward = models.IntegerField(default=0) #EXP rewarded for completing this stage
     lumis_reward = models.IntegerField(default=0) #Lumis rewarded for completing this
-    
+
+    # Display order among dungeons of the same kind (set by dragging in Studio).
+    order = models.PositiveIntegerField(default=0, help_text="Display order")
+
     class Meta:
         abstract = True
-        ordering = ['required_level', 'id']
+        ordering = ['order', 'required_level', 'id']
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # A new dungeon goes to the end of the list unless given a place.
+        if self._state.adding and not self.order:
+            last = type(self).objects.aggregate(last=models.Max('order'))['last']
+            self.order = (last or 0) + 1
+        super().save(*args, **kwargs)
 
 class NormalDungeonTemplate(BaseStageTemplate):
     """

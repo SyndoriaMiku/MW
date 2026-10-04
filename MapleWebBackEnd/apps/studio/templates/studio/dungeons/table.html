@@ -1,21 +1,35 @@
 {% if rows %}
-<div class="table-wrap">
-  <table class="grid list">
-    <thead><tr><th>Tên</th><th>Nằm ở</th><th>Cấp</th><th>{% if kind == 'boss' %}Reset{% else %}Thể lực{% endif %}</th><th>Quái</th><th>Thưởng</th></tr></thead>
-    <tbody>
-    {% for dungeon in rows %}
-      <tr>
-        <td><a href="{% url 'studio:dungeon-edit' kind dungeon.pk %}"><b>{{ dungeon.name }}</b></a></td>
-        <td>{% if dungeon.location %}{{ dungeon.location }}{% else %}<span class="help">—</span>{% endif %}</td>
-        <td>{{ dungeon.required_level }}</td>
-        <td>{% if kind == 'boss' %}{{ dungeon.get_time_type_display }}{% else %}{{ dungeon.stamina_cost }}{% endif %}</td>
-        <td>{% if dungeon.enemy_total %}{{ dungeon.enemy_total }}{% else %}<span class="tag bad">chưa có quái</span>{% endif %}</td>
-        <td>{{ dungeon.exp_reward }} EXP · {{ dungeon.lumis_reward }} Lumis</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<form method="post" data-sortable>
+  {% csrf_token %}
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <div class="table-wrap">
+    <table class="grid list">
+      <thead><tr><th class="sort-col">#</th><th>Tên</th><th>Nằm ở</th><th>Cấp</th><th>{% if kind == 'boss' %}Reset{% else %}Thể lực{% endif %}</th><th>Quái</th><th>Thưởng</th></tr></thead>
+      <tbody data-sort-rows>
+      {% for dungeon in rows %}
+        <tr data-sort-row="{{ dungeon.pk }}">
+          <td class="sort-col">
+            <button type="button" class="drag-handle" aria-label="Kéo để đổi thứ tự {{ dungeon.name }} (hoặc dùng phím mũi tên)" title="Kéo để đổi thứ tự">⠿</button>
+            <span class="sort-index" data-sort-index>{{ forloop.counter }}</span>
+            <input type="hidden" name="order" value="{{ dungeon.pk }}">
+          </td>
+          <td><a href="{% url 'studio:dungeon-edit' kind dungeon.pk %}"><b>{{ dungeon.name }}</b></a></td>
+          <td>{% if dungeon.location %}{{ dungeon.location }}{% else %}<span class="help">—</span>{% endif %}</td>
+          <td>{{ dungeon.required_level }}</td>
+          <td>{% if kind == 'boss' %}{{ dungeon.get_time_type_display }}{% else %}{{ dungeon.stamina_cost }}{% endif %}</td>
+          <td>{% if dungeon.enemy_total %}{{ dungeon.enemy_total }}{% else %}<span class="tag bad">chưa có quái</span>{% endif %}</td>
+          <td>{{ dungeon.exp_reward }} EXP · {{ dungeon.lumis_reward }} Lumis</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="sort-bar">
+    <span class="help" data-sort-status>Kéo ⠿ để đổi thứ tự hiển thị trong game.</span>
+    <button type="button" class="btn ghost small" data-sort-reset hidden>Hoàn tác</button>
+    <button type="submit" class="btn small" data-sort-save disabled>Lưu thứ tự</button>
+  </div>
+</form>
 {% else %}
   <p class="empty">Chưa có dungeon nào.</p>
 {% endif %}

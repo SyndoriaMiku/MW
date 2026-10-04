@@ -130,7 +130,7 @@ class WorldLabelTests(APITestCase):
 
         self.assertEqual([r['name'] for r in regions], ['Meadow', 'Peak'])
         [town] = regions[0]['locations']
-        self.assertEqual(town['normal_dungeons'], [{'id': self.cave.pk, 'name': 'Slime Cave', 'required_level': 5}])
+        self.assertEqual(town['normal_dungeons'], [{'id': self.cave.pk, 'name': 'Slime Cave', 'order': 1, 'required_level': 5}])
         self.assertEqual(town['boss_dungeons'], [])
         self.assertEqual(regions[1]['locations'][0]['boss_dungeons'][0]['name'], 'Dragon Lair')
 

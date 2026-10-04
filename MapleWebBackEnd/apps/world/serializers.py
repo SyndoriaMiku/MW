@@ -21,7 +21,7 @@ class NormalDungeonSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = NormalDungeonTemplate
-        fields = ['id', 'name', 'description', 'location', 'required_level', 'stamina_cost', 'exp_reward', 'lumis_reward']
+        fields = ['id', 'name', 'description', 'order', 'location', 'required_level', 'stamina_cost', 'exp_reward', 'lumis_reward']
 
 
 class BossDungeonSerializer(serializers.ModelSerializer):
@@ -29,12 +29,13 @@ class BossDungeonSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BossDungeonTemplate
-        fields = ['id', 'name', 'description', 'location', 'required_level', 'max_party_size', 'time_type', 'exp_reward', 'lumis_reward']
+        fields = ['id', 'name', 'description', 'order', 'location', 'required_level', 'max_party_size', 'time_type', 'exp_reward', 'lumis_reward']
 
 
 class DungeonSummarySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
+    order = serializers.IntegerField()
     required_level = serializers.IntegerField()
 
 

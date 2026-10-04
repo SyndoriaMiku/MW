@@ -1,12 +1,16 @@
+from django.contrib import messages
+from django.db import transaction
 from django.db.models import Count, Sum
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
 from apps.world.models import BossDungeonTemplate, EnemyTemplate, NormalDungeonTemplate, Region
 
+from .. import history
 from ..access import StaffRequiredMixin
+from ..models import StudioChange
 from ..forms.world import (
     BossDungeonForm, BossStageEnemyFormSet, EnemySkillFormSet, EnemyTemplateForm, LocationFormSet,
     LootTableFormSet, NormalDungeonForm, NormalStageEnemyFormSet, RegionForm,
@@ -51,15 +55,50 @@ DUNGEON_KINDS = {
 
 
 class DungeonListView(StaffRequiredMixin, View):
+    """Both dungeon lists in game order; dragging rows and saving posts the new order."""
+
     def get(self, request):
         def rows(model):
+            # Spelled out: Django drops Meta.ordering once the query groups for Sum.
             return model.objects.select_related('location__region').annotate(
                 enemy_total=Sum('stage_enemies__count'),
-            ).order_by('required_level', 'name')
+            ).order_by('order', 'required_level', 'id')
 
         return render(request, 'studio/dungeons/list.html', {
             'section': 'dungeons', 'normal': rows(NormalDungeonTemplate), 'boss': rows(BossDungeonTemplate),
         })
+
+    def post(self, request):
+        kind = request.POST.get('kind')
+        if kind not in DUNGEON_KINDS:
+            raise Http404('Unknown dungeon kind.')
+        model, _form, _formset, kind_label = DUNGEON_KINDS[kind]
+        with transaction.atomic():
+            dungeons = list(model.objects.select_for_update())
+            by_pk = {str(dungeon.pk): dungeon for dungeon in dungeons}
+            ids = request.POST.getlist('order')
+            # The page must send every dungeon exactly once, or it is out of date.
+            if sorted(ids) != sorted(by_pk):
+                messages.error(request, 'Danh sách dungeon đã thay đổi trong lúc bạn sắp xếp. Hãy tải lại trang rồi thử lại.')
+                return redirect('studio:dungeon-list')
+            old_position = {dungeon.pk: position for position, dungeon in enumerate(dungeons, start=1)}
+            moved = {}
+            for position, pk in enumerate(ids, start=1):
+                dungeon = by_pk[pk]
+                if old_position[dungeon.pk] != position:
+                    moved[dungeon.name] = [old_position[dungeon.pk], position]
+                if dungeon.order != position:
+                    dungeon.order = position
+                    dungeon.save(update_fields=['order'])
+            if moved:
+                history.record(request.user, StudioChange.Action.UPDATE, target_type=model._meta.label,
+                               target_repr=f'{kind_label} (thứ tự)', summary=f'Đổi thứ tự {kind_label.lower()}',
+                               changes=moved)
+        if moved:
+            messages.success(request, f'Đã lưu thứ tự {kind_label.lower()}.')
+        else:
+            messages.info(request, 'Thứ tự không thay đổi.')
+        return redirect('studio:dungeon-list')
 
 
 class DungeonEditorView(EditorView):

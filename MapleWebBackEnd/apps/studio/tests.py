@@ -1,5 +1,6 @@
 from django.test import TestCase
 from django.urls import reverse
+from rest_framework.test import APIClient
 
 from apps.characters.models import Character, EquipmentSlotConfig, RateEvent
 from apps.quests.models import QuestTemplate
@@ -12,7 +13,7 @@ from apps.items.models import (
 )
 from apps.skilles.models import EffectTemplate, SkillLevelConfig, SkillTemplate, SpecialEffectTag
 from apps.users.models import GameUser, NovaTransaction
-from apps.world.models import EnemyTemplate, ExperienceTable, LootTable, NormalDungeonTemplate, Region
+from apps.world.models import BossDungeonTemplate, EnemyTemplate, ExperienceTable, LootTable, NormalDungeonTemplate, Region
 
 from .fields import PercentField
 from .models import StudioChange
@@ -391,6 +392,43 @@ class WorldEditorTests(StudioTestCase):
         ]))
         dungeon = NormalDungeonTemplate.objects.get()
         self.assertEqual(sorted(dungeon.stage_enemies.values_list('count', flat=True)), [2, 4])
+
+    def test_dragged_dungeon_order_is_saved_and_used_by_the_game(self):
+        cave = NormalDungeonTemplate.objects.create(name='Cave', required_level=10)
+        field = NormalDungeonTemplate.objects.create(name='Field', required_level=1)
+        tower = NormalDungeonTemplate.objects.create(name='Tower', required_level=30)
+        lair = BossDungeonTemplate.objects.create(name='Lair')
+        # New dungeons go to the end of their own list.
+        self.assertEqual([cave.order, field.order, tower.order, lair.order], [1, 2, 3, 1])
+        page = self.client.get(reverse('studio:dungeon-list'))
+        self.assertEqual([d.name for d in page.context['normal']], ['Cave', 'Field', 'Tower'])
+
+        response = self.client.post(reverse('studio:dungeon-list'), {
+            'kind': 'normal', 'order': [field.pk, cave.pk, tower.pk],
+        })
+
+        self.assertRedirects(response, reverse('studio:dungeon-list'))
+        self.assertEqual(list(NormalDungeonTemplate.objects.values_list('name', flat=True)), ['Field', 'Cave', 'Tower'])
+        page = self.client.get(reverse('studio:dungeon-list'))
+        self.assertEqual([d.name for d in page.context['normal']], ['Field', 'Cave', 'Tower'])
+        self.assertEqual(BossDungeonTemplate.objects.get().order, 1)
+        change = StudioChange.objects.get()
+        self.assertEqual(change.changes, {'Field': [2, 1], 'Cave': [1, 2]})
+        api = APIClient()
+        api.force_authenticate(self.staff)
+        results = api.get('/api/world/normal-dungeons/').json()
+        results = results.get('results', results) if isinstance(results, dict) else results
+        self.assertEqual([d['name'] for d in results], ['Field', 'Cave', 'Tower'])
+
+    def test_order_from_an_out_of_date_page_is_refused(self):
+        cave = NormalDungeonTemplate.objects.create(name='Cave')
+        field = NormalDungeonTemplate.objects.create(name='Field')
+        NormalDungeonTemplate.objects.create(name='Added meanwhile')
+
+        self.client.post(reverse('studio:dungeon-list'), {'kind': 'normal', 'order': [field.pk, cave.pk]})
+
+        self.assertEqual(list(NormalDungeonTemplate.objects.values_list('name', flat=True)), ['Cave', 'Field', 'Added meanwhile'])
+        self.assertFalse(StudioChange.objects.exists())
 
     def test_region_with_locations(self):
         self.client.post(reverse('studio:region-new'), {

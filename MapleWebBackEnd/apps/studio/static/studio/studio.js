@@ -128,6 +128,81 @@
     render();
   }
 
+  // ---- data-sortable: reorder rows by dragging the handle (or arrow keys), then save ----
+  function setupSortable(form) {
+    const body = form.querySelector('[data-sort-rows]');
+    const save = form.querySelector('[data-sort-save]');
+    const reset = form.querySelector('[data-sort-reset]');
+    const status = form.querySelector('[data-sort-status]');
+    const hint = status.textContent;
+    const rows = () => [...body.querySelectorAll('[data-sort-row]')];
+    const initial = rows().map((row) => row.dataset.sortRow);
+    let dragging = null;
+
+    function refresh() {
+      rows().forEach((row, i) => { row.querySelector('[data-sort-index]').textContent = i + 1; });
+      const changed = rows().map((row) => row.dataset.sortRow).join() !== initial.join();
+      save.disabled = !changed;
+      reset.hidden = !changed;
+      status.textContent = changed ? 'Thứ tự đã thay đổi nhưng chưa lưu.' : hint;
+      form.classList.toggle('is-dirty', changed);
+    }
+
+    body.addEventListener('pointerdown', (event) => {
+      const handle = event.target.closest('.drag-handle');
+      if (!handle || event.button !== 0) return;
+      event.preventDefault();
+      dragging = handle.closest('[data-sort-row]');
+      dragging.classList.add('is-dragging');
+      // Keep receiving moves when the pointer leaves the handle.
+      try { handle.setPointerCapture(event.pointerId); } catch (error) { /* moves still reach the rows */ }
+    });
+    body.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      // Drop before the first row whose middle is below the pointer.
+      const before = rows().find((row) => {
+        if (row === dragging) return false;
+        const box = row.getBoundingClientRect();
+        return event.clientY < box.top + box.height / 2;
+      });
+      if (before !== dragging.nextElementSibling) {
+        body.insertBefore(dragging, before || null);
+        refresh();
+      }
+      if (event.clientY < 48) window.scrollBy(0, -12);
+      else if (event.clientY > window.innerHeight - 48) window.scrollBy(0, 12);
+    });
+    const drop = () => {
+      dragging?.classList.remove('is-dragging');
+      dragging = null;
+    };
+    body.addEventListener('pointerup', drop);
+    body.addEventListener('pointercancel', drop);
+
+    body.addEventListener('keydown', (event) => {
+      const handle = event.target.closest('.drag-handle');
+      if (!handle || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+      event.preventDefault();
+      const row = handle.closest('[data-sort-row]');
+      if (event.key === 'ArrowUp' && row.previousElementSibling) body.insertBefore(row, row.previousElementSibling);
+      if (event.key === 'ArrowDown' && row.nextElementSibling) body.insertBefore(row.nextElementSibling, row);
+      handle.focus();
+      refresh();
+    });
+
+    reset.addEventListener('click', () => {
+      const byId = Object.fromEntries(rows().map((row) => [row.dataset.sortRow, row]));
+      initial.forEach((id) => body.appendChild(byId[id]));
+      refresh();
+    });
+    form.addEventListener('submit', () => form.classList.remove('is-dirty'));
+  }
+
+  // Warn before leaving a page with an unsaved order.
+  window.addEventListener('beforeunload', (event) => {
+    if (document.querySelector('form.is-dirty')) event.preventDefault();
+  });
+
   function initWithin(root) {
     root.querySelectorAll('[data-materials]').forEach(setupMaterials);
   }
@@ -150,6 +225,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-formset]').forEach(setupFormset);
     document.querySelectorAll('[data-growth-preview]').forEach(setupGrowthPreview);
+    document.querySelectorAll('form[data-sortable]').forEach(setupSortable);
     initWithin(document);
     document.querySelectorAll('form').forEach((form) => {
       refreshConditionals(form);
