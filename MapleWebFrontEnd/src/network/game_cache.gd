@@ -21,6 +21,8 @@ const PLAYER_TTL := 300.0
 ## Reference data that Studio edits often, so changes show up sooner.
 const SHORT_TTL := {
 	"world/normal-dungeons/": 1800.0,
+	"world/boss-dungeons/": 1800.0,
+	"world/regions/": 1800.0,
 }
 const DISK_DIR := "user://cache/"
 
@@ -31,7 +33,13 @@ const RULES := {
 	"skills/": "reference",
 	"inventory/slots/": "reference",
 	"world/normal-dungeons/": "reference",
+	"world/boss-dungeons/": "reference",
+	"world/regions/": "reference",
 	"shops/categories/": "reference",
+	"items/templates/": "reference",
+	"skills/learnable/": "player",
+	"quests/": "player",
+	"party/party/my/": "player",
 	"characters/my/": "player",
 	"users/profile/": "player",
 	"inventory/": "player",
@@ -42,14 +50,14 @@ const RULES := {
 
 ## POST path prefix -> the cached paths (prefixes) it may change.
 const INVALIDATES := {
-	"inventory/": ["inventory/", "characters/my/", "users/profile/", "items/lumen/preview/"],
-	"shops/": ["inventory/", "users/profile/", "shops/items/", "characters/my/"],
-	"items/": ["inventory/", "characters/my/", "users/profile/", "items/lumen/preview/"],
-	"world/": ["battles/active/", "characters/my/"],
-	"battles/": ["battles/active/", "characters/my/", "users/profile/", "inventory/"],
-	"characters/": ["characters/my/"],
-	"quests/": ["characters/my/", "users/profile/", "inventory/"],
-	"party/": ["battles/active/"],
+	"inventory/": ["inventory/", "characters/my/", "users/profile/", "items/lumen/preview/", "quests/"],
+	"shops/": ["inventory/", "users/profile/", "shops/items/", "characters/my/", "quests/"],
+	"items/": ["inventory/", "characters/my/", "users/profile/", "items/lumen/preview/", "quests/"],
+	"world/": ["battles/active/", "characters/my/", "party/"],
+	"battles/": ["battles/active/", "characters/my/", "users/profile/", "inventory/", "quests/", "skills/learnable/", "party/"],
+	"characters/": ["characters/my/", "inventory/", "skills/learnable/", "quests/"],
+	"quests/": ["quests/", "characters/my/", "users/profile/", "inventory/", "skills/learnable/"],
+	"party/": ["battles/active/", "party/"],
 	"market/": ["inventory/", "users/profile/"],
 }
 

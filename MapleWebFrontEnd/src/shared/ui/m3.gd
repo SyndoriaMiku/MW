@@ -103,6 +103,13 @@ const ICONS := {
 	"trending_up": 0xe8e5, "event": 0xe878, "account_circle": 0xe853,
 	"star": 0xe838, "forest": 0xea99, "check": 0xe5ca, "close": 0xe5cd,
 	"hourglass_top": 0xea5b, "military_tech": 0xea3f,
+	"menu_book": 0xea19, "task_alt": 0xe2e6, "assignment": 0xe85d,
+	"local_fire_department": 0xef55, "map": 0xe55b, "location_on": 0xe0c8,
+	"flag": 0xe153, "redeem": 0xe8b1, "emoji_events": 0xea23, "timer": 0xe425,
+	"water_drop": 0xe798, "upgrade": 0xf0fb, "groups": 0xf233,
+	"check_circle": 0xe86c, "radio_button_unchecked": 0xe836,
+	"arrow_forward": 0xe5c8, "lock_open": 0xe898, "shield": 0xe9e0,
+	"auto_fix_high": 0xe663, "crown": 0xecb3, "stars": 0xe8d0,
 }
 
 

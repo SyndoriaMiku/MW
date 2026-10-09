@@ -7,6 +7,7 @@ extends Control
 
 signal adventure_requested
 signal resume_requested
+signal quests_requested
 
 ## Drop key art here to replace the drawn background.
 const BACKGROUND_PATH := "res://assets/ui/home_background.png"
@@ -14,6 +15,9 @@ const BACKGROUND_PATH := "res://assets/ui/home_background.png"
 var _art := HomeArt.new()
 var _greeting := Label.new()
 var _events_box := VBoxContainer.new()
+var _quest_card := Button.new()
+var _quest_title := Label.new()
+var _quest_meta := Label.new()
 var _resume_card := PanelContainer.new()
 var _resume_details := Label.new()
 var _adventure_button := Button.new()
@@ -70,6 +74,7 @@ func _init() -> void:
 	left.add_child(events_title)
 	_events_box.add_theme_constant_override("separation", 8)
 	left.add_child(_events_box)
+	_build_quest_card(left)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -131,6 +136,54 @@ func _build_resume_card(parent: Control) -> void:
 	resume.icon = _icon_texture("play_arrow", M3.ON_PRIMARY)
 	resume.pressed.connect(resume_requested.emit)
 	box.add_child(resume)
+
+
+## A card that opens Quests; it says how many wait to be claimed.
+func _build_quest_card(parent: Control) -> void:
+	var title := Label.new()
+	title.text = "Quests"
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_color_override("font_color", M3.ON_PRIMARY_CONTAINER)
+	parent.add_child(title)
+	_quest_card.name = "QuestCard"
+	_quest_card.custom_minimum_size = Vector2(0, 72)
+	_quest_card.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "hover_pressed"]:
+		var opacity := M3.HOVER_OPACITY if state.begins_with("hover") else 0.0
+		_quest_card.add_theme_stylebox_override(state, M3.box(M3.layered(M3.with_alpha(M3.SURFACE_CONTAINER_LOWEST, 0.9), M3.ON_SURFACE, opacity), M3.CORNER_CARD, 14.0))
+	_quest_card.pressed.connect(quests_requested.emit)
+	parent.add_child(_quest_card)
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
+	row.add_theme_constant_override("separation", 12)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_quest_card.add_child(row)
+	row.add_child(HubWidgets.badge("task_alt", M3.PRIMARY_CONTAINER, M3.ON_PRIMARY_CONTAINER, 44))
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.alignment = BoxContainer.ALIGNMENT_CENTER
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(text)
+	_quest_title.theme_type_variation = &"TitleLabel"
+	_quest_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(_quest_title)
+	_quest_meta.theme_type_variation = &"MutedLabel"
+	_quest_meta.add_theme_font_size_override("font_size", M3.BODY_SMALL)
+	_quest_meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(_quest_meta)
+	row.add_child(M3.icon_label("arrow_forward", 22, M3.ON_SURFACE_VARIANT))
+	set_quests(0, 0)
+
+
+## `ready`: quests waiting to be claimed; `active`: quests in progress.
+func set_quests(ready: int, active: int) -> void:
+	if ready > 0:
+		_quest_title.text = "%d %s ready to claim" % [ready, "quest" if ready == 1 else "quests"]
+	elif active > 0:
+		_quest_title.text = "%d %s in progress" % [active, "quest" if active == 1 else "quests"]
+	else:
+		_quest_title.text = "No quest to do"
+	_quest_meta.text = "Open your quests"
 
 
 func set_character_name(character_name: String) -> void:

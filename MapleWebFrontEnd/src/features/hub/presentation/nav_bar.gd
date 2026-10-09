@@ -38,6 +38,16 @@ func select(id: String, animate: bool = true) -> void:
 		_destinations[key].set_active(key == id, animate)
 
 
+## Shows an M3 badge with `count` on destination `id` (hidden at 0).
+func set_badge(id: String, count: int) -> void:
+	if _destinations.has(id):
+		_destinations[id].set_badge(count)
+
+
+func badge(id: String) -> int:
+	return _destinations[id].badge_count if _destinations.has(id) else 0
+
+
 func selected() -> String:
 	return _selected
 
@@ -56,6 +66,8 @@ class Destination:
 	const PILL := Vector2(64, 32)
 
 	var id := ""
+	var badge_count := 0
+	var _badge := Label.new()
 	var _indicator := Panel.new()
 	var _icon: Label
 	var _label := Label.new()
@@ -94,6 +106,20 @@ class Destination:
 		_icon = M3.icon_label(icon_name, 24)
 		_icon.size = PILL
 		pill_host.add_child(_icon)
+		_badge.visible = false
+		_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_badge.add_theme_font_size_override("font_size", M3.LABEL_SMALL)
+		_badge.add_theme_font_override("font", M3.FONT_MEDIUM)
+		_badge.add_theme_color_override("font_color", M3.ON_ERROR)
+		var badge_style := M3.box(M3.ERROR, M3.CORNER_FULL, 0.0)
+		badge_style.content_margin_left = 4
+		badge_style.content_margin_right = 4
+		_badge.add_theme_stylebox_override("normal", badge_style)
+		_badge.position = Vector2(PILL.x / 2.0 + 4.0, -2.0)
+		_badge.custom_minimum_size = Vector2(16, 16)
+		pill_host.add_child(_badge)
 		_label.text = text_label
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_label.add_theme_font_size_override("font_size", M3.LABEL_MEDIUM)
@@ -104,6 +130,12 @@ class Destination:
 		mouse_entered.connect(_refresh_hover.bind(true))
 		mouse_exited.connect(_refresh_hover.bind(false))
 		_paint()
+
+	func set_badge(count: int) -> void:
+		badge_count = maxi(0, count)
+		_badge.visible = badge_count > 0
+		_badge.text = str(badge_count) if badge_count < 100 else "99+"
+		_badge.reset_size()
 
 	func set_active(value: bool, animate: bool) -> void:
 		_active = value

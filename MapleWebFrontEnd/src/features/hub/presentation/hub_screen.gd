@@ -12,7 +12,9 @@ const HISTORY_LIMIT := 20
 const DESTINATIONS := [
 	{"id": "home", "label": "Home", "icon": "home"},
 	{"id": "adventure", "label": "Adventure", "icon": "swords"},
+	{"id": "quests", "label": "Quests", "icon": "task_alt"},
 	{"id": "character", "label": "Character", "icon": "person"},
+	{"id": "skills", "label": "Skills", "icon": "menu_book"},
 	{"id": "inventory", "label": "Inventory", "icon": "backpack"},
 	{"id": "enhance", "label": "Enhance", "icon": "auto_awesome"},
 	{"id": "shop", "label": "Shop", "icon": "storefront"},
@@ -45,6 +47,8 @@ var _character: Dictionary = {}
 var _profile: Dictionary = {}
 var _active_battle: Dictionary = {}
 var _events: Array = []
+var _quest_counts := [0, 0]
+var _quests_refresh_queued := false
 var _server_offset := 0.0
 var _stamina := StaminaClock.new()
 var _tween: Tween
@@ -77,6 +81,7 @@ func _ready() -> void:
 		return
 	_ready_to_navigate = true
 	open_page(str(args.get("page", "home")), args.get("page_args", {}), false)
+	_refresh_quest_badge()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -141,7 +146,14 @@ func _page_for(id: String, args: Dictionary) -> Control:
 			var home := HomePage.new()
 			home.adventure_requested.connect(open_page.bind("adventure"))
 			home.resume_requested.connect(func(): SceneRouter.go_to(SceneRouter.BATTLE))
+			home.quests_requested.connect(open_page.bind("quests"))
 			created = home
+		"quests":
+			var quests := QuestsPage.new()
+			quests.quests_changed.connect(func(_ready_count): _refresh_quest_badge())
+			created = quests
+		"skills":
+			created = SkillsPage.new()
 		"adventure":
 			var adventure := AdventurePage.new()
 			adventure.stamina_changed.connect(_refresh_header)
@@ -193,6 +205,10 @@ func _on_page_created(id: String, created: Control) -> void:
 		"adventure":
 			created.set_context(_character, _stamina.value_at(_now()), _active_battle)
 			created.load_dungeons()
+		"quests":
+			created.load_quests()
+		"skills":
+			created.load_skills()
 
 
 func _on_page_shown(id: String, shown: Control, args: Dictionary) -> void:
@@ -202,6 +218,10 @@ func _on_page_shown(id: String, shown: Control, args: Dictionary) -> void:
 		"adventure":
 			shown.set_context(_character, _stamina.value_at(_now()), _active_battle)
 			shown.load_dungeons()
+		"quests":
+			shown.load_quests()
+		"skills":
+			shown.load_skills()
 		"settings":
 			pass
 		_:
@@ -304,12 +324,31 @@ func _load_fallback() -> void:
 ## A POST changed player data: refresh the header once, after the page that
 ## made the change has had its turn.
 func _on_cache_invalidated(paths: Array) -> void:
+	if (paths.has("*") or paths.any(func(path): return str(path).begins_with("quests/"))) and not _quests_refresh_queued and _ready_to_navigate:
+		_quests_refresh_queued = true
+		_refresh_quest_badge.call_deferred()
 	for path in paths:
 		if path == "*" or str(path).begins_with("characters/") or str(path).begins_with("users/") or str(path).begins_with("battles/"):
 			if not _header_refresh_queued and _ready_to_navigate:
 				_header_refresh_queued = true
 				_queued_header_refresh.call_deferred()
 			return
+
+
+## Quests waiting to be claimed: a badge on Quests and the card on Home.
+func _refresh_quest_badge() -> void:
+	_quests_refresh_queued = false
+	var response: Dictionary = await GameCache.get_json("quests/")
+	if not is_inside_tree() or not response.get("ok", false):
+		return
+	var quests := ApiClient.unwrap_list(response.data)
+	var ready := QuestRules.ready_count(quests)
+	var active := quests.filter(func(quest): return str(quest.get("status")) == "in_progress").size()
+	_quest_counts = [ready, active]
+	nav_bar.set_badge("quests", ready)
+	var home: HomePage = _screens.get("home")
+	if home != null:
+		home.set_quests(ready, active)
 
 
 func _queued_header_refresh() -> void:
@@ -393,6 +432,7 @@ func _render_home() -> void:
 	home.set_character_name(str(_character.get("name", "")))
 	home.set_active_battle(_active_battle)
 	home.set_events(_events, _server_offset)
+	home.set_quests(_quest_counts[0], _quest_counts[1])
 
 
 func _build_settings_page() -> Control:

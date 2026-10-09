@@ -69,14 +69,14 @@ Sửa kèm khi làm Giai đoạn 2:
 - [x] Hộp chọn Aurora bắt buộc: roll đang chờ được lấy từ server (`pending_aurora_roll` trong inventory API) và mở lại mỗi khi vào Enhancement; so sánh dòng cũ/mới, chọn dòng cho triple choice
 - [x] Roll có tăng cấp Aurora phải lấy dòng mới (backend từ chối `keep_old`)
 - [x] Nhận diện Essence theo field backend (`use_kind`) thay vì tên chứa chữ "essence"
-- [ ] Học / nâng cấp skill (`skills/learnable/`, `characters/my/skills/<id>/upgrade/`)
+- [x] Trang Skills: skill đã học (sát thương hiện tại và cấp sau, MP, hồi chiêu, mục tiêu), skill sắp mở khoá theo level, nâng cấp bằng vật liệu (hiện số đang có / cần); cấp tự động thì ghi rõ
 - [ ] Special shop (đổi vật liệu lấy item, `shops/special/`), lịch sử Nova (`users/nova/history/`)
 
 ## Giai đoạn 5 — Nội dung & xã hội
 
-- [ ] Quest (`quests/`, claim thưởng)
-- [ ] Boss dungeon (`world/boss-dungeons/`)
-- [ ] Bản đồ thế giới theo region/location
+- [x] Trang Quests: lọc daily/weekly/story, tiến độ từng mục tiêu, phần thưởng, nhận thưởng; badge trên thanh điều hướng và thẻ trên Home đếm quest chờ nhận
+- [x] Boss dungeon: kỳ reset, số người tối đa, chỉ trưởng nhóm vào; chưa có party thì tạo party 1 người rồi vào
+- [x] Bản đồ thế giới: chip region → location → dungeon (`world/regions/`), dungeon không có location vào mục "Elsewhere"
 - [ ] Party (tạo, mời, loot)
 - [ ] Market / trade
 
